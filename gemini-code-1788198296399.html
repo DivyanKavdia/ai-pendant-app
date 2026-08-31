@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AI Notetaker (PWA)</title>
+
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2583/2583126.png">
+
+    <style>
+        :root {
+            --primary: #007aff;
+            --danger: #ff3b30;
+            --bg: #f2f2f7;
+            --card-bg: #ffffff;
+            --text: #1c1c1e;
+            --subtext: #8e8e93;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 16px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        h2 { margin-top: 8px; margin-bottom: 16px; font-weight: 700; }
+        h3 { margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: var(--subtext); }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+        }
+
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--danger);
+            transition: background 0.3s ease;
+        }
+
+        .dot.connected { background: #34c759; }
+
+        input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d1d1d6;
+            border-radius: 8px;
+            font-size: 14px;
+            box-sizing: border-box;
+            margin-top: 8px;
+        }
+
+        button {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            background: var(--primary);
+            cursor: pointer;
+            transition: opacity 0.2s ease, background-color 0.3s ease;
+        }
+
+        button:active { opacity: 0.8; }
+        button:disabled { background: #c7c7cc; cursor: not-allowed; }
+        button.recording { background: var(--danger); }
+
+        .box {
+            background: #f8f8fc;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            color: var(--text);
+        }
+
+        .note-item {
+            border-bottom: 1px solid #e5e5ea;
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+        }
+        .note-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .note-date { font-size: 12px; color: var(--subtext); margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+
+    <h2>AI Notetaker</h2>
+
+    <div class="card">
+        <h3>OpenAI API Key</h3>
+        <input type="password" id="apiKeyInput" placeholder="sk-..." onchange="saveKey()">
+    </div>
+
+    <div class="card">
+        <div class="status-row">
+            <div id="dot" class="dot"></div>
+            <span id="statusText">Disconnected</span>
+        </div>
+    </div>
+
+    <button id="connectBtn" onclick="connectBLE()">Connect to dk-pendant</button>
+    <br><br>
+    <button id="recordBtn" onclick="toggleRecord()" disabled>Start Recording Note</button>
+
+    <br><br>
+
+    <div id="outputSection" class="card" style="display: none;">
+        <h3>Current Note Processing</h3>
+        <div id="summaryBox" class="box">Waiting for audio...</div>
+    </div>
+
+    <div class="card">
+        <h3>Saved Notes History</h3>
+        <div id="historyList">
+            <p style="font-size: 14px; color: var(--subtext); margin: 0;">No notes saved yet.</p>
+        </div>
+    </div>
+
+    <script>
+        const SERVICE_UUID = "4fa12345-0000-1000-8000-00805f9b34fb";
+        const AUDIO_CHAR_UUID = "4fa12346-0000-1000-8000-00805f9b34fb";
+
+        let gattServer, audioChar;
+        let isRecording = false;
+        let pcmChunks = [];
+        let db;
+
+        // Initialize App
+        window.addEventListener('load', () => {
+            const savedKey = localStorage.getItem("OPENAI_KEY");
+            if (savedKey) document.getElementById("apiKeyInput").value = savedKey;
+            initDB();
+        });
+
+        function saveKey() {
+            const key = document.getElementById("apiKeyInput").value.trim();
+            localStorage.setItem("OPENAI_KEY", key);
+        }
+
+        // --- IndexedDB for Note Storage ---
+        function initDB() {
+            const request = indexedDB.open("NotetakerDB", 1);
+            request.onupgradeneeded = (e) => {
+                db = e.target.result;
+                db.createObjectStore("notes", { keyPath: "id", autoIncrement: true });
+            };
+            request.onsuccess = (e) => {
+                db = e.target.result;
+                renderHistory();
+            };
+        }
+
+        function saveNoteToDB(summary, transcript) {
+            const tx = db.transaction("notes", "readwrite");
+            const store = tx.objectStore("notes");
+            store.add({
+                timestamp: new Date().toLocaleString(),
+                summary: summary,
+                transcript: transcript
+            });
+            tx.oncomplete = () => renderHistory();
+        }
+
+        function renderHistory() {
+            const tx = db.transaction("notes", "readonly");
+            const store = tx.objectStore("notes");
+            const request = store.getAll();
+
+            request.onsuccess = () => {
+                const notes = request.result.reverse();
+                const listEl = document.getElementById("historyList");
+                if (notes.length === 0) {
+                    listEl.innerHTML = '<p style="font-size: 14px; color: var(--subtext); margin: 0;">No notes saved yet.</p>';
+                    return;
+                }
+                listEl.innerHTML = notes.map(n => `
+                    <div class="note-item">
+                        <div class="note-date">${n.timestamp}</div>
+                        <div class="box"><strong>Summary:</strong><br>${n.summary}<br><br><strong>Transcript:</strong><br>${n.transcript}</div>
+                    </div>
+                `).join('');
+            };
+        }
+
+        // --- Web BLE Logic ---
+        async function connectBLE() {
+            try {
+                document.getElementById("statusText").innerText = "Scanning...";
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'dk-pendant' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+
+                document.getElementById("statusText").innerText = "Connecting...";
+                gattServer = await device.gatt.connect();
+                const service = await gattServer.getPrimaryService(SERVICE_UUID);
+                audioChar = await service.getCharacteristic(AUDIO_CHAR_UUID);
+
+                await audioChar.startNotifications();
+                audioChar.addEventListener('characteristicvaluechanged', handleAudioData);
+
+                document.getElementById("dot").classList.add("connected");
+                document.getElementById("statusText").innerText = "Connected to dk-pendant";
+                document.getElementById("connectBtn").style.display = "none";
+                document.getElementById("recordBtn").disabled = false;
+            } catch (err) {
+                alert("BLE Connection Error: " + err.message);
+                document.getElementById("statusText").innerText = "Connection Failed";
+            }
+        }
+
+        function handleAudioData(event) {
+            if (!isRecording) return;
+            let value = new Uint8Array(event.target.value.buffer);
+            pcmChunks.push(value);
+        }
+
+        function toggleRecord() {
+            const btn = document.getElementById("recordBtn");
+            if (!isRecording) {
+                pcmChunks = [];
+                isRecording = true;
+                btn.innerText = "Stop & Process Note";
+                btn.classList.add("recording");
+                document.getElementById("statusText").innerText = "Recording Audio...";
+            } else {
+                isRecording = false;
+                btn.innerText = "Start Recording Note";
+                btn.classList.remove("recording");
+                document.getElementById("statusText").innerText = "Processing Audio...";
+                processAudio();
+            }
+        }
+
+        // --- Audio Packaging & AI Pipeline ---
+        async function processAudio() {
+            const apiKey = localStorage.getItem("OPENAI_KEY");
+            if (!apiKey) {
+                alert("Please enter your OpenAI API key at the top first.");
+                return;
+            }
+
+            document.getElementById("outputSection").style.display = "block";
+            document.getElementById("summaryBox").innerText = "Synthesizing WAV file...";
+
+            // Combine PCM chunks into a flat Byte Array
+            let totalLength = pcmChunks.reduce((acc, val) => acc + val.length, 0);
+            let pcmData = new Uint8Array(totalLength);
+            let offset = 0;
+            for (let chunk of pcmChunks) {
+                pcmData.set(chunk, offset);
+                offset += chunk.length;
+            }
+
+            if (pcmData.length === 0) {
+                document.getElementById("summaryBox").innerText = "No audio data was captured.";
+                return;
+            }
+
+            let wavBlob = createWavBlob(pcmData, 16000);
+
+            // 1. OpenAI Whisper Transcription
+            document.getElementById("summaryBox").innerText = "Transcribing audio with Whisper...";
+            let formData = new FormData();
+            formData.append("file", wavBlob, "audio.wav");
+            formData.append("model", "whisper-1");
+
+            try {
+                let whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${apiKey}` },
+                    body: formData
+                });
+                let whisperData = await whisperRes.json();
+                let transcript = whisperData.text || "No speech detected.";
+
+                // 2. OpenAI GPT-4o Summarization
+                document.getElementById("summaryBox").innerText = "Generating summary with GPT-4o...";
+                let gptRes = await fetch("https://api.openai.com/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${apiKey}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        model: "gpt-4o",
+                        messages: [
+                            { role: "system", content: "You are an AI Notetaker. Summarize the transcript into key takeaways and bullet action items." },
+                            { role: "user", content: transcript }
+                        ]
+                    })
+                });
+                let gptData = await gptRes.json();
+                let summary = gptData.choices[0].message.content;
+
+                document.getElementById("summaryBox").innerText = summary;
+                document.getElementById("statusText").innerText = "Connected to dk-pendant";
+
+                // Save to local IndexedDB on phone
+                saveNoteToDB(summary, transcript);
+
+            } catch (err) {
+                alert("API Processing Error: " + err.message);
+                document.getElementById("summaryBox").innerText = "Failed to process audio.";
+            }
+        }
+
+        // Convert PCM stream to WAV Container (16kHz, 16-bit Mono)
+        function createWavBlob(pcmData, sampleRate) {
+            let buffer = new ArrayBuffer(44 + pcmData.length);
+            let view = new DataView(buffer);
+
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + pcmData.length, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, pcmData.length, true);
+
+            let pcmBytes = new Uint8Array(buffer, 44);
+            pcmBytes.set(pcmData);
+
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+
+        function writeString(view, offset, string) {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+    </script>
+</body>
+</html>
