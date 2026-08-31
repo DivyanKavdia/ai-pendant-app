@@ -14,10 +14,12 @@
         :root {
             --primary: #007aff;
             --danger: #ff3b30;
+            --success: #34c759;
             --bg: #f2f2f7;
             --card-bg: #ffffff;
             --text: #1c1c1e;
             --subtext: #8e8e93;
+            --border: #d1d1d6;
         }
 
         body {
@@ -32,7 +34,7 @@
         }
 
         h2 { margin-top: 8px; margin-bottom: 16px; font-weight: 700; }
-        h3 { margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: var(--subtext); }
+        h3 { margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: var(--subtext); }
 
         .card {
             background: var(--card-bg);
@@ -42,52 +44,44 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.03);
         }
 
-        .status-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+        .form-group {
+            margin-bottom: 12px;
+        }
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
             font-weight: 600;
-            font-size: 15px;
-        }
-
-        .status-left {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: var(--danger);
-            transition: background 0.3s ease;
-        }
-
-        .dot.connected { background: #34c759; }
-
-        .data-counter {
-            font-size: 12px;
             color: var(--subtext);
-            font-weight: normal;
+            margin-bottom: 4px;
         }
 
-        input[type="password"] {
+        select, input[type="password"], input[type="text"] {
             width: 100%;
             padding: 12px;
-            border: 1px solid #d1d1d6;
+            border: 1px solid var(--border);
             border-radius: 8px;
             font-size: 14px;
             box-sizing: border-box;
-            margin-top: 8px;
+            background: #fff;
+            color: var(--text);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
         }
 
         button {
             width: 100%;
-            padding: 16px;
+            padding: 14px;
             border: none;
-            border-radius: 12px;
-            font-size: 16px;
+            border-radius: 10px;
+            font-size: 15px;
             font-weight: 600;
             color: white;
             background: var(--primary);
@@ -97,296 +91,399 @@
 
         button:active { opacity: 0.8; }
         button:disabled { background: #c7c7cc; cursor: not-allowed; }
-        button.recording { background: var(--danger); }
+        button.danger { background: var(--danger); }
+        button.secondary { background: #8e8e93; }
 
-        .box {
+        .status-box {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
             background: #f8f8fc;
-            padding: 12px;
             border-radius: 8px;
             font-size: 14px;
-            line-height: 1.5;
-            white-space: pre-wrap;
-            color: var(--text);
+            font-weight: 500;
         }
 
-        .note-item {
-            border-bottom: 1px solid #e5e5ea;
-            padding-bottom: 12px;
-            margin-bottom: 12px;
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
-        .note-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-        .note-date { font-size: 12px; color: var(--subtext); margin-bottom: 4px; }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--danger);
+        }
+        .dot.connected { background: var(--success); }
+
+        .storage-tree {
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            background: #f8f8fc;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #e5e5ea;
+        }
+        .folder-item { font-weight: bold; color: var(--primary); margin-top: 6px; }
+        .file-item { margin-left: 14px; color: var(--text); }
     </style>
 </head>
 <body>
 
     <h2>AI Notetaker</h2>
 
-    <!-- API Key Input -->
+    <!-- 1. Model & Provider Configuration -->
     <div class="card">
-        <h3>OpenAI API Key</h3>
-        <input type="password" id="apiKeyInput" placeholder="sk-..." onchange="saveKey()">
-    </div>
+        <h3>1. AI Provider & Key</h3>
+        
+        <div class="form-group">
+            <label for="providerSelect">Provider</label>
+            <select id="providerSelect" onchange="onProviderChange()">
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="gemini">Google Gemini</option>
+                <option value="openrouter">OpenRouter (Free / Multi-Model)</option>
+            </select>
+        </div>
 
-    <!-- Connection Status -->
-    <div class="card">
-        <div class="status-row">
-            <div class="status-left">
-                <div id="dot" class="dot"></div>
-                <span id="statusText">Disconnected</span>
-            </div>
-            <div id="byteCounter" class="data-counter">0 Chunks (0 KB)</div>
+        <div class="form-group">
+            <label for="modelSelect">Model</label>
+            <select id="modelSelect"></select>
+        </div>
+
+        <div class="form-group">
+            <label for="apiKeyInput">API Key</label>
+            <input type="password" id="apiKeyInput" placeholder="Enter API Key">
+        </div>
+
+        <div class="btn-group">
+            <button id="apiConnectBtn" onclick="connectAPI()">Connect Provider</button>
+            <button id="apiDisconnectBtn" class="danger" onclick="disconnectAPI()" disabled>Disconnect</button>
         </div>
     </div>
 
-    <!-- Action Buttons -->
-    <button id="connectBtn" onclick="connectBLE()">Connect to dk-pendant</button>
-    <br><br>
-    <button id="recordBtn" onclick="toggleRecord()" disabled>Start Recording Note</button>
-
-    <br><br>
-
-    <!-- Active Note Processing Display -->
-    <div id="outputSection" class="card" style="display: none;">
-        <h3>Current Note Processing</h3>
-        <div id="summaryBox" class="box">Waiting for audio...</div>
+    <!-- 2. AI Connection Status -->
+    <div class="card">
+        <h3>AI Status</h3>
+        <div class="status-box">
+            <div class="status-indicator">
+                <div id="apiDot" class="dot"></div>
+                <span id="apiStatusText">Disconnected</span>
+            </div>
+        </div>
     </div>
 
-    <!-- Saved Notes History -->
+    <!-- 3. BLE Pendant Control -->
     <div class="card">
-        <h3>Saved Notes History</h3>
-        <div id="historyList">
-            <p style="font-size: 14px; color: var(--subtext); margin: 0;">No notes saved yet.</p>
+        <h3>2. Pendant Connection</h3>
+        <div class="status-box" style="margin-bottom: 12px;">
+            <div class="status-indicator">
+                <div id="bleDot" class="dot"></div>
+                <span id="bleStatusText">Pendant Disconnected</span>
+            </div>
+            <span id="chunkCounter" style="font-size: 12px; color: var(--subtext);">0 files</span>
+        </div>
+
+        <div class="btn-group">
+            <button id="bleConnectBtn" onclick="connectBLE()" disabled>Connect Pendant</button>
+            <button id="bleDisconnectBtn" class="secondary" onclick="disconnectBLE()" disabled>Disconnect</button>
+        </div>
+    </div>
+
+    <!-- 4. Real-time Storage Monitor -->
+    <div class="card">
+        <h3>Hourly Audio Storage</h3>
+        <div id="storageTree" class="storage-tree">
+            <em>No audio chunks recorded yet.</em>
         </div>
     </div>
 
     <script>
+        // Preset Model Configurations per Provider
+        const PROVIDER_MODELS = {
+            openai: [
+                { id: "gpt-4o", name: "GPT-4o" },
+                { id: "gpt-4o-mini", name: "GPT-4o Mini" }
+            ],
+            anthropic: [
+                { id: "claude-3-5-sonnet-20240620", name: "Claude 3.5 Sonnet" },
+                { id: "claude-3-haiku-20240307", name: "Claude 3 Haiku" }
+            ],
+            gemini: [
+                { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" },
+                { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro" }
+            ],
+            openrouter: [
+                { id: "google/gemini-2.5-flash-lite:free", name: "Gemini 2.5 Flash Lite (Free)" },
+                { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B (Free)" },
+                { id: "qwen/qwen-2.5-72b-instruct:free", name: "Qwen 2.5 72B (Free)" }
+            ]
+        };
+
         const SERVICE_UUID = "4fa12345-0000-1000-8000-00805f9b34fb";
         const AUDIO_CHAR_UUID = "4fa12346-0000-1000-8000-00805f9b34fb";
 
-        let gattServer, audioChar;
-        let isRecording = false;
-        let pcmChunks = [];
-        let totalBytesReceived = 0;
-        let db;
+        let bleDevice = null;
+        let gattServer = null;
+        let audioChar = null;
+        let db = null;
+        let totalChunkCount = 0;
 
-        window.addEventListener('load', () => {
-            const savedKey = localStorage.getItem("OPENAI_KEY");
-            if (savedKey) document.getElementById("apiKeyInput").value = savedKey;
-            initDB();
+        // Initialize state on boot
+        window.addEventListener('load', async () => {
+            await initDB();
+            populateProviders();
+            restoreAPIConnection();
+            renderStorageTree();
         });
 
-        function saveKey() {
-            const key = document.getElementById("apiKeyInput").value.trim();
-            localStorage.setItem("OPENAI_KEY", key);
+        // --- 1. Provider & Model UI Management ---
+        function populateProviders() {
+            const providerSelect = document.getElementById("providerSelect");
+            const savedProvider = localStorage.getItem("AI_PROVIDER") || "openai";
+            providerSelect.value = savedProvider;
+            
+            onProviderChange();
+            
+            const savedModel = localStorage.getItem("AI_MODEL");
+            if (savedModel) {
+                document.getElementById("modelSelect").value = savedModel;
+            }
+            
+            const savedKey = localStorage.getItem("AI_KEY");
+            if (savedKey) {
+                document.getElementById("apiKeyInput").value = savedKey;
+            }
         }
 
-        // --- IndexedDB for Note Storage ---
-        function initDB() {
-            const request = indexedDB.open("NotetakerDB", 1);
-            request.onupgradeneeded = (e) => {
-                db = e.target.result;
-                db.createObjectStore("notes", { keyPath: "id", autoIncrement: true });
-            };
-            request.onsuccess = (e) => {
-                db = e.target.result;
-                renderHistory();
-            };
-        }
+        function onProviderChange() {
+            const provider = document.getElementById("providerSelect").value;
+            const modelSelect = document.getElementById("modelSelect");
+            modelSelect.innerHTML = "";
 
-        function saveNoteToDB(summary, transcript) {
-            const tx = db.transaction("notes", "readwrite");
-            const store = tx.objectStore("notes");
-            store.add({
-                timestamp: new Date().toLocaleString(),
-                summary: summary,
-                transcript: transcript
+            PROVIDER_MODELS[provider].forEach(m => {
+                const opt = document.createElement("option");
+                opt.value = m.id;
+                opt.textContent = m.name;
+                modelSelect.appendChild(opt);
             });
-            tx.oncomplete = () => renderHistory();
         }
 
-        function renderHistory() {
-            const tx = db.transaction("notes", "readonly");
-            const store = tx.objectStore("notes");
+        // --- 2. API Connection Management ---
+        function connectAPI() {
+            const provider = document.getElementById("providerSelect").value;
+            const model = document.getElementById("modelSelect").value;
+            const apiKey = document.getElementById("apiKeyInput").value.trim();
+
+            if (!apiKey) {
+                alert("Please enter a valid API key.");
+                return;
+            }
+
+            // Persist parameters
+            localStorage.setItem("AI_PROVIDER", provider);
+            localStorage.setItem("AI_MODEL", model);
+            localStorage.setItem("AI_KEY", apiKey);
+            localStorage.setItem("AI_CONNECTED", "true");
+
+            updateAPIUI(true, model);
+        }
+
+        function restoreAPIConnection() {
+            const isConnected = localStorage.getItem("AI_CONNECTED") === "true";
+            const model = localStorage.getItem("AI_MODEL");
+            const key = localStorage.getItem("AI_KEY");
+
+            if (isConnected && key && model) {
+                updateAPIUI(true, model);
+            } else {
+                updateAPIUI(false);
+            }
+        }
+
+        function disconnectAPI() {
+            localStorage.setItem("AI_CONNECTED", "false");
+            updateAPIUI(false);
+        }
+
+        function updateAPIUI(connected, modelName = "") {
+            const apiDot = document.getElementById("apiDot");
+            const apiStatusText = document.getElementById("apiStatusText");
+            const apiConnectBtn = document.getElementById("apiConnectBtn");
+            const apiDisconnectBtn = document.getElementById("apiDisconnectBtn");
+            const bleConnectBtn = document.getElementById("bleConnectBtn");
+
+            if (connected) {
+                apiDot.classList.add("connected");
+                apiStatusText.innerText = `Connected using model: ${modelName}`;
+                apiConnectBtn.disabled = true;
+                apiDisconnectBtn.disabled = false;
+                bleConnectBtn.disabled = false;
+            } else {
+                apiDot.classList.remove("connected");
+                apiStatusText.innerText = "Disconnected";
+                apiConnectBtn.disabled = false;
+                apiDisconnectBtn.disabled = true;
+                bleConnectBtn.disabled = true;
+
+                // If AI disconnects, disconnect BLE as well
+                if (gattServer && gattServer.connected) {
+                    disconnectBLE();
+                }
+            }
+        }
+
+        // --- 3. IndexedDB Hourly Folder Storage ---
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open("PendantAudioDB", 1);
+                request.onupgradeneeded = (e) => {
+                    db = e.target.result;
+                    if (!db.objectStoreNames.contains("chunks")) {
+                        const store = db.createObjectStore("chunks", { keyPath: "id" });
+                        store.createIndex("folder", "folder", { unique: false });
+                    }
+                };
+                request.onsuccess = (e) => {
+                    db = e.target.result;
+                    resolve();
+                };
+                request.onerror = (e) => reject(e);
+            });
+        }
+
+        async function saveAudioChunk(blob) {
+            const now = new Date();
+            // Create hourly folder format: YYYY-MM-DD_HH-00
+            const folderName = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}-00`;
+            // Auto-generated timestamp filename
+            const fileName = `chunk_${now.getTime()}.pcm`;
+            const fileId = `${folderName}/${fileName}`;
+
+            const record = {
+                id: fileId,
+                folder: folderName,
+                filename: fileName,
+                timestamp: now.toISOString(),
+                data: blob
+            };
+
+            const tx = db.transaction("chunks", "readwrite");
+            const store = tx.objectStore("chunks");
+            store.put(record);
+
+            tx.oncomplete = () => {
+                totalChunkCount++;
+                document.getElementById("chunkCounter").innerText = `${totalChunkCount} files`;
+                renderStorageTree();
+            };
+        }
+
+        function renderStorageTree() {
+            if (!db) return;
+            const tx = db.transaction("chunks", "readonly");
+            const store = tx.objectStore("chunks");
             const request = store.getAll();
 
             request.onsuccess = () => {
-                const notes = request.result.reverse();
-                const listEl = document.getElementById("historyList");
-                if (notes.length === 0) {
-                    listEl.innerHTML = '<p style="font-size: 14px; color: var(--subtext); margin: 0;">No notes saved yet.</p>';
+                const records = request.result;
+                const treeEl = document.getElementById("storageTree");
+                
+                if (records.length === 0) {
+                    treeEl.innerHTML = "<em>No audio chunks recorded yet.</em>";
                     return;
                 }
-                listEl.innerHTML = notes.map(n => `
-                    <div class="note-item">
-                        <div class="note-date">${n.timestamp}</div>
-                        <div class="box"><strong>Summary:</strong><br>${n.summary}<br><br><strong>Transcript:</strong><br>${n.transcript}</div>
-                    </div>
-                `).join('');
+
+                // Group by folder
+                const folders = {};
+                records.forEach(r => {
+                    if (!folders[r.folder]) folders[r.folder] = [];
+                    folders[r.folder].push(r.filename);
+                });
+
+                let html = "";
+                Object.keys(folders).sort().reverse().forEach(folder => {
+                    html += `<div class="folder-item">📁 ${folder}/</div>`;
+                    folders[folder].slice(-5).forEach(file => { // Show last 5 per folder
+                        html += `<div class="file-item">📄 ${file}</div>`;
+                    });
+                });
+
+                treeEl.innerHTML = html;
             };
         }
 
-        // --- Web BLE Logic ---
+        // --- 4. BLE Connection & Ingestion ---
         async function connectBLE() {
             try {
-                document.getElementById("statusText").innerText = "Scanning...";
-                const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'dk-pendant' }],
+                document.getElementById("bleStatusText").innerText = "Scanning Pendants...";
+                
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'dk-' }, { name: 'dk-pendant' }],
                     optionalServices: [SERVICE_UUID]
                 });
 
-                document.getElementById("statusText").innerText = "Connecting...";
-                gattServer = await device.gatt.connect();
+                bleDevice.addEventListener('gattserverdisconnected', onBLEDisconnected);
+
+                document.getElementById("bleStatusText").innerText = "Connecting...";
+                gattServer = await bleDevice.gatt.connect();
+                
                 const service = await gattServer.getPrimaryService(SERVICE_UUID);
                 audioChar = await service.getCharacteristic(AUDIO_CHAR_UUID);
 
-                // Enable Notifications
                 await audioChar.startNotifications();
-                audioChar.addEventListener('characteristicvaluechanged', handleAudioData);
+                audioChar.addEventListener('characteristicvaluechanged', handleIncomingAudioChunk);
 
-                document.getElementById("dot").classList.add("connected");
-                document.getElementById("statusText").innerText = "Connected";
-                document.getElementById("connectBtn").style.display = "none";
-                document.getElementById("recordBtn").disabled = false;
+                updateBLEUI(true, bleDevice.name);
             } catch (err) {
-                alert("BLE Connection Error: " + err.message);
-                document.getElementById("statusText").innerText = "Connection Failed";
+                alert("BLE Error: " + err.message);
+                updateBLEUI(false);
             }
         }
 
-        function handleAudioData(event) {
-            if (!isRecording) return;
-
-            // Safe slice copy to prevent WebBLE buffer memory recycling issues
+        function handleIncomingAudioChunk(event) {
             const rawBuffer = event.target.value;
-            const chunk = new Uint8Array(rawBuffer.buffer.slice(rawBuffer.byteOffset, rawBuffer.byteOffset + rawBuffer.byteLength));
+            // Create a safe detached slice
+            const chunkData = new Uint8Array(rawBuffer.buffer.slice(rawBuffer.byteOffset, rawBuffer.byteOffset + rawBuffer.byteLength));
+            const blob = new Blob([chunkData], { type: 'audio/pcm' });
             
-            pcmChunks.push(chunk);
-            totalBytesReceived += chunk.byteLength;
-
-            // Update live chunk indicator UI
-            const kbReceived = (totalBytesReceived / 1024).toFixed(1);
-            document.getElementById("byteCounter").innerText = `${pcmChunks.length} Chunks (${kbReceived} KB)`;
+            // Store continuously into hourly database structures
+            saveAudioChunk(blob);
         }
 
-        function toggleRecord() {
-            const btn = document.getElementById("recordBtn");
-            if (!isRecording) {
-                pcmChunks = [];
-                totalBytesReceived = 0;
-                isRecording = true;
-                btn.innerText = "Stop & Process Note";
-                btn.classList.add("recording");
-                document.getElementById("statusText").innerText = "Recording Audio...";
+        function disconnectBLE() {
+            if (gattServer && gattServer.connected) {
+                gattServer.disconnect();
             } else {
-                isRecording = false;
-                btn.innerText = "Start Recording Note";
-                btn.classList.remove("recording");
-                document.getElementById("statusText").innerText = "Processing Audio...";
-                processAudio();
+                onBLEDisconnected();
             }
         }
 
-        // --- Audio Packaging & AI Pipeline ---
-        async function processAudio() {
-            const apiKey = localStorage.getItem("OPENAI_KEY");
-            if (!apiKey) {
-                alert("Please enter your OpenAI API key at the top first.");
-                return;
-            }
-
-            document.getElementById("outputSection").style.display = "block";
-            document.getElementById("summaryBox").innerText = "Synthesizing WAV file...";
-
-            // Combine PCM chunks into a flat Byte Array
-            let totalLength = pcmChunks.reduce((acc, val) => acc + val.length, 0);
-            let pcmData = new Uint8Array(totalLength);
-            let offset = 0;
-            for (let chunk of pcmChunks) {
-                pcmData.set(chunk, offset);
-                offset += chunk.length;
-            }
-
-            if (pcmData.length === 0) {
-                document.getElementById("summaryBox").innerText = "No audio data was captured.";
-                return;
-            }
-
-            let wavBlob = createWavBlob(pcmData, 16000);
-
-            // 1. OpenAI Whisper Transcription
-            document.getElementById("summaryBox").innerText = "Transcribing audio with Whisper...";
-            let formData = new FormData();
-            formData.append("file", wavBlob, "audio.wav");
-            formData.append("model", "whisper-1");
-
-            try {
-                let whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-                    method: "POST",
-                    headers: { "Authorization": `Bearer ${apiKey}` },
-                    body: formData
-                });
-                let whisperData = await whisperRes.json();
-                let transcript = whisperData.text || "No speech detected.";
-
-                // 2. OpenAI GPT-4o Summarization
-                document.getElementById("summaryBox").innerText = "Generating summary with GPT-4o...";
-                let gptRes = await fetch("https://api.openai.com/v1/chat/completions", {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${apiKey}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        model: "gpt-4o",
-                        messages: [
-                            { role: "system", content: "You are an AI Notetaker. Summarize the transcript into key takeaways and bullet action items." },
-                            { role: "user", content: transcript }
-                        ]
-                    })
-                });
-                let gptData = await gptRes.json();
-                let summary = gptData.choices[0].message.content;
-
-                document.getElementById("summaryBox").innerText = summary;
-                document.getElementById("statusText").innerText = "Connected";
-
-                saveNoteToDB(summary, transcript);
-
-            } catch (err) {
-                alert("API Processing Error: " + err.message);
-                document.getElementById("summaryBox").innerText = "Failed to process audio.";
-            }
+        function onBLEDisconnected() {
+            updateBLEUI(false);
         }
 
-        // Convert PCM stream to WAV Container (16kHz, 16-bit Mono)
-        function createWavBlob(pcmData, sampleRate) {
-            let buffer = new ArrayBuffer(44 + pcmData.length);
-            let view = new DataView(buffer);
+        function updateBLEUI(connected, deviceName = "") {
+            const bleDot = document.getElementById("bleDot");
+            const bleStatusText = document.getElementById("bleStatusText");
+            const bleConnectBtn = document.getElementById("bleConnectBtn");
+            const bleDisconnectBtn = document.getElementById("bleDisconnectBtn");
 
-            writeString(view, 0, 'RIFF');
-            view.setUint32(4, 36 + pcmData.length, true);
-            writeString(view, 8, 'WAVE');
-            writeString(view, 12, 'fmt ');
-            view.setUint32(16, 16, true);
-            view.setUint16(20, 1, true);
-            view.setUint16(22, 1, true);
-            view.setUint32(24, sampleRate, true);
-            view.setUint32(28, sampleRate * 2, true);
-            view.setUint16(32, 2, true);
-            view.setUint16(34, 16, true);
-            writeString(view, 36, 'data');
-            view.setUint32(40, pcmData.length, true);
-
-            let pcmBytes = new Uint8Array(buffer, 44);
-            pcmBytes.set(pcmData);
-
-            return new Blob([buffer], { type: 'audio/wav' });
-        }
-
-        function writeString(view, offset, string) {
-            for (let i = 0; i < string.length; i++) {
-                view.setUint8(offset + i, string.charCodeAt(i));
+            if (connected) {
+                bleDot.classList.add("connected");
+                bleStatusText.innerText = `Connected: ${deviceName}`;
+                bleConnectBtn.disabled = true;
+                bleDisconnectBtn.disabled = false;
+            } else {
+                bleDot.classList.remove("connected");
+                bleStatusText.innerText = "Pendant Disconnected";
+                bleConnectBtn.disabled = localStorage.getItem("AI_CONNECTED") !== "true";
+                bleDisconnectBtn.disabled = true;
             }
         }
     </script>
