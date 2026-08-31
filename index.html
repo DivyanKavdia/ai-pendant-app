@@ -45,9 +45,15 @@
         .status-row {
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: space-between;
             font-weight: 600;
             font-size: 15px;
+        }
+
+        .status-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .dot {
@@ -59,6 +65,12 @@
         }
 
         .dot.connected { background: #34c759; }
+
+        .data-counter {
+            font-size: 12px;
+            color: var(--subtext);
+            font-weight: normal;
+        }
 
         input[type="password"] {
             width: 100%;
@@ -110,29 +122,37 @@
 
     <h2>AI Notetaker</h2>
 
+    <!-- API Key Input -->
     <div class="card">
         <h3>OpenAI API Key</h3>
         <input type="password" id="apiKeyInput" placeholder="sk-..." onchange="saveKey()">
     </div>
 
+    <!-- Connection Status -->
     <div class="card">
         <div class="status-row">
-            <div id="dot" class="dot"></div>
-            <span id="statusText">Disconnected</span>
+            <div class="status-left">
+                <div id="dot" class="dot"></div>
+                <span id="statusText">Disconnected</span>
+            </div>
+            <div id="byteCounter" class="data-counter">0 Chunks (0 KB)</div>
         </div>
     </div>
 
+    <!-- Action Buttons -->
     <button id="connectBtn" onclick="connectBLE()">Connect to dk-pendant</button>
     <br><br>
     <button id="recordBtn" onclick="toggleRecord()" disabled>Start Recording Note</button>
 
     <br><br>
 
+    <!-- Active Note Processing Display -->
     <div id="outputSection" class="card" style="display: none;">
         <h3>Current Note Processing</h3>
         <div id="summaryBox" class="box">Waiting for audio...</div>
     </div>
 
+    <!-- Saved Notes History -->
     <div class="card">
         <h3>Saved Notes History</h3>
         <div id="historyList">
@@ -147,9 +167,9 @@
         let gattServer, audioChar;
         let isRecording = false;
         let pcmChunks = [];
+        let totalBytesReceived = 0;
         let db;
 
-        // Initialize App
         window.addEventListener('load', () => {
             const savedKey = localStorage.getItem("OPENAI_KEY");
             if (savedKey) document.getElementById("apiKeyInput").value = savedKey;
@@ -220,11 +240,12 @@
                 const service = await gattServer.getPrimaryService(SERVICE_UUID);
                 audioChar = await service.getCharacteristic(AUDIO_CHAR_UUID);
 
+                // Enable Notifications
                 await audioChar.startNotifications();
                 audioChar.addEventListener('characteristicvaluechanged', handleAudioData);
 
                 document.getElementById("dot").classList.add("connected");
-                document.getElementById("statusText").innerText = "Connected to dk-pendant";
+                document.getElementById("statusText").innerText = "Connected";
                 document.getElementById("connectBtn").style.display = "none";
                 document.getElementById("recordBtn").disabled = false;
             } catch (err) {
@@ -235,14 +256,24 @@
 
         function handleAudioData(event) {
             if (!isRecording) return;
-            let value = new Uint8Array(event.target.value.buffer);
-            pcmChunks.push(value);
+
+            // Safe slice copy to prevent WebBLE buffer memory recycling issues
+            const rawBuffer = event.target.value;
+            const chunk = new Uint8Array(rawBuffer.buffer.slice(rawBuffer.byteOffset, rawBuffer.byteOffset + rawBuffer.byteLength));
+            
+            pcmChunks.push(chunk);
+            totalBytesReceived += chunk.byteLength;
+
+            // Update live chunk indicator UI
+            const kbReceived = (totalBytesReceived / 1024).toFixed(1);
+            document.getElementById("byteCounter").innerText = `${pcmChunks.length} Chunks (${kbReceived} KB)`;
         }
 
         function toggleRecord() {
             const btn = document.getElementById("recordBtn");
             if (!isRecording) {
                 pcmChunks = [];
+                totalBytesReceived = 0;
                 isRecording = true;
                 btn.innerText = "Stop & Process Note";
                 btn.classList.add("recording");
@@ -318,9 +349,8 @@
                 let summary = gptData.choices[0].message.content;
 
                 document.getElementById("summaryBox").innerText = summary;
-                document.getElementById("statusText").innerText = "Connected to dk-pendant";
+                document.getElementById("statusText").innerText = "Connected";
 
-                // Save to local IndexedDB on phone
                 saveNoteToDB(summary, transcript);
 
             } catch (err) {
