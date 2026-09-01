@@ -163,6 +163,16 @@
         .folder-item { font-weight: bold; color: var(--primary); margin-top: 6px; }
         .file-item { margin-left: 14px; color: var(--text); }
         .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; background: #e5e5ea; font-size: 11px; }
+        
+        .pulse-badge {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            margin-right: 4px;
+            animation: pulse 1s infinite alternate;
+        }
     </style>
 </head>
 <body>
@@ -224,7 +234,7 @@
             </div>
         </div>
 
-        <!-- 2. BLE Pendant Config (Independent Connection) -->
+        <!-- 2. BLE Pendant Config (Independent Connection & Persistent Auto-Reconnect) -->
         <div class="card">
             <h3>2. Pendant BLE</h3>
             <div class="status-box" style="margin-bottom: 12px;">
@@ -234,7 +244,7 @@
                 </div>
             </div>
 
-            <p style="font-size: 12px; color: var(--subtext); margin-top: 0;">Connects independently of AI setup. Audio will store locally until AI is ready.</p>
+            <p style="font-size: 12px; color: var(--subtext); margin-top: 0;">Connects independently. Reconnects automatically on refresh until manually disconnected.</p>
 
             <div class="btn-group" style="margin-top: 24px;">
                 <button id="bleConnectBtn" onclick="connectBLE()">Connect Pendant</button>
@@ -252,11 +262,14 @@
         <div id="notesContainer" class="notes-container"><em>Transcriptions and combined meeting notes will appear here in real-time...</em></div>
     </div>
 
-    <!-- Audio Storage Archive -->
+    <!-- Audio Storage Archive (Auto-Refreshing) -->
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <h3 style="margin: 0;">Hourly Audio Archive</h3>
-            <span id="chunkCounter" style="font-size: 12px; color: var(--subtext);">0 chunks saved</span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="pulse-badge"></span>
+                <span id="chunkCounter" style="font-size: 12px; color: var(--subtext);">0 chunks saved</span>
+            </div>
         </div>
         <div id="storageTree" class="storage-tree">
             <em>No audio chunks recorded yet.</em>
@@ -289,6 +302,7 @@
         let gattServer = null;
         let audioChar = null;
         let db = null;
+        let userIntentionalDisconnect = false;
 
         // Audio Accumulation State
         let rawPcmBufferPool = [];
@@ -308,6 +322,12 @@
             restoreAPIConnection();
             renderStorageTree();
             updatePipelineStatus();
+
+            // Attempt silent auto-reconnection on page refresh/load
+            await autoReconnectBLE();
+
+            // Set up real-time auto-refresh interval for audio storage archive UI
+            setInterval(renderStorageTree, 2500);
         });
 
         // Provider UI Control
@@ -407,36 +427,102 @@
             }
         }
 
-        // BLE Connection (Independent)
+        // --- Persistent Auto-Reconnecting BLE Engine ---
+
+        async function autoReconnectBLE() {
+            if (!navigator.bluetooth || !navigator.bluetooth.getDevices) return;
+
+            try {
+                const devices = await navigator.bluetooth.getDevices();
+                const pendantDevice = devices.find(d => d.name && (d.name.startsWith('dk-') || d.name === 'dk-pendant'));
+
+                if (pendantDevice) {
+                    bleDevice = pendantDevice;
+                    userIntentionalDisconnect = false;
+                    await setupBLEConnection(bleDevice);
+                }
+            } catch (err) {
+                console.warn("Auto-reconnect BLE failed:", err);
+            }
+        }
+
+        async function setupBLEConnection(device) {
+            document.getElementById("bleStatusText").innerText = "Connecting...";
+
+            device.removeEventListener('gattserverdisconnected', onBLEDisconnected);
+            device.addEventListener('gattserverdisconnected', onBLEDisconnected);
+
+            gattServer = await device.gatt.connect();
+            const service = await gattServer.getPrimaryService(SERVICE_UUID);
+            audioChar = await service.getCharacteristic(AUDIO_CHAR_UUID);
+
+            await audioChar.startNotifications();
+            audioChar.removeEventListener('characteristicvaluechanged', handleIncomingAudioChunk);
+            audioChar.addEventListener('characteristicvaluechanged', handleIncomingAudioChunk);
+
+            isBleConnected = true;
+            updateBLEUI(true, device.name);
+            updatePipelineStatus();
+        }
+
         async function connectBLE() {
             try {
+                userIntentionalDisconnect = false;
                 document.getElementById("bleStatusText").innerText = "Scanning...";
-                
+
                 bleDevice = await navigator.bluetooth.requestDevice({
                     filters: [{ namePrefix: 'dk-' }, { name: 'dk-pendant' }],
                     optionalServices: [SERVICE_UUID]
                 });
 
-                bleDevice.addEventListener('gattserverdisconnected', onBLEDisconnected);
-
-                document.getElementById("bleStatusText").innerText = "Connecting...";
-                gattServer = await bleDevice.gatt.connect();
-                
-                const service = await gattServer.getPrimaryService(SERVICE_UUID);
-                audioChar = await service.getCharacteristic(AUDIO_CHAR_UUID);
-
-                await audioChar.startNotifications();
-                audioChar.addEventListener('characteristicvaluechanged', handleIncomingAudioChunk);
-
-                isBleConnected = true;
-                updateBLEUI(true, bleDevice.name);
-                updatePipelineStatus();
+                await setupBLEConnection(bleDevice);
             } catch (err) {
                 alert("BLE Error: " + err.message);
                 updateBLEUI(false);
                 updatePipelineStatus();
             }
         }
+
+        function disconnectBLE() {
+            userIntentionalDisconnect = true;
+            if (gattServer && gattServer.connected) {
+                gattServer.disconnect();
+            } else {
+                onBLEDisconnected();
+            }
+        }
+
+        function onBLEDisconnected() {
+            isBleConnected = false;
+            updateBLEUI(false);
+            updatePipelineStatus();
+
+            if (!userIntentionalDisconnect) {
+                document.getElementById("bleStatusText").innerText = "Reconnecting...";
+                setTimeout(autoReconnectBLE, 2000);
+            }
+        }
+
+        function updateBLEUI(connected, deviceName = "") {
+            const bleDot = document.getElementById("bleDot");
+            const bleStatusText = document.getElementById("bleStatusText");
+            const bleConnectBtn = document.getElementById("bleConnectBtn");
+            const bleDisconnectBtn = document.getElementById("bleDisconnectBtn");
+
+            if (connected) {
+                bleDot.classList.add("connected");
+                bleStatusText.innerText = deviceName || "Pendant Connected";
+                bleConnectBtn.disabled = true;
+                bleDisconnectBtn.disabled = false;
+            } else {
+                bleDot.classList.remove("connected");
+                bleStatusText.innerText = "Disconnected";
+                bleConnectBtn.disabled = false;
+                bleDisconnectBtn.disabled = true;
+            }
+        }
+
+        // --- Audio Processing & AI Pipeline ---
 
         function handleIncomingAudioChunk(event) {
             const rawBuffer = event.target.value;
@@ -465,49 +551,14 @@
 
             const wavBlob = pcmToWav(mergedPcm, 16000, 1, 16);
 
-            // Store audio chunk locally in IndexedDB
+            // Store audio chunk locally in IndexedDB (triggers real-time tree update)
             await saveAudioChunk(wavBlob);
 
-            // Process AI pipeline ONLY if both API and BLE connections are active
             if (isApiConnected && isBleConnected && !isProcessingChunk) {
                 processAudioWithAI(wavBlob);
             }
         }
 
-        function disconnectBLE() {
-            if (gattServer && gattServer.connected) {
-                gattServer.disconnect();
-            } else {
-                onBLEDisconnected();
-            }
-        }
-
-        function onBLEDisconnected() {
-            isBleConnected = false;
-            updateBLEUI(false);
-            updatePipelineStatus();
-        }
-
-        function updateBLEUI(connected, deviceName = "") {
-            const bleDot = document.getElementById("bleDot");
-            const bleStatusText = document.getElementById("bleStatusText");
-            const bleConnectBtn = document.getElementById("bleConnectBtn");
-            const bleDisconnectBtn = document.getElementById("bleDisconnectBtn");
-
-            if (connected) {
-                bleDot.classList.add("connected");
-                bleStatusText.innerText = deviceName || "Pendant Connected";
-                bleConnectBtn.disabled = true;
-                bleDisconnectBtn.disabled = false;
-            } else {
-                bleDot.classList.remove("connected");
-                bleStatusText.innerText = "Disconnected";
-                bleConnectBtn.disabled = false;
-                bleDisconnectBtn.disabled = true;
-            }
-        }
-
-        // AI Processing Pipeline
         async function processAudioWithAI(wavBlob) {
             isProcessingChunk = true;
             const dot = document.getElementById("pipelineDot");
@@ -657,7 +708,8 @@ Respond ONLY with valid raw JSON (no markdown fences) in this exact format:
             await saveNoteToDB(activeMeetingId, activeMeetingTitle, activeMeetingContent);
         }
 
-        // Audio Conversion & Utilities
+        // --- Audio Format & Binary Helpers ---
+
         function pcmToWav(pcmData, sampleRate = 16000, numChannels = 1, bitsPerSample = 16) {
             const headerLength = 44;
             const dataLength = pcmData.length;
@@ -698,7 +750,8 @@ Respond ONLY with valid raw JSON (no markdown fences) in this exact format:
             });
         }
 
-        // IndexedDB Operations
+        // --- IndexedDB Operations & Auto-Updating Storage UI ---
+
         function initDB() {
             return new Promise((resolve, reject) => {
                 const request = indexedDB.open("PendantAudioDB", 2);
@@ -732,6 +785,7 @@ Respond ONLY with valid raw JSON (no markdown fences) in this exact format:
             tx.objectStore("chunks").put(record);
 
             tx.oncomplete = () => {
+                // Instantly update tree view when a new file finishes saving
                 renderStorageTree();
             };
         }
