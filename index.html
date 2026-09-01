@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=5.3.0">
+  <link rel="stylesheet" href="styles.css?v=5.4.0">
 </head>
 <body data-state="disconnected">
   <a class="skip-link" href="#capture">Skip to recorder</a>
@@ -31,16 +31,15 @@
 
   <aside class="rail" aria-label="Main navigation">
     <nav class="rail-nav">
-      <a class="rail-link active" href="#capture" aria-current="location" aria-label="Recorder"><svg><use href="#i-wave"/></svg><span>Record</span></a>
+      <a class="rail-link active" href="#insights" aria-current="location" aria-label="Meetings and transcripts"><svg><use href="#i-spark"/></svg><span>Insights</span></a>
       <a class="rail-link" href="#library" aria-label="Your recordings"><svg><use href="#i-library"/></svg><span>Library</span></a>
-      <a class="rail-link" href="#insights" aria-label="Meetings and transcripts"><svg><use href="#i-spark"/></svg><span>Insights</span></a>
       <a class="rail-link" href="#processing" aria-label="Processing queue"><svg><use href="#i-check"/></svg><span>Queue</span></a>
     </nav>
   </aside>
 
   <div class="app-shell">
     <header class="topbar">
-      <a class="brand" href="#capture" aria-label="synap"><img class="brand-logo" src="logo.webp?v=5.3.0" width="800" height="216" alt="synap"></a>
+      <a class="brand" href="#capture" aria-label="synap"><img class="brand-logo" src="logo.webp?v=5.4.0" width="800" height="216" alt="synap"></a>
       <div class="top-actions">
         <button id="connectButton" class="connection-pill" type="button">
           <span id="connectionBadge" class="status-badge status-offline"><span class="status-dot" aria-hidden="true"></span><span id="connectionText" role="status" aria-live="polite">Not connected</span></span>
@@ -53,7 +52,38 @@
 
     <main>
       <p id="updateNotice" class="update-notice" role="status" hidden></p>
-      <div class="page-heading"><div><p class="eyebrow">YOUR PERSONAL AUDIO STUDIO</p><h1>Make room<br>for <span>the moment.</span></h1><p class="heading-description">Capture a thought. Keep the conversation.</p></div><span class="edition"><svg aria-hidden="true"><use href="#i-check"/></svg>Local-first recording</span></div>
+      <div class="page-heading compact-heading"><div><p class="eyebrow">A LITTLE SPACE FOR YOUR MIND</p><h1>Your day, <span>remembered.</span></h1></div></div>
+
+      <section id="capture" class="capture-layout compact-recorder" aria-label="Recorder" tabindex="-1">
+        <div class="hero-card">
+          <div class="session-heading"><div><p class="eyebrow">CAPTURE A MOMENT</p><h2 id="recorderTitle">Ready when you are.</h2></div><span class="local-badge"><svg aria-hidden="true"><use href="#i-check"/></svg>On-device</span></div>
+          <p id="recorderSubtitle" class="recorder-subtitle">Connect your pendant to capture a little of your world.</p>
+          <div class="capture-strip">
+          <div class="recording-stage">
+            <div id="timer" class="timer" aria-label="Recording duration">00:00</div>
+            <div class="canvas-wrap"><canvas id="waveformCanvas" aria-label="Audio level history"></canvas></div>
+          </div>
+          <div class="recorder-controls">
+            <button id="startButton" class="record-button" type="button" aria-label="Start recording" disabled><span class="record-orb" aria-hidden="true"><svg><use href="#i-mic"/></svg></span><span>Record</span></button>
+            <button id="stopButton" class="button stop-button" type="button" disabled><span class="stop-square" aria-hidden="true"></span><span>Stop &amp; save</span></button>
+          </div>
+          </div>
+          <div id="levelText" class="level-text">Waiting for pendant</div>
+          <details class="recorder-details">
+          <summary><span>Audio &amp; connection details</span><span class="detail-chevron" aria-hidden="true">+</span></summary>
+          <div class="device-panel">
+            <div class="panel-label"><p class="eyebrow">LIVE CONNECTION</p><span class="format-chip">16 kHz · MONO</span></div>
+            <div class="led-key"><span><i class="led-off"></i>Offline</span><span><i class="led-idle"></i>Ready</span><span><i class="led-live"></i>Recording</span></div>
+            <div class="metrics-grid" aria-label="Live transport health">
+              <div class="metric-card"><span>Audio level</span><strong id="signalMetric">—</strong><small id="signalDetail">No stream</small></div>
+              <div class="metric-card"><span>Frames</span><strong id="framesMetric">0</strong><small id="framesDetail">Complete</small></div>
+              <div class="metric-card"><span>Transport</span><strong id="transportMetric">—</strong><small id="transportDetail">MTU / chunks</small></div>
+              <div class="metric-card"><span>Quality</span><strong id="qualityMetric">—</strong><small id="qualityDetail">Waiting</small></div>
+            </div>
+          </div>
+          </details>
+        </div>
+      </section>
 
       <section class="day-lens" aria-labelledby="dayLensTitle">
         <div class="day-lens-heading"><div><p class="eyebrow">YOUR TIMELINE</p><h2 id="dayLensTitle">Today at a glance</h2><p id="selectedDateLabel">Your recordings and insights for today.</p></div><label class="calendar-picker"><svg aria-hidden="true"><use href="#i-calendar"/></svg><span>Choose date</span><input id="datePicker" type="date" aria-label="Choose a date"></label></div>
@@ -61,33 +91,10 @@
         <div class="glance-grid" aria-live="polite"><div><strong id="glanceRecordings">0</strong><span>recordings</span></div><div><strong id="glanceDuration">0m</strong><span>captured</span></div><div><strong id="glanceSummaries">0</strong><span>summaries</span></div><div><strong id="glanceTranscripts">0</strong><span>transcripts</span></div></div>
       </section>
 
-      <section id="capture" class="capture-layout" aria-label="Recorder" tabindex="-1">
-        <div class="hero-card">
-          <div class="session-heading"><div><p class="eyebrow">THE RECORDER</p><h2 id="recorderTitle">Ready when you are.</h2></div><span class="format-chip">16 kHz <span>·</span> MONO</span></div>
-          <p id="recorderSubtitle" class="recorder-subtitle">Connect your pendant to capture a little of your world.</p>
-          <div class="recording-stage">
-            <div class="stage-orbit" aria-hidden="true"></div>
-            <div id="timer" class="timer" aria-label="Recording duration">00:00</div>
-            <div class="canvas-wrap"><canvas id="waveformCanvas" aria-label="Audio level history"></canvas></div>
-            <div id="levelText" class="level-text">Waiting for pendant</div>
-          </div>
-          <div class="recorder-controls">
-            <button id="startButton" class="record-button" type="button" disabled><span class="record-dot"></span><span>Start recording</span><svg><use href="#i-arrow"/></svg></button>
-            <button id="stopButton" class="button stop-button" type="button" disabled><span class="stop-square"></span><span>Stop &amp; save</span></button>
-          </div>
-          <div class="privacy-line"><svg><use href="#i-check"/></svg>Saved on this device. Shared only when you choose.</div>
-        </div>
-
-        <aside class="device-panel">
-          <div class="panel-label"><p class="eyebrow">LIVE CONNECTION</p><svg aria-hidden="true"><use href="#i-bt"/></svg></div>
-          <div class="led-key"><span><i class="led-off"></i>Offline</span><span><i class="led-idle"></i>Ready</span><span><i class="led-live"></i>Recording</span></div>
-          <div class="metrics-grid" aria-label="Live transport health">
-            <div class="metric-card"><span>Audio level</span><strong id="signalMetric">—</strong><small id="signalDetail">No stream</small></div>
-            <div class="metric-card"><span>Frames</span><strong id="framesMetric">0</strong><small id="framesDetail">Complete</small></div>
-            <div class="metric-card"><span>Transport</span><strong id="transportMetric">—</strong><small id="transportDetail">MTU / chunks</small></div>
-            <div class="metric-card"><span>Quality</span><strong id="qualityMetric">—</strong><small id="qualityDetail">Waiting</small></div>
-          </div>
-        </aside>
+      <section id="insights" class="section-card insights-section" aria-labelledby="insightsTitle">
+        <div class="section-heading"><div><p class="eyebrow">QUICK ACCESS</p><h2 id="insightsTitle">Meetings &amp; transcripts <span id="insightsCount" class="count-badge">0</span></h2></div></div>
+        <div id="emptyInsights" class="empty-state"><div class="empty-art" aria-hidden="true"><span></span><svg><use href="#i-spark"/></svg><span></span></div><h3>No processed notes for this day.</h3><p>Process a recording to see its meeting summary and transcript here.</p></div>
+        <div id="insightsList" class="insights-list"></div>
       </section>
 
       <section id="library" class="section-card recordings-section">
@@ -100,17 +107,6 @@
         <div id="recordingsList" class="recordings-list"></div>
       </section>
 
-      <section id="insights" class="section-card insights-section" aria-labelledby="insightsTitle">
-        <div class="section-heading"><div><p class="eyebrow">QUICK ACCESS</p><h2 id="insightsTitle">Meetings &amp; transcripts <span id="insightsCount" class="count-badge">0</span></h2></div></div>
-        <div id="emptyInsights" class="empty-state"><div class="empty-art" aria-hidden="true"><span></span><svg><use href="#i-spark"/></svg><span></span></div><h3>No processed notes for this day.</h3><p>Process a recording to see its meeting summary and transcript here.</p></div>
-        <div id="insightsList" class="insights-list"></div>
-      </section>
-
-      <details id="diagnostics" class="section-card diagnostics-section">
-        <summary><span class="health-summary"><svg><use href="#i-info"/></svg><span><strong>Connection &amp; diagnostics</strong><small>The details, when you need them.</small></span></span><span class="summary-chevron">+</span></summary>
-        <div class="diagnostic-actions"><button id="copyDiagnosticsButton" class="button button-secondary button-small" type="button">Copy diagnostics</button><button id="clearDiagnosticsButton" class="text-button" type="button">Clear log</button></div>
-        <pre id="diagnosticsLog" class="diagnostics-log"></pre>
-      </details>
       <section id="processing" class="section-card queue-panel" aria-label="Sequential processing queue">
         <p class="eyebrow">SAVED FIRST. PROCESSED IN ORDER.</p>
         <h2>Processing queue</h2>
@@ -119,8 +115,13 @@
         <p class="settings-note">30-second audio segments → transcription → segment summary → final consolidation. Failed jobs pause the FIFO queue.</p>
         <div class="settings-actions"><button id="runQueueButton" class="button button-primary" type="button">Process recordings</button><button id="pauseQueueButton" class="button button-secondary" type="button">Pause queue</button></div>
       </section>
+      <details id="diagnostics" class="section-card diagnostics-section">
+        <summary><span class="health-summary"><svg><use href="#i-info"/></svg><span><strong>Connection &amp; diagnostics</strong><small>The details, when you need them.</small></span></span><span class="summary-chevron">+</span></summary>
+        <div class="diagnostic-actions"><button id="copyDiagnosticsButton" class="button button-secondary button-small" type="button">Copy diagnostics</button><button id="clearDiagnosticsButton" class="text-button" type="button">Clear log</button></div>
+        <pre id="diagnosticsLog" class="diagnostics-log"></pre>
+      </details>
     </main>
-    <footer><span>Designed for presence.</span><span id="appVersion">PWA 5.3.0</span><span>PROTOCOL 02</span></footer>
+    <footer><span>Designed for presence.</span><span id="appVersion">PWA 5.4.0</span><span>PROTOCOL 02</span></footer>
   </div>
 
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
@@ -143,7 +144,7 @@
       <div class="modal-actions"><button class="button button-primary" type="submit">Save preferences <svg><use href="#i-check"/></svg></button></div>
     </form>
   </dialog>
-  <script src="audio-store.js?v=5.3.0" defer></script>
-  <script src="app.js?v=5.3.0" defer></script>
+  <script src="audio-store.js?v=5.4.0" defer></script>
+  <script src="app.js?v=5.4.0" defer></script>
 </body>
 </html>

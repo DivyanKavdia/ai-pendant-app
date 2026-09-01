@@ -2,7 +2,7 @@
 
 Stay present. Keep the memory
 
-Release 5.3.0. This repository contains only the browser application.
+Release 5.4.0. This repository contains only the browser application.
 ESP32-S3 firmware is maintained separately and must not be committed here.
 
 ## Deploy
@@ -11,7 +11,7 @@ Serve the repository root over HTTPS (for example, GitHub Pages). No npm
 installation, build step, or runtime framework is required. Upload all ten
 application assets together: `index.html`, `styles.css`, `app.js`,
 `audio-store.js`, `sw.js`, `manifest.webmanifest`, `logo.webp`, and the three icon files.
-Verify the footer shows 5.3.0. Do not clear site data to update the app:
+Verify the footer shows 5.4.0. Do not clear site data to update the app:
 recordings and pending processing jobs are stored there.
 
 Use a browser with Web Bluetooth, IndexedDB, and Web Locks support. Keep the
@@ -20,10 +20,11 @@ guaranteed. Only one tab may own the recorder at a time.
 
 ## Mobile-first interface
 
-All screen sizes use the same bottom navigation for Record, Library and Queue,
-the same section order, and the same recorder and transport panel. Wider screens
-gain spacing and a two-column recordings list, not a different app. Recording controls are full-width on phones, live
-transport metrics stay visible, and Settings opens as a bottom sheet on small
+All screen sizes use Insights, Library and Queue in that order in the bottom
+navigation and page content. The compact recorder sits above the timeline;
+Record, Stop & Save, elapsed time, and status stay visible. Audio and connection
+metrics expand on demand. Wider screens gain spacing and a two-column recordings
+list, not a different app. Settings opens as a bottom sheet on small
 screens. Inputs use readable 16 px text, controls have large touch targets,
 safe-area insets are respected, and reduced-motion preferences are supported.
 This release does not change BLE commands, audio storage, or FIFO processing.
