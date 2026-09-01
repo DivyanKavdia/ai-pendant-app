@@ -1,6 +1,6 @@
 # DK AI Pendant — PWA only
 
-Release 5.0.0. This repository contains only the browser application.
+Release 5.1.0. This repository contains only the browser application.
 ESP32-S3 firmware is maintained separately and must not be committed here.
 
 ## Deploy
@@ -9,12 +9,46 @@ Serve the repository root over HTTPS (for example, GitHub Pages). No npm
 installation, build step, or runtime framework is required. Upload all nine
 application assets together: `index.html`, `styles.css`, `app.js`,
 `audio-store.js`, `sw.js`, `manifest.webmanifest`, and the three icon files.
-Verify the footer shows 5.0.0. Do not clear site data to update the app:
+Verify the footer shows 5.1.0. Do not clear site data to update the app:
 recordings and pending processing jobs are stored there.
 
 Use a browser with Web Bluetooth, IndexedDB, and Web Locks support. Keep the
 application open while recording or processing; background execution is not
 guaranteed. Only one tab may own the recorder at a time.
+
+## Mobile-first interface
+
+All screen sizes use the same bottom navigation for Record, Library and Queue,
+the same section order, and the same recorder and transport panel. Wider screens
+gain spacing and a two-column recordings list, not a different app. Recording controls are full-width on phones, live
+transport metrics stay visible, and Settings opens as a bottom sheet on small
+screens. Inputs use readable 16 px text, controls have large touch targets,
+safe-area insets are respected, and reduced-motion preferences are supported.
+This release does not change BLE commands, audio storage, or FIFO processing.
+It adds no runtime dependencies or deployed files. The service worker serves a
+complete precached release; a persistent update notice asks you to finish your
+work and reload when a newer worker takes control. It never reloads automatically
+or clears IndexedDB. Compare the footer version on both devices. Recordings are
+device-local; this release does not add cloud sync between laptop and phone.
+
+## Reconnect after reload
+
+The last successfully connected device ID is remembered locally. On reload,
+the app uses `navigator.bluetooth.getDevices()` when available to recover that
+permitted device, reconnect GATT, and subscribe again to audio and status.
+For older installations without a saved ID, exactly one permitted device named
+`dk-pendant` is accepted. Ambiguous or revoked devices require manual selection.
+After a failed automatic connection, up to three retries are scheduled. A manual
+retry then offers Reselect pendant, opening the chooser directly in the user's
+click so the same pendant can be selected again without visiting Settings.
+Timed-out connects are cancelled, and stale-device disconnect events are ignored. An
+orphaned stream is stopped before returning to idle; recording never restarts
+automatically. Committed audio chunks from an interrupted take are recovered.
+
+This requires retained permission on the same origin, a supporting browser,
+Bluetooth enabled, and a nearby advertising pendant. If `getDevices()` is
+unavailable, tap Connect pendant. Reloading does not preserve the old GATT
+connection. A closed/suspended browser cannot guarantee an ongoing connection.
 
 ## Separate hardware interface
 

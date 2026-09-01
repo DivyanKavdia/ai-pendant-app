@@ -1,7 +1,8 @@
-/* Release 5.0.0. Only this application's public shell is cached. */
-const CACHE_NAME = "dk-pendant-pwa-v5.0.0";
+/* Release 5.1.0. Only this application's public shell is cached. */
+const APP_VERSION = "5.1.0";
+const CACHE_NAME = "dk-pendant-pwa-v" + APP_VERSION;
 const APP_SHELL = [
-  "./", "./index.html", "./styles.css?v=5.0.0", "./audio-store.js?v=5.0.0", "./app.js?v=5.0.0",
+  "./", "./index.html", "./styles.css?v=5.1.0", "./audio-store.js?v=5.1.0", "./app.js?v=5.1.0",
   "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png"
 ];
 const SHELL_URLS = new Set(APP_SHELL.map(path => new URL(path, self.registration.scope).href));
@@ -16,24 +17,24 @@ self.addEventListener("activate", event => {
       .map(key => caches.delete(key))
   )).then(() => self.clients.claim()));
 });
+self.addEventListener("message", event => {
+  if (event.data && event.data.type === "GET_VERSION" && event.source) {
+    event.source.postMessage({ type: "APP_VERSION", version: APP_VERSION });
+  }
+});
 self.addEventListener("fetch", event => {
   const request = event.request;
-  if (request.method !== "GET" || !SHELL_URLS.has(request.url)) return;
+  const url = new URL(request.url);
+  const scope = new URL(self.registration.scope);
+  const isEntry = request.mode === "navigate" && url.origin === scope.origin &&
+    (url.pathname === scope.pathname || url.pathname === scope.pathname + "index.html");
+  if (request.method !== "GET" || (!SHELL_URLS.has(request.url) && !isEntry)) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-    try {
-      // Network-first avoids stale JavaScript after a deployment. Query versions
-      // also keep an older worker from serving the previous app.js to a new page.
-      const response = await fetch(request);
-      if (response.ok) {
-        await cache.put(request, response.clone());
-        return response;
-      }
-      return (await cache.match(request)) || response;
-    } catch (error) {
-      const cached = await cache.match(request);
-      if (cached) return cached;
-      throw error;
-    }
+    // Serve the complete installed release, not independently refreshed files.
+    // A new worker precaches all assets before activation. Query-string entry
+    // URLs use the same shell, including when offline.
+    const cached = await cache.match(isEntry ? new URL("./index.html", scope).href : request);
+    return cached || fetch(request);
   })());
 });

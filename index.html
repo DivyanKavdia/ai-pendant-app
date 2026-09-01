@@ -10,9 +10,10 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=5.0.0">
+  <link rel="stylesheet" href="styles.css?v=5.1.0">
 </head>
 <body data-state="disconnected">
+  <a class="skip-link" href="#capture">Skip to recorder</a>
   <svg class="icon-defs" aria-hidden="true"><defs>
     <symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 10v4m4-8v12m5-16v20m5-16v12m4-8v4"/></symbol>
     <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4m-4 0h8"/></symbol>
@@ -27,13 +28,11 @@
   </defs></svg>
 
   <aside class="rail" aria-label="Main navigation">
-    <a class="monogram" href="#capture" aria-label="DK Pendant home">dk<span>.</span></a>
     <nav class="rail-nav">
-      <a class="rail-link active" href="#capture" aria-label="Recorder"><svg><use href="#i-wave"/></svg><span>Record</span></a>
+      <a class="rail-link active" href="#capture" aria-current="location" aria-label="Recorder"><svg><use href="#i-wave"/></svg><span>Record</span></a>
       <a class="rail-link" href="#library" aria-label="Your recordings"><svg><use href="#i-library"/></svg><span>Library</span></a>
-      <a class="rail-link" href="#diagnostics" aria-label="Diagnostics"><svg><use href="#i-info"/></svg><span>Health</span></a>
+      <a class="rail-link" href="#processing" aria-label="Processing queue"><svg><use href="#i-check"/></svg><span>Queue</span></a>
     </nav>
-    <span class="rail-signature">MADE FOR<br>THE MOMENT</span>
   </aside>
 
   <div class="app-shell">
@@ -46,9 +45,10 @@
     </header>
 
     <main>
-      <div class="page-heading"><div><p class="eyebrow">LESS DISTRACTION. MORE PRESENCE.</p><h1>Keep the thought.<br><span>Stay in the moment.</span></h1></div><span class="edition">YOUR WORDS.<br>YOUR SPACE.</span></div>
+      <p id="updateNotice" class="update-notice" role="status" hidden></p>
+      <div class="page-heading"><div><p class="eyebrow">YOUR PERSONAL AUDIO STUDIO</p><h1>Make room<br>for <span>the moment.</span></h1><p class="heading-description">Capture a thought. Keep the conversation.</p></div><span class="edition"><svg aria-hidden="true"><use href="#i-check"/></svg>Local-first recording</span></div>
 
-      <section id="capture" class="capture-layout" aria-label="Recorder">
+      <section id="capture" class="capture-layout" aria-label="Recorder" tabindex="-1">
         <div class="hero-card">
           <div class="connection-row">
             <div id="connectionBadge" class="status-badge status-offline" role="status" aria-live="polite"><span class="status-dot"></span><span id="connectionText">Not connected</span></div>
@@ -70,10 +70,7 @@
         </div>
 
         <aside class="device-panel">
-          <div class="panel-label"><p class="eyebrow">YOUR COMPANION</p><svg><use href="#i-bt"/></svg></div>
-          <div class="pendant-scene" aria-hidden="true"><div class="pendant-glow"></div><div class="pendant-cord"></div><div class="pendant-object"><span class="pendant-slot"></span><span class="pendant-emblem">dk.</span><span class="pendant-led"></span></div></div>
-          <h3>Small device.<br>Big possibilities.</h3>
-          <p class="device-caption">A visual status indicator.<br>Actual hardware appearance may vary.</p>
+          <div class="panel-label"><p class="eyebrow">LIVE CONNECTION</p><svg aria-hidden="true"><use href="#i-bt"/></svg></div>
           <div class="led-key"><span><i class="led-off"></i>Offline</span><span><i class="led-idle"></i>Ready</span><span><i class="led-live"></i>Recording</span></div>
           <div class="metrics-grid" aria-label="Live transport health">
             <div class="metric-card"><span>Audio level</span><strong id="signalMetric">—</strong><small id="signalDetail">No stream</small></div>
@@ -85,10 +82,10 @@
       </section>
 
       <section id="library" class="section-card recordings-section">
-        <div class="section-heading"><div><p class="eyebrow">A PLACE FOR YOUR WORDS</p><h2>Your recordings <span id="recordingsCount" class="count-badge">0</span></h2></div><button id="clearRecordingsButton" class="text-button" type="button">Clear all</button></div>
+        <div class="section-heading"><div><p class="eyebrow">YOUR LIBRARY</p><h2>Saved moments <span id="recordingsCount" class="count-badge">0</span></h2></div><button id="clearRecordingsButton" class="text-button" type="button">Clear all</button></div>
         <div id="emptyRecordings" class="empty-state">
           <div class="empty-art" aria-hidden="true"><span></span><svg><use href="#i-wave"/></svg><span></span></div>
-          <h3>The good stuff starts here.</h3><p>Ideas, conversations, little reminders.<br>Your first recording is just a tap away.</p>
+          <h3>Your next idea belongs here.</h3><p>Connect your pendant and make your first recording.<br>It will be saved on this device.</p>
           <span class="empty-note">No account. No automatic uploads.</span>
         </div>
         <div id="recordingsList" class="recordings-list"></div>
@@ -99,22 +96,23 @@
         <div class="diagnostic-actions"><button id="copyDiagnosticsButton" class="button button-secondary button-small" type="button">Copy diagnostics</button><button id="clearDiagnosticsButton" class="text-button" type="button">Clear log</button></div>
         <pre id="diagnosticsLog" class="diagnostics-log"></pre>
       </details>
-      <section class="section-card queue-panel" aria-label="Sequential processing queue">
+      <section id="processing" class="section-card queue-panel" aria-label="Sequential processing queue">
         <p class="eyebrow">SAVED FIRST. PROCESSED IN ORDER.</p>
         <h2>Processing queue</h2>
+        <ol class="pipeline" aria-label="Processing order"><li><span>01</span> Transcribe</li><li><span>02</span> Summarize</li><li><span>03</span> Consolidate</li></ol>
         <p id="queueStatus" role="status" aria-live="polite">Chunks save locally during recording. Configure your endpoints to process them.</p>
         <p class="settings-note">30-second audio segments → transcription → segment summary → final consolidation. Failed jobs pause the FIFO queue.</p>
-        <div class="settings-actions"><button id="runQueueButton" class="button button-primary" type="button">Run / retry FIFO</button><button id="pauseQueueButton" class="button button-secondary" type="button">Pause processing</button></div>
+        <div class="settings-actions"><button id="runQueueButton" class="button button-primary" type="button">Process recordings</button><button id="pauseQueueButton" class="button button-secondary" type="button">Pause queue</button></div>
       </section>
     </main>
-    <footer><span>Designed for presence.</span><span id="appVersion">PWA 5.0.0</span><span>PROTOCOL 02</span></footer>
+    <footer><span>Designed for presence.</span><span id="appVersion">PWA 5.1.0</span><span>PROTOCOL 02</span></footer>
   </div>
 
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
 
-  <dialog id="settingsDialog" class="modal">
+  <dialog id="settingsDialog" class="modal" aria-labelledby="settingsTitle">
     <form id="settingsForm">
-      <div class="modal-header"><div><p class="eyebrow">MAKE IT YOURS</p><h2>Settings</h2></div><button id="closeSettingsButton" class="icon-button" type="button" aria-label="Close settings"><svg><use href="#i-close"/></svg></button></div>
+      <div class="modal-header"><div><p class="eyebrow">MAKE IT YOURS</p><h2 id="settingsTitle">Settings</h2></div><button id="closeSettingsButton" class="icon-button" type="button" aria-label="Close settings"><svg><use href="#i-close"/></svg></button></div>
       <div class="settings-section"><h3>Device &amp; recording</h3>
         <label class="toggle-row"><span><strong>Keep screen awake</strong><small>While recording, keep this app in the foreground.</small></span><input id="wakeLockInput" type="checkbox" checked></label>
         <p class="settings-note">Previously authorised devices reconnect automatically when your browser supports it. Bluetooth cannot stay connected through a closed browser or an Android suspension.</p>
@@ -124,13 +122,13 @@
         <p class="settings-note">Run FIFO uploads audio to your transcription endpoint, then sends text to your LLM endpoint. Use trusted servers you control. Provider API keys belong on those servers.</p>
         <label class="field"><span>HTTPS endpoint</span><input id="endpointInput" type="url" inputmode="url" placeholder="https://your-server.example/transcribe"><small>Multipart field <code>audio</code>; response: <code>text</code> or <code>transcript</code>.</small></label>
         <label class="field"><span>Server access token <span class="optional">OPTIONAL</span></span><input id="tokenInput" type="password" autocomplete="off" placeholder="Not a provider API key"><small>Kept only for this page session; never saved to browser storage.</small></label>
-        <label class="field"><span>HTTPS LLM endpoint</span><input id="llmEndpointInput" type="url" inputmode="url" placeholder="https://your-server.example/summarize"><small>Accepts task + input JSON; returns a summary. See PROCESSING_API.md.</small></label>
+        <label class="field"><span>HTTPS LLM endpoint</span><input id="llmEndpointInput" type="url" inputmode="url" placeholder="https://your-server.example/summarize"><small>Accepts task + input JSON; returns a summary. See the repository README for the API contract.</small></label>
         <label class="toggle-row"><span><strong>Automatically process saved recordings</strong><small>Upload queued audio/text while this app is open. Off by default.</small></span><input id="autoProcessInput" type="checkbox"></label>
       </div>
       <div class="modal-actions"><button class="button button-primary" type="submit">Save preferences <svg><use href="#i-check"/></svg></button></div>
     </form>
   </dialog>
-  <script src="audio-store.js?v=5.0.0" defer></script>
-  <script src="app.js?v=5.0.0" defer></script>
+  <script src="audio-store.js?v=5.1.0" defer></script>
+  <script src="app.js?v=5.1.0" defer></script>
 </body>
 </html>

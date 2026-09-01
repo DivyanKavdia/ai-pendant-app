@@ -5,7 +5,7 @@
   // Shared BLE Protocol v2
   // -------------------------------------------------------------------------
 
-  const APP_VERSION = "5.0.0";
+  const APP_VERSION = "5.1.0";
   const PROTOCOL_VERSION = 0x02;
 
   const SERVICE_UUID =
@@ -115,6 +115,7 @@
   let controlCharacteristic = null;
   let manualDisconnect = false;
   let connectInProgress = false;
+  let needsDeviceSelection = false;
 
   let deviceStatus = {
     state: DEVICE_STATE.DISCONNECTED,
@@ -236,7 +237,9 @@
     if (!error) return "Unknown error";
 
     const name = error.name || "";
-    const message = error.message || String(error);
+    const message = error.message || (typeof error === "number"
+      ? "Operation failed (code " + error + "). See connection diagnostics."
+      : String(error));
 
     // NotSupportedError may be a GATT/device or storage error, not absence of Web Bluetooth.
     return (operation ? operation + ": " : "") + (name ? name + ": " : "") + message;
@@ -279,7 +282,7 @@
       ui.connectionBadge.classList.add("status-offline");
       ui.connectionText.textContent = "Not connected";
       ui.connectButton.textContent =
-        bluetoothDevice ? "Reconnect" : "Connect pendant";
+        needsDeviceSelection ? "Reselect pendant" : (bluetoothDevice ? "Reconnect" : "Connect pendant");
       ui.recorderTitle.textContent = "Ready when you are.";
       ui.recorderSubtitle.textContent =
         message ||
@@ -456,16 +459,26 @@
       !navigator.bluetooth ||
       typeof navigator.bluetooth.getDevices !== "function"
     ) {
+      log("Reload reconnect unavailable: browser cannot list permitted devices. Tap Connect pendant.");
       return false;
     }
 
     try {
       const devices = await navigator.bluetooth.getDevices();
-      const pendant = devices.find(function (device) {
+      let rememberedId = null;
+      try { rememberedId = localStorage.getItem("dk-pendant-device-id"); }
+      catch (_) { /* Storage restrictions must not block manual Bluetooth use. */ }
+      const namedPendants = devices.filter(function (device) {
         return device.name === "dk-pendant";
       });
+      const pendant = rememberedId
+        ? devices.find(function (device) { return device.id === rememberedId; })
+        : (namedPendants.length === 1 ? namedPendants[0] : null);
 
-      if (!pendant) return false;
+      if (!pendant) {
+        log("No unambiguous previously permitted pendant. Tap Connect pendant to select one.");
+        return false;
+      }
 
       attachBluetoothDevice(pendant);
       log("Previously authorised pendant restored", {
@@ -535,6 +548,12 @@
     setAppState("connecting");
 
     try {
+      // A failed restored handle must not trap the user in the same retry loop.
+      // Open the chooser directly in this click's activation, never after an await.
+      if (!autoReconnect && needsDeviceSelection) {
+        cleanupCharacteristics();
+        attachBluetoothDevice(null);
+      }
       if (!bluetoothDevice) {
         const selectedDevice = await navigator.bluetooth.requestDevice({
           filters: [
@@ -552,7 +571,14 @@
       }
 
       const epoch = connectionEpoch;
-      gattServer = await withTimeout(bluetoothDevice.gatt.connect(), 12000, "Connection");
+      const connectingDevice = bluetoothDevice;
+      try {
+        gattServer = await withTimeout(connectingDevice.gatt.connect(), 12000, "Connection");
+      } catch (error) {
+        // disconnect() also cancels an outstanding connect, even while connected is false.
+        connectingDevice.gatt.disconnect();
+        throw error;
+      }
       function assertConnection() {
         if (epoch !== connectionEpoch || !isGattConnected()) {
           throw new Error("Connection changed during discovery.");
@@ -623,6 +649,9 @@
         deviceStatus.error === 0
       ) {
         reconnectAttempts = 0;
+        needsDeviceSelection = false;
+        try { localStorage.setItem("dk-pendant-device-id", bluetoothDevice.id); }
+        catch (_) { log("Device preference could not be saved; name-based reload recovery remains available."); }
         setAppState("idle");
         if (!silent) toast("Pendant connected");
       } else if (deviceStatus.state === DEVICE_STATE.STREAMING) {
@@ -635,6 +664,7 @@
     } catch (error) {
       const message = friendlyError(error);
       log("Connection failed", message);
+      needsDeviceSelection = Boolean(bluetoothDevice) || needsDeviceSelection;
       if (isGattConnected()) bluetoothDevice.gatt.disconnect();
       cleanupCharacteristics();
       setAppState("disconnected", message);
@@ -672,7 +702,8 @@
     }
   }
 
-  async function handleGattDisconnected() {
+  async function handleGattDisconnected(event) {
+    if (event && event.target !== bluetoothDevice) return;
     log("GATT disconnected", {
       manual: manualDisconnect
     });
@@ -683,6 +714,9 @@
       completedPcmFrames.length > 0 || Boolean(currentRecordingId) || Boolean(openingCapture);
 
     cleanupCharacteristics();
+
+    // The connection attempt owns its failure UI and retry scheduling.
+    if (connectInProgress && !hadRecording) return;
 
     if (hadRecording) {
       await finalizeRecording(
@@ -2018,9 +2052,29 @@
     if (!("serviceWorker" in navigator)) return;
 
     try {
+      const showUpdate = function (event) {
+        if (event.data && event.data.type === "APP_VERSION" && event.data.version !== APP_VERSION) {
+          const notice = document.getElementById("updateNotice");
+          notice.hidden = false;
+          notice.textContent = "Update " + event.data.version + " is ready. Finish recording and processing, then reload. Saved recordings stay on this device.";
+        }
+      };
+      const checkVersion = function () {
+        if (navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage({ type: "GET_VERSION" });
+      };
+      navigator.serviceWorker.addEventListener("message", showUpdate);
+      navigator.serviceWorker.addEventListener("controllerchange", checkVersion);
       const registration =
         await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
       await registration.update();
+      checkVersion();
+      let lastCheck = Date.now();
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible" && Date.now() - lastCheck > 60000) {
+          lastCheck = Date.now();
+          registration.update().then(checkVersion).catch(error => log("Update check failed", friendlyError(error)));
+        }
+      });
       log("Service worker registered", {
         scope: registration.scope
       });
@@ -2265,6 +2319,36 @@
   // Start-up
   // -------------------------------------------------------------------------
 
+  // Presentation only: anchors remain usable even if Bluetooth is unavailable.
+  function bindSectionNavigation() {
+    const links = Array.from(document.querySelectorAll(".rail-link"));
+    const sections = links.map(function (link) {
+      return document.querySelector(link.getAttribute("href"));
+    });
+    let scheduled = false;
+    function update() {
+      scheduled = false;
+      let selected = 0;
+      sections.forEach(function (section, index) {
+        if (section && section.getBoundingClientRect().top <= 160) selected = index;
+      });
+      if (window.scrollY > 0 && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 4) {
+        selected = links.length - 1;
+      }
+      links.forEach(function (link, index) {
+        link.classList.toggle("active", index === selected);
+        if (index === selected) link.setAttribute("aria-current", "location");
+        else link.removeAttribute("aria-current");
+      });
+    }
+    function schedule() {
+      if (!scheduled) { scheduled = true; window.requestAnimationFrame(update); }
+    }
+    window.addEventListener("scroll", schedule, {passive:true});
+    window.addEventListener("resize", schedule);
+    update();
+  }
+
   async function initialize() {
     if (!journal) throw new Error("Audio storage module did not load. Deploy all v5 files and reload.");
     if (!navigator.locks) throw new Error("This build needs Web Locks for safe local storage. Use current Android Chrome over HTTPS.");
@@ -2318,6 +2402,7 @@
     }
   }
 
+  bindSectionNavigation();
   initialize().catch(function (error) {
     const message = friendlyError(error);
     log("Fatal initialization error", message);
