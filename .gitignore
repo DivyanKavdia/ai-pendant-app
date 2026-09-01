@@ -1,0 +1,16 @@
+# Firmware is maintained separately.
+firmware/
+esp/
+*.ino
+*.bin
+*.elf
+*.hex
+*.zip
+
+# Generated dependencies and local credentials.
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store

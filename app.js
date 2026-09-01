@@ -1,0 +1,2326 @@
+(function () {
+  "use strict";
+
+  // -------------------------------------------------------------------------
+  // Shared BLE Protocol v2
+  // -------------------------------------------------------------------------
+
+  const APP_VERSION = "5.0.0";
+  const PROTOCOL_VERSION = 0x02;
+
+  const SERVICE_UUID =
+    "4fa12345-0000-1000-8000-00805f9b34fb";
+  const AUDIO_CHAR_UUID =
+    "4fa12346-0000-1000-8000-00805f9b34fb";
+  const CONTROL_CHAR_UUID =
+    "4fa12347-0000-1000-8000-00805f9b34fb";
+
+  const CMD_STOP = 0x00;
+  const CMD_START = 0x01;
+  const CMD_GET_STATUS = 0x02;
+
+  const AUDIO_MAGIC = 0xA5;
+  const STATUS_MAGIC = 0x5A;
+  const AUDIO_HEADER_BYTES = 8;
+  const PCM_BYTES_PER_FRAME = 1600;
+  const DEFAULT_SAMPLE_RATE = 16000;
+  const MIN_CHUNKS_PER_FRAME = 10;
+  const MAX_CHUNKS_PER_FRAME = 20;
+
+  const DEVICE_STATE = {
+    DISCONNECTED: 0,
+    CONNECTED_IDLE: 1,
+    STREAMING: 2,
+    ERROR: 3
+  };
+
+  const ERROR_TEXT = {
+    0: "No error",
+    1: "BLE MTU is too small. Reconnect using Android Chrome.",
+    2: "Audio notifications were not enabled before Start.",
+    3: "The ESP audio source failed.",
+    4: "PWA and ESP protocol versions do not match.",
+    5: "The ESP received an invalid command.",
+    6: "BLE transport changed. Stop and start again."
+  };
+
+  const MAX_RECORDING_MS = 30 * 60 * 1000;
+  const START_TIMEOUT_MS = 5000;
+  const COMMAND_TIMEOUT_MS = 3500;
+  const INCOMPLETE_FRAME_TIMEOUT_MS = 900;
+  const MAX_AUTO_RECONNECT_ATTEMPTS = 3;
+
+  // -------------------------------------------------------------------------
+  // DOM
+  // -------------------------------------------------------------------------
+
+  const ui = {
+    connectionBadge: document.getElementById("connectionBadge"),
+    connectionText: document.getElementById("connectionText"),
+    connectButton: document.getElementById("connectButton"),
+    startButton: document.getElementById("startButton"),
+    stopButton: document.getElementById("stopButton"),
+    recorderTitle: document.getElementById("recorderTitle"),
+    recorderSubtitle: document.getElementById("recorderSubtitle"),
+    waveformCanvas: document.getElementById("waveformCanvas"),
+    timer: document.getElementById("timer"),
+    levelText: document.getElementById("levelText"),
+    signalMetric: document.getElementById("signalMetric"),
+    signalDetail: document.getElementById("signalDetail"),
+    framesMetric: document.getElementById("framesMetric"),
+    framesDetail: document.getElementById("framesDetail"),
+    transportMetric: document.getElementById("transportMetric"),
+    transportDetail: document.getElementById("transportDetail"),
+    qualityMetric: document.getElementById("qualityMetric"),
+    qualityDetail: document.getElementById("qualityDetail"),
+    recordingsList: document.getElementById("recordingsList"),
+    recordingsCount: document.getElementById("recordingsCount"),
+    emptyRecordings: document.getElementById("emptyRecordings"),
+    clearRecordingsButton:
+      document.getElementById("clearRecordingsButton"),
+    diagnosticsLog: document.getElementById("diagnosticsLog"),
+    copyDiagnosticsButton:
+      document.getElementById("copyDiagnosticsButton"),
+    clearDiagnosticsButton:
+      document.getElementById("clearDiagnosticsButton"),
+    toastRegion: document.getElementById("toastRegion"),
+    settingsButton: document.getElementById("settingsButton"),
+    chooseDeviceButton: document.getElementById("chooseDeviceButton"),
+    recoveryButton: document.getElementById("recoveryButton"),
+    settingsDialog: document.getElementById("settingsDialog"),
+    settingsForm: document.getElementById("settingsForm"),
+    closeSettingsButton:
+      document.getElementById("closeSettingsButton"),
+    endpointInput: document.getElementById("endpointInput"),
+    tokenInput: document.getElementById("tokenInput"),
+    llmEndpointInput: document.getElementById("llmEndpointInput"),
+    autoProcessInput: document.getElementById("autoProcessInput"),
+    queueStatus: document.getElementById("queueStatus"),
+    runQueueButton: document.getElementById("runQueueButton"),
+    pauseQueueButton: document.getElementById("pauseQueueButton"),
+    retrySaveButton: document.getElementById("retrySaveButton"),
+    wakeLockInput: document.getElementById("wakeLockInput"),
+    installButton: document.getElementById("installButton"),
+    appVersion: document.getElementById("appVersion")
+  };
+
+  // -------------------------------------------------------------------------
+  // Runtime state
+  // -------------------------------------------------------------------------
+
+  let appState = "disconnected";
+  let bluetoothDevice = null;
+  let gattServer = null;
+  let audioCharacteristic = null;
+  let controlCharacteristic = null;
+  let manualDisconnect = false;
+  let connectInProgress = false;
+
+  let deviceStatus = {
+    state: DEVICE_STATE.DISCONNECTED,
+    error: 0,
+    mtu: 0,
+    attCapacity: 0,
+    chunksPerFrame: 0,
+    headerBytes: AUDIO_HEADER_BYTES,
+    sampleRate: DEFAULT_SAMPLE_RATE,
+    samplesPerFrame: 800,
+    payloadBytes: 0
+  };
+
+  let recordingConfirmed = false;
+  let recordingStartedAt = 0;
+  let timerInterval = null;
+  let startTimeout = null;
+  let finalizeTimeout = null;
+  let finalizing = false;
+  let wakeLock = null;
+  let recordingSessionId = 0;
+  let finalizedSessionId = 0;
+  let connectionEpoch = 0;
+  let gattQueue = Promise.resolve();
+
+  let reconnectTimer = null;
+  let reconnectAttempts = 0;
+
+  let pendingFrames = new Map();
+  let completedPcmFrames = [];
+  let completedSequences = new Set();
+  let unsavedAudio = false;
+  let lastObservedSequence = null;
+  let lastFrameCleanupAt = 0;
+  let lastAudioAt = 0;
+
+  let sessionStats = createEmptyStats();
+  let levelHistory = [];
+  let currentRms = 0;
+  let lastDb = -96;
+  let waveformPhase = 0;
+  let lastWaveDraw = 0;
+
+  let diagnosticLines = [];
+  let installPrompt = null;
+  let renderedObjectUrls = [];
+  let databasePromise = null;
+  let currentRecordingId = null;
+  let openingCapture = null;
+  let persistenceRequested = false;
+  const journal = globalThis.DKAudioStore ? new globalThis.DKAudioStore({onError: handleStorageError}) : null;
+  let processor = null;
+
+  let settings = {
+    endpoint: "",
+    llmEndpoint: "",
+    autoProcess: false,
+    token: "",
+    wakeLock: true
+  };
+
+  function createEmptyStats() {
+    return {
+      packetsReceived: 0,
+      invalidPackets: 0,
+      duplicatePackets: 0,
+      completeFrames: 0,
+      incompleteFrames: 0,
+      missingFrames: 0,
+      pcmBytes: 0,
+      firstSequence: null,
+      lastSequence: null
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Logging and feedback
+  // -------------------------------------------------------------------------
+
+  function log(message, detail) {
+    const time = new Date().toISOString();
+    let line = "[" + time + "] " + message;
+
+    if (detail !== undefined) {
+      try {
+        line += " " +
+          (typeof detail === "string"
+            ? detail
+            : JSON.stringify(detail));
+      } catch (error) {
+        line += " [unserializable detail]";
+      }
+    }
+
+    diagnosticLines.push(line);
+
+    if (diagnosticLines.length > 300) {
+      diagnosticLines = diagnosticLines.slice(-300);
+    }
+
+    ui.diagnosticsLog.textContent = diagnosticLines.join("\n");
+    ui.diagnosticsLog.scrollTop = ui.diagnosticsLog.scrollHeight;
+    console.log(line);
+  }
+
+  function toast(message, type) {
+    const element = document.createElement("div");
+    element.className =
+      "toast" + (type === "error" ? " toast-error" : "");
+    element.textContent = message;
+    ui.toastRegion.appendChild(element);
+
+    window.setTimeout(function () {
+      element.remove();
+    }, 3600);
+  }
+
+  function friendlyError(error, operation) {
+    if (!error) return "Unknown error";
+
+    const name = error.name || "";
+    const message = error.message || String(error);
+
+    // NotSupportedError may be a GATT/device or storage error, not absence of Web Bluetooth.
+    return (operation ? operation + ": " : "") + (name ? name + ": " : "") + message;
+  }
+
+  function handleStorageError(error) {
+    log("Chunk storage failed", friendlyError(error, "IndexedDB"));
+    unsavedAudio = true;
+    toast("Chunk storage failed. Stopping; use Settings to retry saving or export recovery audio.", "error");
+    if (appState === "recording" || appState === "starting") stopRecording();
+  }
+
+  // -------------------------------------------------------------------------
+  // Application state and UI
+  // -------------------------------------------------------------------------
+
+  function setAppState(nextState, message) {
+    appState = nextState;
+    document.body.dataset.state = nextState;
+
+    ui.connectionBadge.className = "status-badge";
+    ui.connectButton.disabled = false;
+    ui.startButton.disabled = true;
+    ui.stopButton.disabled = true;
+
+    if (nextState === "unsupported") {
+      ui.connectionBadge.classList.add("status-error");
+      ui.connectionText.textContent = "Bluetooth unavailable";
+      ui.connectButton.textContent = "Not supported";
+      ui.connectButton.disabled = true;
+      ui.recorderTitle.textContent = "Browser not supported.";
+      ui.recorderSubtitle.textContent =
+        message ||
+        "Open this app in Android Chrome over HTTPS.";
+      ui.levelText.textContent = "Web Bluetooth unavailable";
+      return;
+    }
+
+    if (nextState === "disconnected") {
+      ui.connectionBadge.classList.add("status-offline");
+      ui.connectionText.textContent = "Not connected";
+      ui.connectButton.textContent =
+        bluetoothDevice ? "Reconnect" : "Connect pendant";
+      ui.recorderTitle.textContent = "Ready when you are.";
+      ui.recorderSubtitle.textContent =
+        message ||
+        "Connect your pendant to capture private, local audio.";
+      ui.levelText.textContent = "Waiting for pendant";
+      return;
+    }
+
+    if (nextState === "connecting") {
+      ui.connectionBadge.classList.add("status-offline");
+      ui.connectionText.textContent = "Connecting";
+      ui.connectButton.textContent = "Connecting…";
+      ui.connectButton.disabled = true;
+      ui.recorderTitle.textContent = "Finding your pendant…";
+      ui.recorderSubtitle.textContent =
+        "Keep the pendant powered on and close to this phone.";
+      ui.levelText.textContent = "Opening Bluetooth connection";
+      return;
+    }
+
+    if (nextState === "idle") {
+      ui.connectionBadge.classList.add("status-ready");
+      ui.connectionText.textContent = "Connected";
+      ui.connectButton.textContent = "Disconnect";
+      ui.startButton.disabled = deviceStatus.error !== 0 || finalizing;
+      ui.recorderTitle.textContent = "Ready to capture.";
+      ui.recorderSubtitle.textContent =
+        message ||
+        "Your pendant is connected. Start when the conversation begins.";
+      ui.levelText.textContent = "Pendant ready";
+      return;
+    }
+
+    if (nextState === "starting") {
+      ui.connectionBadge.classList.add("status-ready");
+      ui.connectionText.textContent = "Starting";
+      ui.connectButton.textContent = "Disconnect";
+      ui.connectButton.disabled = true;
+      ui.stopButton.disabled = false;
+      ui.recorderTitle.textContent = "Starting stream…";
+      ui.recorderSubtitle.textContent =
+        "Negotiating audio transport with the pendant.";
+      ui.levelText.textContent = "Waiting for first audio frame";
+      return;
+    }
+
+    if (nextState === "recording") {
+      ui.connectionBadge.classList.add("status-recording");
+      ui.connectionText.textContent = "Recording";
+      ui.connectButton.textContent = "Disconnect";
+      ui.connectButton.disabled = true;
+      ui.stopButton.disabled = false;
+      ui.recorderTitle.textContent = "Capturing the moment.";
+      ui.recorderSubtitle.textContent =
+        "Capturing audio from your pendant. Keep this app open.";
+      ui.levelText.textContent = "Live PCM audio";
+      return;
+    }
+
+    if (nextState === "stopping" || nextState === "saving") {
+      ui.connectionBadge.classList.add("status-ready");
+      ui.connectionText.textContent = "Finishing";
+      ui.connectButton.textContent = "Disconnect";
+      ui.connectButton.disabled = true;
+      ui.recorderTitle.textContent = "Finishing recording…";
+      ui.recorderSubtitle.textContent =
+        nextState === "saving"
+          ? "Saving the completed WAV on this device."
+          : "Waiting for the pendant to acknowledge Stop.";
+      ui.levelText.textContent = "Finalising locally";
+      return;
+    }
+
+    if (nextState === "error") {
+      ui.connectionBadge.classList.add("status-error");
+      ui.connectionText.textContent = "Needs attention";
+      ui.connectButton.textContent =
+        isGattConnected() ? "Disconnect" : "Reconnect";
+      ui.recorderTitle.textContent = "Pendant needs attention.";
+      ui.recorderSubtitle.textContent =
+        message || "Check Diagnostics for details.";
+      ui.levelText.textContent = message || "Transport error";
+    }
+  }
+
+  function updateMetrics() {
+    ui.framesMetric.textContent =
+      String(sessionStats.completeFrames);
+    ui.framesDetail.textContent =
+      sessionStats.incompleteFrames +
+      " incomplete · " +
+      sessionStats.missingFrames +
+      " missing";
+
+    if (deviceStatus.mtu) {
+      ui.transportMetric.textContent =
+        String(deviceStatus.mtu);
+      ui.transportDetail.textContent =
+        "MTU · " +
+        deviceStatus.chunksPerFrame +
+        " chunks/frame";
+    } else {
+      ui.transportMetric.textContent = "—";
+      ui.transportDetail.textContent = "MTU / chunks";
+    }
+
+    if (sessionStats.completeFrames > 0) {
+      ui.signalMetric.textContent =
+        Math.round(lastDb) + " dB";
+      ui.signalDetail.textContent =
+        Math.round(currentRms * 100) + "% RMS";
+
+      const totalIssues =
+        sessionStats.incompleteFrames +
+        sessionStats.missingFrames +
+        sessionStats.invalidPackets;
+      const denominator =
+        sessionStats.completeFrames + totalIssues;
+      const issueRate =
+        denominator > 0 ? totalIssues / denominator : 0;
+
+      if (issueRate === 0) {
+        ui.qualityMetric.textContent = "Excellent";
+      } else if (issueRate < 0.01) {
+        ui.qualityMetric.textContent = "Good";
+      } else if (issueRate < 0.05) {
+        ui.qualityMetric.textContent = "Fair";
+      } else {
+        ui.qualityMetric.textContent = "Poor";
+      }
+
+      ui.qualityDetail.textContent =
+        (issueRate * 100).toFixed(1) + "% issue rate";
+    } else {
+      ui.signalMetric.textContent = "—";
+      ui.signalDetail.textContent = "No stream";
+      ui.qualityMetric.textContent = "—";
+      ui.qualityDetail.textContent = "Waiting";
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // BLE connection
+  // -------------------------------------------------------------------------
+
+  function isGattConnected() {
+    return Boolean(
+      bluetoothDevice &&
+      bluetoothDevice.gatt &&
+      bluetoothDevice.gatt.connected
+    );
+  }
+
+  function attachBluetoothDevice(device) {
+    if (bluetoothDevice) {
+      bluetoothDevice.removeEventListener(
+        "gattserverdisconnected",
+        handleGattDisconnected
+      );
+    }
+
+    bluetoothDevice = device;
+
+    if (bluetoothDevice) {
+      bluetoothDevice.addEventListener(
+        "gattserverdisconnected",
+        handleGattDisconnected
+      );
+    }
+  }
+
+  async function restoreKnownPendant() {
+    if (
+      !navigator.bluetooth ||
+      typeof navigator.bluetooth.getDevices !== "function"
+    ) {
+      return false;
+    }
+
+    try {
+      const devices = await navigator.bluetooth.getDevices();
+      const pendant = devices.find(function (device) {
+        return device.name === "dk-pendant";
+      });
+
+      if (!pendant) return false;
+
+      attachBluetoothDevice(pendant);
+      log("Previously authorised pendant restored", {
+        name: pendant.name,
+        id: pendant.id
+      });
+      return true;
+    } catch (error) {
+      log("Known-device restore unavailable", friendlyError(error));
+      return false;
+    }
+  }
+
+  function clearReconnectTimer(resetAttempts) {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+
+    if (resetAttempts) reconnectAttempts = 0;
+  }
+
+  function scheduleAutoReconnect() {
+    if (
+      manualDisconnect ||
+      !bluetoothDevice ||
+      reconnectAttempts >= MAX_AUTO_RECONNECT_ATTEMPTS ||
+      reconnectTimer
+    ) {
+      return;
+    }
+
+    const delays = [1200, 2600, 5200];
+    const attempt = reconnectAttempts + 1;
+    const wait = delays[reconnectAttempts];
+
+    log("Automatic reconnect scheduled", {
+      attempt: attempt,
+      delayMs: wait
+    });
+
+    reconnectTimer = window.setTimeout(function () {
+      reconnectTimer = null;
+      reconnectAttempts = attempt;
+      connectPendant({ silent: true, autoReconnect: true });
+    }, wait);
+  }
+
+  async function connectPendant(options) {
+    const settings = options || {};
+    const silent = Boolean(settings.silent);
+    const autoReconnect = Boolean(settings.autoReconnect);
+
+    if (connectInProgress || finalizing) return;
+
+    if (!navigator.bluetooth) {
+      setAppState(
+        "unsupported",
+        "Use Android Chrome over HTTPS. iPhone Web Bluetooth is not available."
+      );
+      return;
+    }
+
+    clearReconnectTimer(!autoReconnect);
+    connectInProgress = true;
+    manualDisconnect = false;
+    setAppState("connecting");
+
+    try {
+      if (!bluetoothDevice) {
+        const selectedDevice = await navigator.bluetooth.requestDevice({
+          filters: [
+            { services: [SERVICE_UUID] }
+          ],
+          optionalServices: [SERVICE_UUID]
+        });
+
+        attachBluetoothDevice(selectedDevice);
+
+        log("BLE device selected", {
+          name: bluetoothDevice.name || "unnamed",
+          id: bluetoothDevice.id
+        });
+      }
+
+      const epoch = connectionEpoch;
+      gattServer = await withTimeout(bluetoothDevice.gatt.connect(), 12000, "Connection");
+      function assertConnection() {
+        if (epoch !== connectionEpoch || !isGattConnected()) {
+          throw new Error("Connection changed during discovery.");
+        }
+      }
+      assertConnection();
+      log("GATT connected");
+
+      const service =
+        await queueGattOperation(function () { return gattServer.getPrimaryService(SERVICE_UUID); });
+      assertConnection();
+      log("Pendant service resolved");
+
+      audioCharacteristic =
+        await queueGattOperation(function () { return service.getCharacteristic(AUDIO_CHAR_UUID); });
+      assertConnection();
+      controlCharacteristic =
+        await queueGattOperation(function () { return service.getCharacteristic(CONTROL_CHAR_UUID); });
+      assertConnection();
+      log("Audio and control characteristics resolved");
+
+      audioCharacteristic.addEventListener(
+        "characteristicvaluechanged",
+        handleAudioNotification
+      );
+      controlCharacteristic.addEventListener(
+        "characteristicvaluechanged",
+        handleStatusNotification
+      );
+
+      await queueGattOperation(function () {
+        return controlCharacteristic.startNotifications();
+      });
+      log("Control notifications enabled");
+
+      await queueGattOperation(function () {
+        return audioCharacteristic.startNotifications();
+      });
+      log("Audio notifications enabled");
+
+      // Let the CCCD subscription reach the peripheral before START is possible.
+      await delay(180);
+      await writeCommand(CMD_GET_STATUS);
+      await delay(120);
+      await readControlStatus();
+
+      // Android negotiates MTU asynchronously. Give it a bounded settling window.
+      for (let retry = 0; deviceStatus.error === 1 && retry < 3; retry += 1) {
+        await delay(350);
+        await writeCommand(CMD_GET_STATUS);
+        await delay(120);
+        await readControlStatus();
+      }
+      assertConnection();
+
+      // A browser refresh can leave the peripheral streaming while the new
+      // page has no matching recording session. Normalize it to idle before
+      // exposing Start, so the LED and UI cannot disagree.
+      if (deviceStatus.state === DEVICE_STATE.STREAMING) {
+        log("Recovered orphaned stream; requesting clean stop");
+        await writeCommand(CMD_STOP);
+        await delay(180);
+        await readControlStatus();
+      }
+
+      if (
+        deviceStatus.state === DEVICE_STATE.CONNECTED_IDLE &&
+        deviceStatus.error === 0
+      ) {
+        reconnectAttempts = 0;
+        setAppState("idle");
+        if (!silent) toast("Pendant connected");
+      } else if (deviceStatus.state === DEVICE_STATE.STREAMING) {
+        throw new Error(
+          "Pendant is still streaming after recovery Stop. Reconnect it."
+        );
+      } else if (deviceStatus.state !== DEVICE_STATE.ERROR) {
+        throw new Error("No valid idle acknowledgement. Check that both firmware and PWA are updated.");
+      }
+    } catch (error) {
+      const message = friendlyError(error);
+      log("Connection failed", message);
+      if (isGattConnected()) bluetoothDevice.gatt.disconnect();
+      cleanupCharacteristics();
+      setAppState("disconnected", message);
+
+      if (!silent && error && error.name !== "NotFoundError") {
+        toast(message, "error");
+      }
+
+      if (autoReconnect && !manualDisconnect) {
+        scheduleAutoReconnect();
+      }
+    } finally {
+      connectInProgress = false;
+    }
+  }
+
+  async function disconnectPendant() {
+    manualDisconnect = true;
+    clearReconnectTimer(true);
+
+    if (
+      appState === "recording" ||
+      appState === "starting" ||
+      appState === "stopping"
+    ) {
+      await stopRecording();
+      await delay(250);
+    }
+
+    if (isGattConnected()) {
+      bluetoothDevice.gatt.disconnect();
+    } else {
+      cleanupCharacteristics();
+      setAppState("disconnected");
+    }
+  }
+
+  async function handleGattDisconnected() {
+    log("GATT disconnected", {
+      manual: manualDisconnect
+    });
+
+    const disconnectedSessionId = recordingSessionId;
+    const hadRecording =
+      recordingConfirmed ||
+      completedPcmFrames.length > 0 || Boolean(currentRecordingId) || Boolean(openingCapture);
+
+    cleanupCharacteristics();
+
+    if (hadRecording) {
+      await finalizeRecording(
+        "connection-lost",
+        disconnectedSessionId
+      );
+    }
+
+    setAppState(
+      "disconnected",
+      manualDisconnect
+        ? "Pendant disconnected."
+        : "Connection was lost. Tap Reconnect to continue."
+    );
+
+    if (!manualDisconnect) {
+      toast("Pendant connection lost", "error");
+      scheduleAutoReconnect();
+    }
+  }
+
+  function cleanupCharacteristics() {
+    connectionEpoch += 1;
+    gattQueue = Promise.resolve();
+    clearStartTimeout();
+    clearFinalizeTimer();
+    if (audioCharacteristic) {
+      audioCharacteristic.removeEventListener(
+        "characteristicvaluechanged",
+        handleAudioNotification
+      );
+    }
+
+    if (controlCharacteristic) {
+      controlCharacteristic.removeEventListener(
+        "characteristicvaluechanged",
+        handleStatusNotification
+      );
+    }
+
+    audioCharacteristic = null;
+    controlCharacteristic = null;
+    gattServer = null;
+
+    deviceStatus = {
+      state: DEVICE_STATE.DISCONNECTED,
+      error: 0,
+      mtu: 0,
+      attCapacity: 0,
+      chunksPerFrame: 0,
+      headerBytes: AUDIO_HEADER_BYTES,
+      sampleRate: DEFAULT_SAMPLE_RATE,
+      samplesPerFrame: 800,
+      payloadBytes: 0
+    };
+    document.body.dataset.deviceState = "0";
+
+    stopTimer();
+    releaseWakeLock();
+  }
+
+  function withTimeout(promise, milliseconds, label) {
+    let timeout;
+    return Promise.race([
+      promise,
+      new Promise(function (_, reject) {
+        timeout = window.setTimeout(function () {
+          const error = new Error(label + " timed out");
+          error.name = "TimeoutError";
+          reject(error);
+        }, milliseconds);
+      })
+    ]).finally(function () { clearTimeout(timeout); });
+  }
+
+  function queueGattOperation(action, label = "Bluetooth operation") {
+    const epoch = connectionEpoch;
+    const operation = gattQueue.then(async function () {
+      if (epoch !== connectionEpoch || !isGattConnected()) {
+        throw new Error("Bluetooth connection changed.");
+      }
+      try {
+        return await withTimeout(action(), COMMAND_TIMEOUT_MS, label);
+      } catch (error) {
+        log("GATT operation failed", { operation: label, name: error.name, message: error.message,
+          connected: isGattConnected(), session: recordingSessionId });
+        if (error.name === "TimeoutError" && epoch === connectionEpoch &&
+            isGattConnected()) {
+          bluetoothDevice.gatt.disconnect();
+        }
+        throw error;
+      }
+    });
+    gattQueue = operation.catch(function () {});
+    return operation;
+  }
+
+  async function writeCommand(command) {
+    const characteristic = controlCharacteristic;
+    if (!characteristic || !isGattConnected()) {
+      throw new Error("Pendant control characteristic is unavailable.");
+    }
+    const value = new Uint8Array([command, PROTOCOL_VERSION]);
+    await queueGattOperation(async function () {
+      const properties = characteristic.properties;
+      if (properties.write && typeof characteristic.writeValueWithResponse === "function") {
+        try { return await characteristic.writeValueWithResponse(value); }
+        catch (error) {
+          if (error.name !== "NotSupportedError" || !properties.writeWithoutResponse ||
+              typeof characteristic.writeValueWithoutResponse !== "function") throw error;
+          log("Write-with-response rejected; using advertised write-without-response", {
+            command, name: error.name, message: error.message
+          });
+          // START/STOP/GET_STATUS are idempotent. Status, not the write result, is the ACK.
+          return characteristic.writeValueWithoutResponse(value);
+        }
+      }
+      if (properties.writeWithoutResponse &&
+          typeof characteristic.writeValueWithoutResponse === "function") {
+        return characteristic.writeValueWithoutResponse(value);
+      }
+      return characteristic.writeValue(value);
+    }, "Control command 0x" + command.toString(16));
+    log("Control command sent", { command, protocol: PROTOCOL_VERSION });
+  }
+
+  async function readControlStatus() {
+    const characteristic = controlCharacteristic;
+    const epoch = connectionEpoch;
+    if (!characteristic || !isGattConnected()) return false;
+    try {
+      const value = await queueGattOperation(function () {
+        return characteristic.readValue();
+      });
+      if (epoch !== connectionEpoch) return false;
+      return parseStatusValue(value, "read");
+    } catch (error) {
+      log("Control status read failed", friendlyError(error));
+      return false;
+    }
+  }
+
+  function handleStatusNotification(event) {
+    parseStatusValue(event.target.value, "notification");
+  }
+
+  function parseStatusValue(value, source) {
+    if (!value || value.byteLength !== 16) {
+      log("Ignored short status value", {
+        source: source,
+        length: value ? value.byteLength : 0
+      });
+      return false;
+    }
+
+    if (value.getUint8(0) !== STATUS_MAGIC) {
+      log("Ignored non-status control value", {
+        source: source,
+        firstByte: value.getUint8(0)
+      });
+      return false;
+    }
+
+    const version = value.getUint8(1);
+
+    if (version !== PROTOCOL_VERSION) {
+      const message =
+        "Protocol mismatch: PWA " +
+        PROTOCOL_VERSION +
+        ", pendant " +
+        version;
+      log(message);
+      setAppState("error", message);
+      return false;
+    }
+
+    const receivedStatus = {
+      state: value.getUint8(2),
+      error: value.getUint8(3),
+      mtu: value.getUint16(4, true),
+      attCapacity: value.getUint16(6, true),
+      chunksPerFrame: value.getUint8(8),
+      headerBytes: value.getUint8(9),
+      sampleRate: value.getUint16(10, true),
+      samplesPerFrame: value.getUint16(12, true),
+      payloadBytes: value.getUint16(14, true)
+    };
+
+    if (receivedStatus.state > 3 || receivedStatus.headerBytes !== AUDIO_HEADER_BYTES ||
+        receivedStatus.sampleRate !== DEFAULT_SAMPLE_RATE || receivedStatus.samplesPerFrame !== 800) {
+      log("Rejected incompatible status layout", receivedStatus);
+      return false;
+    }
+    if (receivedStatus.state === DEVICE_STATE.STREAMING &&
+        (receivedStatus.mtu < 91 || receivedStatus.chunksPerFrame < 10 ||
+         receivedStatus.chunksPerFrame > 20 || receivedStatus.payloadBytes < 80 ||
+         receivedStatus.payloadBytes > 160)) {
+      log("Rejected invalid streaming transport", receivedStatus);
+      return false;
+    }
+    deviceStatus = receivedStatus;
+    document.body.dataset.deviceState = String(deviceStatus.state);
+
+    log("Pendant status received", {
+      source: source,
+      state: deviceStatus.state,
+      error: deviceStatus.error,
+      mtu: deviceStatus.mtu,
+      attCapacity: deviceStatus.attCapacity,
+      chunks: deviceStatus.chunksPerFrame,
+      payload: deviceStatus.payloadBytes,
+      sampleRate: deviceStatus.sampleRate
+    });
+
+    updateMetrics();
+
+    if (
+      deviceStatus.state === DEVICE_STATE.ERROR ||
+      deviceStatus.error !== 0
+    ) {
+      const message =
+        ERROR_TEXT[deviceStatus.error] ||
+        "Unknown pendant error " + deviceStatus.error;
+
+      clearStartTimeout();
+      log("Pendant reported error", message);
+      if (recordingConfirmed || appState === "starting" || appState === "stopping") {
+        scheduleFinalize(0, "device-error", recordingSessionId);
+      }
+      setAppState("error", message);
+      toast(message, "error");
+      return true;
+    }
+
+    if (deviceStatus.state === DEVICE_STATE.STREAMING) {
+      confirmRecordingStarted("status");
+      return true;
+    }
+
+    if (deviceStatus.state === DEVICE_STATE.CONNECTED_IDLE) {
+      if (appState === "stopping") {
+        scheduleFinalize(140, "normal");
+      } else if (appState === "recording") {
+        scheduleFinalize(0, "peripheral-stopped");
+      } else if (
+        appState === "idle" && !finalizing
+      ) {
+        setAppState("idle");
+      }
+    }
+
+    return true;
+  }
+
+  // -------------------------------------------------------------------------
+  // Recording lifecycle
+  // -------------------------------------------------------------------------
+
+  function clearFinalizeTimer() {
+    if (finalizeTimeout !== null) {
+      clearTimeout(finalizeTimeout);
+      finalizeTimeout = null;
+    }
+  }
+
+  function isCurrentSession(id) {
+    return id === recordingSessionId && id !== finalizedSessionId;
+  }
+
+  async function startRecording() {
+    if (appState !== "idle" || finalizing || !isGattConnected()) return;
+    if (journal && unsavedAudio) {
+      toast("Resolve the pending local save in Settings before starting another take.", "error");return;
+    }
+    if (unsavedAudio && !window.confirm("Unsaved audio is still in memory. Download it in Settings first. Discard it and start a new recording?")) return;
+    unsavedAudio = false;
+    clearFinalizeTimer();
+    clearStartTimeout();
+    const sessionId = ++recordingSessionId;
+    resetCollector();
+    setAppState("starting");
+
+    try {
+      if (journal) {
+        processor?.pause();
+        if (!persistenceRequested && navigator.storage?.persist) {
+          persistenceRequested=true;
+          navigator.storage.persist().then(granted=>log("Persistent storage request",{granted}))
+            .catch(error=>log("Persistent storage request failed",friendlyError(error,"Storage")));
+        }
+        openingCapture = journal.begin(defaultRecordingName(new Date()));
+        currentRecordingId = await openingCapture;
+        openingCapture = null;
+        if (!isCurrentSession(sessionId) || appState !== "starting") return;
+      }
+      if (settings.wakeLock) await acquireWakeLock();
+      if (!isCurrentSession(sessionId) || appState !== "starting") return;
+      // Subscriptions already belong to this connection. Do not reopen GATT
+      // subscriptions on every take or race a cancellation with a late START.
+      startTimeout = window.setTimeout(async function () {
+        if (!isCurrentSession(sessionId) || appState !== "starting") return;
+        await readControlStatus();
+        if (!isCurrentSession(sessionId) || appState !== "starting") return;
+        toast("Start was not acknowledged. Stopping safely.", "error");
+        await stopRecording();
+      }, START_TIMEOUT_MS);
+      await writeCommand(CMD_START);
+      await delay(140);
+      if (isCurrentSession(sessionId) && appState === "starting") {
+        await readControlStatus();
+      }
+    } catch (error) {
+      if (!isCurrentSession(sessionId)) return;
+      log("Start failed", friendlyError(error));
+      toast(friendlyError(error), "error");
+      if (appState === "starting" || appState === "recording") {
+        await stopRecording();
+      }
+    }
+  }
+
+  function confirmRecordingStarted(source) {
+    if (appState !== "starting" && appState !== "recording") return;
+    if (!recordingConfirmed) {
+      recordingConfirmed = true;
+      recordingStartedAt = performance.now();
+      lastAudioAt = recordingStartedAt;
+      clearStartTimeout();
+      startTimer();
+      setAppState("recording");
+      log("Recording confirmed", { source: source, session: recordingSessionId });
+    }
+  }
+
+  async function stopRecording() {
+    if (appState !== "recording" && appState !== "starting") return;
+    const sessionId = recordingSessionId;
+    setAppState("stopping");
+    clearStartTimeout();
+
+    try {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (!isCurrentSession(sessionId) || appState !== "stopping") return;
+        if (!isGattConnected()) break;
+        await writeCommand(CMD_STOP);
+        await delay(150);
+        if (!isCurrentSession(sessionId) || appState !== "stopping") return;
+        await readControlStatus();
+        if (!isCurrentSession(sessionId) || appState !== "stopping") return;
+        if (deviceStatus.state === DEVICE_STATE.CONNECTED_IDLE &&
+            deviceStatus.error === 0) {
+          scheduleFinalize(100, "normal", sessionId);
+          return;
+        }
+        log("Stop not yet acknowledged; retrying", { attempt: attempt + 1 });
+      }
+      if (!isCurrentSession(sessionId)) return;
+      log("Stop unconfirmed; disconnecting to stop the peripheral");
+      toast("Stop was not confirmed. Disconnected safely; saving received audio.", "error");
+    } catch (error) {
+      if (!isCurrentSession(sessionId)) return;
+      log("Stop failed; disconnecting safely", friendlyError(error));
+    }
+    // Never display Ready while the pendant might still be streaming.
+    if (isGattConnected()) bluetoothDevice.gatt.disconnect();
+    await finalizeRecording("stop-unconfirmed", sessionId);
+  }
+
+  function scheduleFinalize(delayMs, reason, sessionId = recordingSessionId) {
+    if (!isCurrentSession(sessionId) || finalizing) return;
+    clearFinalizeTimer();
+    finalizeTimeout = window.setTimeout(function () {
+      finalizeTimeout = null;
+      if (isCurrentSession(sessionId)) finalizeRecording(reason, sessionId);
+    }, delayMs);
+  }
+
+  async function finalizeRecording(reason, sessionId = recordingSessionId) {
+    if (!isCurrentSession(sessionId) || finalizing) return;
+    finalizedSessionId = sessionId;
+    finalizing = true;
+    clearFinalizeTimer();
+    clearStartTimeout();
+    stopTimer();
+    cleanupStaleFrames(true);
+    setAppState("saving");
+    let saveError = "";
+
+    try {
+      if (journal) {
+        if (openingCapture) currentRecordingId = await openingCapture;
+        const saved = currentRecordingId ? await journal.close(currentRecordingId, reason) : null;
+        log("Chunk journal sealed", { id: currentRecordingId, reason, stats: saved?.stats });
+        toast(saved?.durationMs ? "Recording saved; processing jobs queued" : "No complete frames received; partial chunks retained");
+        currentRecordingId = null;unsavedAudio = false;
+        resetCollector();await renderRecordings();
+        ui.queueStatus.textContent = "Saved locally. FIFO jobs ready; configure endpoints and press Run / retry.";
+        if (settings.autoProcess) processor?.resume();
+        return;
+      }
+      if (completedPcmFrames.length === 0) {
+        log("Session ended without complete PCM frames", {
+          session: sessionId, reason: reason,
+          packets: sessionStats.packetsReceived,
+          invalid: sessionStats.invalidPackets
+        });
+        if (sessionStats.packetsReceived > 0) {
+          toast("No complete audio frames received. Check Diagnostics.", "error");
+        }
+        resetCollector();
+        return;
+      }
+
+      const sampleRate = deviceStatus.sampleRate || DEFAULT_SAMPLE_RATE;
+      const wavBlob = createWavBlob(completedPcmFrames, sampleRate);
+      const durationMs = Math.round(sessionStats.pcmBytes / 2 / sampleRate * 1000);
+      const now = new Date();
+      const id = now.getTime().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+      const recording = {
+        id, name: defaultRecordingName(now), createdAt: now.toISOString(),
+        durationMs, sizeBytes: wavBlob.size, sampleRate, blob: wavBlob,
+        notes: "", transcript: "", summary: "", stopReason: reason,
+        stats: Object.assign({}, sessionStats)
+      };
+      await putRecording(recording);
+      log("Recording saved", {
+        id, session: sessionId, durationMs, sizeBytes: wavBlob.size,
+        completeFrames: sessionStats.completeFrames, reason
+      });
+      toast("Recording saved");
+      resetCollector();
+      await renderRecordings();
+    } catch (error) {
+      saveError = friendlyError(error);
+      unsavedAudio = Boolean(currentRecordingId) || completedPcmFrames.length > 0;
+      log("Could not save recording", saveError);
+      // Keep the PCM in memory for the Recovery download button.
+      toast("Storage failed. Use Download unsaved audio in Settings.", "error");
+    } finally {
+      await releaseWakeLock();
+      finalizing = false;
+      if (saveError) {
+        setAppState("error", "Audio is still in memory. Download it before reloading.");
+      } else if (!isGattConnected()) {
+        setAppState("disconnected");
+      } else if (deviceStatus.state === DEVICE_STATE.CONNECTED_IDLE &&
+                 deviceStatus.error === 0) {
+        setAppState("idle");
+      } else {
+        setAppState("error", "Pendant is not idle. Disconnect and reconnect to recover.");
+      }
+    }
+  }
+
+  function resetCollector() {
+    pendingFrames.clear();
+    completedSequences.clear();
+    completedPcmFrames = [];
+    lastObservedSequence = null;
+    lastFrameCleanupAt = 0;
+    lastAudioAt = 0;
+    sessionStats = createEmptyStats();
+    recordingConfirmed = false;
+    recordingStartedAt = 0;
+    levelHistory = [];
+    currentRms = 0;
+    lastDb = -96;
+    ui.timer.textContent = "00:00";
+    updateMetrics();
+  }
+
+  function clearStartTimeout() {
+    if (startTimeout) {
+      clearTimeout(startTimeout);
+      startTimeout = null;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Audio packet assembly
+  // -------------------------------------------------------------------------
+
+  function handleAudioNotification(event) {
+    const value = event.target.value;
+
+    if (!value || value.byteLength < AUDIO_HEADER_BYTES) {
+      sessionStats.invalidPackets += 1;
+      return;
+    }
+
+    if (
+      value.getUint8(0) !== AUDIO_MAGIC ||
+      value.getUint8(1) !== PROTOCOL_VERSION
+    ) {
+      sessionStats.invalidPackets += 1;
+      log("Rejected audio packet with invalid marker/version", {
+        marker: value.getUint8(0),
+        version: value.getUint8(1),
+        length: value.byteLength
+      });
+      updateMetrics();
+      return;
+    }
+
+    if (
+      appState !== "recording" &&
+      appState !== "starting" &&
+      appState !== "stopping"
+    ) {
+      return;
+    }
+
+    const sequence = value.getUint16(2, true);
+    const chunkIndex = value.getUint8(4);
+    const totalChunks = value.getUint8(5);
+    const payloadLength = value.getUint16(6, true);
+
+    sessionStats.packetsReceived += 1;
+
+    if (
+      totalChunks < MIN_CHUNKS_PER_FRAME ||
+      totalChunks > MAX_CHUNKS_PER_FRAME ||
+      chunkIndex >= totalChunks ||
+      payloadLength === 0 ||
+      payloadLength > 160 ||
+      AUDIO_HEADER_BYTES + payloadLength !== value.byteLength
+    ) {
+      sessionStats.invalidPackets += 1;
+      log("Rejected malformed audio packet", {
+        sequence: sequence,
+        chunk: chunkIndex,
+        total: totalChunks,
+        payload: payloadLength,
+        packetLength: value.byteLength
+      });
+      updateMetrics();
+      return;
+    }
+
+    if (appState === "starting") confirmRecordingStarted("first-audio-packet");
+    lastAudioAt = performance.now();
+    if (completedSequences.has(sequence)) {
+      sessionStats.duplicatePackets += 1;
+      return;
+    }
+    let frame = pendingFrames.get(sequence);
+
+    if (!frame) {
+      observeSequence(sequence);
+
+      frame = {
+        sequence: sequence,
+        totalChunks: totalChunks,
+        chunks: new Array(totalChunks),
+        receivedChunks: 0,
+        receivedBytes: 0,
+        createdAt: performance.now()
+      };
+
+      pendingFrames.set(sequence, frame);
+    }
+
+    if (frame.totalChunks !== totalChunks) {
+      pendingFrames.delete(sequence);
+      sessionStats.invalidPackets += 1;
+      log("Chunk count changed inside frame", {
+        sequence: sequence
+      });
+      return;
+    }
+
+    if (frame.chunks[chunkIndex]) {
+      sessionStats.duplicatePackets += 1;
+      return;
+    }
+
+    const payload = new Uint8Array(payloadLength);
+    payload.set(
+      new Uint8Array(
+        value.buffer,
+        value.byteOffset + AUDIO_HEADER_BYTES,
+        payloadLength
+      )
+    );
+
+    if (journal && currentRecordingId) {
+      try {journal.append(currentRecordingId, {sequence, chunk:chunkIndex, total:totalChunks, payload});}
+      catch(error){handleStorageError(error);return;}
+    }
+
+    frame.chunks[chunkIndex] = payload;
+    frame.receivedChunks += 1;
+    frame.receivedBytes += payloadLength;
+
+    if (frame.receivedChunks === frame.totalChunks) {
+      completeFrame(frame);
+      pendingFrames.delete(sequence);
+    }
+
+    const now = performance.now();
+
+    if (now - lastFrameCleanupAt > 250) {
+      lastFrameCleanupAt = now;
+      cleanupStaleFrames(false);
+    }
+  }
+
+  function observeSequence(sequence) {
+    if (sessionStats.firstSequence === null) {
+      sessionStats.firstSequence = sequence;
+    }
+
+    if (lastObservedSequence !== null) {
+      const delta =
+        (sequence - lastObservedSequence + 65536) % 65536;
+
+      if (delta > 1 && delta < 32768) {
+        sessionStats.missingFrames += delta - 1;
+      }
+    }
+
+    if (lastObservedSequence === null ||
+        (sequence - lastObservedSequence + 65536) % 65536 < 32768) {
+      lastObservedSequence = sequence;
+    }
+    sessionStats.lastSequence = sequence;
+  }
+
+  function completeFrame(frame) {
+    if (frame.receivedBytes !== PCM_BYTES_PER_FRAME) {
+      sessionStats.incompleteFrames += 1;
+      log("Dropped frame with incorrect PCM length", {
+        sequence: frame.sequence,
+        bytes: frame.receivedBytes
+      });
+      updateMetrics();
+      return;
+    }
+
+    const pcm = new Uint8Array(PCM_BYTES_PER_FRAME);
+    let offset = 0;
+
+    for (let index = 0; index < frame.totalChunks; index += 1) {
+      const chunk = frame.chunks[index];
+
+      if (!chunk) {
+        sessionStats.incompleteFrames += 1;
+        return;
+      }
+
+      pcm.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    // With the journal enabled, only the waveform/assembly window stays in RAM.
+    if (!journal) completedPcmFrames.push(pcm);
+    completedSequences.add(frame.sequence);
+    sessionStats.completeFrames += 1;
+    sessionStats.pcmBytes += pcm.length;
+
+    updateAudioLevel(pcm);
+    updateMetrics();
+
+    const durationMs =
+      (sessionStats.pcmBytes / 2 /
+        (deviceStatus.sampleRate || DEFAULT_SAMPLE_RATE)) *
+      1000;
+
+    if (durationMs >= MAX_RECORDING_MS) {
+      log("Maximum recording duration reached");
+      toast("30-minute limit reached. Saving recording.");
+      stopRecording();
+    }
+  }
+
+  function cleanupStaleFrames(force) {
+    const now = performance.now();
+
+    pendingFrames.forEach(function (frame, sequence) {
+      if (
+        force ||
+        now - frame.createdAt > INCOMPLETE_FRAME_TIMEOUT_MS
+      ) {
+        pendingFrames.delete(sequence);
+        sessionStats.incompleteFrames += 1;
+      }
+    });
+
+    updateMetrics();
+  }
+
+  function updateAudioLevel(pcm) {
+    const view = new DataView(
+      pcm.buffer,
+      pcm.byteOffset,
+      pcm.byteLength
+    );
+    let sumSquares = 0;
+    const samples = pcm.byteLength / 2;
+
+    for (let index = 0; index < samples; index += 1) {
+      const normalized =
+        view.getInt16(index * 2, true) / 32768;
+      sumSquares += normalized * normalized;
+    }
+
+    currentRms = Math.sqrt(sumSquares / samples);
+    lastDb =
+      20 * Math.log10(Math.max(currentRms, 0.000016));
+    levelHistory.push(currentRms);
+
+    if (levelHistory.length > 150) {
+      levelHistory.shift();
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // WAV creation
+  // -------------------------------------------------------------------------
+
+  function createWavBlob(pcmFrames, sampleRate) {
+    const dataLength = pcmFrames.reduce(function (total, frame) {
+      return total + frame.byteLength;
+    }, 0);
+
+    const header = new ArrayBuffer(44);
+    const view = new DataView(header);
+
+    writeAscii(view, 0, "RIFF");
+    view.setUint32(4, 36 + dataLength, true);
+    writeAscii(view, 8, "WAVE");
+    writeAscii(view, 12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeAscii(view, 36, "data");
+    view.setUint32(40, dataLength, true);
+
+    return new Blob(
+      [header].concat(pcmFrames),
+      { type: "audio/wav" }
+    );
+  }
+
+  function writeAscii(view, offset, text) {
+    for (let index = 0; index < text.length; index += 1) {
+      view.setUint8(offset + index, text.charCodeAt(index));
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Timer, wake lock and waveform
+  // -------------------------------------------------------------------------
+
+  function startTimer() {
+    stopTimer();
+    updateTimer();
+    timerInterval = window.setInterval(updateTimer, 200);
+  }
+
+  function stopTimer() {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+  }
+
+  function updateTimer() {
+    if (!recordingConfirmed || !recordingStartedAt) return;
+
+    const elapsed = performance.now() - recordingStartedAt;
+    ui.timer.textContent = formatClock(elapsed);
+    if (appState === "recording" && performance.now() - lastAudioAt > 7000) {
+      log("Audio stalled for seven seconds; stopping safely");
+      toast("Audio stopped arriving. Saving what was received.", "error");
+      stopRecording();
+    }
+  }
+
+  function formatClock(milliseconds) {
+    const totalSeconds = Math.max(
+      0,
+      Math.floor(milliseconds / 1000)
+    );
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return (
+        pad2(hours) +
+        ":" +
+        pad2(minutes) +
+        ":" +
+        pad2(seconds)
+      );
+    }
+
+    return pad2(minutes) + ":" + pad2(seconds);
+  }
+
+  function pad2(number) {
+    return String(number).padStart(2, "0");
+  }
+
+  async function acquireWakeLock() {
+    if (!("wakeLock" in navigator) || wakeLock) return;
+
+    try {
+      const sessionId = recordingSessionId;
+      const lock = await navigator.wakeLock.request("screen");
+      if (!isCurrentSession(sessionId) ||
+          (appState !== "starting" && appState !== "recording") || wakeLock) {
+        await lock.release();
+        return;
+      }
+      wakeLock = lock;
+      lock.addEventListener("release", function () {
+        if (wakeLock === lock) wakeLock = null;
+        log("Screen wake lock released");
+      });
+      log("Screen wake lock acquired");
+    } catch (error) {
+      log("Wake lock unavailable", friendlyError(error));
+    }
+  }
+
+  async function releaseWakeLock() {
+    if (!wakeLock) return;
+
+    try {
+      await wakeLock.release();
+    } catch (error) {
+      log("Wake lock release failed", friendlyError(error));
+    } finally {
+      wakeLock = null;
+    }
+  }
+
+  function drawWaveform() {
+    if (performance.now() - lastWaveDraw < 50) {
+      window.requestAnimationFrame(drawWaveform);return;
+    }
+    lastWaveDraw = performance.now();
+    const canvas = ui.waveformCanvas;
+    const rect = canvas.getBoundingClientRect();
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const width = Math.max(1, Math.round(rect.width * ratio));
+    const height = Math.max(1, Math.round(rect.height * ratio));
+
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+
+    const context = canvas.getContext("2d");
+    context.clearRect(0, 0, width, height);
+
+    const centerY = height / 2;
+    const gradient = context.createLinearGradient(0, 0, width, 0);
+    gradient.addColorStop(0, "rgba(8,107,220,.15)");
+    gradient.addColorStop(.5, "rgba(8,107,220,.90)");
+    gradient.addColorStop(1, "rgba(8,107,220,.15)");
+
+    context.strokeStyle = "rgba(173,207,235,.08)";
+    context.lineWidth = ratio;
+    context.beginPath();
+    context.moveTo(0, centerY);
+    context.lineTo(width, centerY);
+    context.stroke();
+
+    const values =
+      levelHistory.length > 2
+        ? levelHistory
+        : createIdleWaveValues(90);
+    const barCount = Math.min(values.length, 120);
+    const spacing = width / barCount;
+
+    context.strokeStyle = gradient;
+    context.lineWidth = Math.max(2 * ratio, spacing * .33);
+    context.lineCap = "round";
+
+    for (let index = 0; index < barCount; index += 1) {
+      const sourceIndex =
+        Math.floor(
+          (index / Math.max(1, barCount - 1)) *
+          (values.length - 1)
+        );
+      const value = values[sourceIndex];
+      const boosted =
+        levelHistory.length > 2
+          ? Math.min(1, value * 4.8)
+          : value;
+      const amplitude =
+        Math.max(3 * ratio, boosted * height * .39);
+      const x = spacing * index + spacing / 2;
+
+      context.beginPath();
+      context.moveTo(x, centerY - amplitude);
+      context.lineTo(x, centerY + amplitude);
+      context.stroke();
+    }
+
+    waveformPhase += .018;
+    requestAnimationFrame(drawWaveform);
+  }
+
+  function createIdleWaveValues(count) {
+    const values = [];
+
+    for (let index = 0; index < count; index += 1) {
+      const position = index / count;
+      const envelope = Math.sin(position * Math.PI);
+      const value =
+        .035 +
+        Math.abs(
+          Math.sin(index * .37 + waveformPhase)
+        ) *
+        .05 *
+        envelope;
+      values.push(value);
+    }
+
+    return values;
+  }
+
+  // -------------------------------------------------------------------------
+  // IndexedDB recording storage
+  // -------------------------------------------------------------------------
+
+  function openDatabase() {
+    if (journal) return journal.open();
+    if (databasePromise) return databasePromise;
+
+    databasePromise = new Promise(function (resolve, reject) {
+      const request =
+        indexedDB.open("dk-pendant-recordings", 1);
+
+      request.onupgradeneeded = function () {
+        const database = request.result;
+
+        if (!database.objectStoreNames.contains("recordings")) {
+          const store = database.createObjectStore(
+            "recordings",
+            { keyPath: "id" }
+          );
+          store.createIndex("createdAt", "createdAt");
+        }
+      };
+
+      request.onsuccess = function () {
+        resolve(request.result);
+      };
+
+      request.onerror = function () {
+        reject(request.error);
+      };
+    });
+
+    return databasePromise;
+  }
+
+  async function putRecording(recording) {
+    const database = await openDatabase();
+
+    return new Promise(function (resolve, reject) {
+      const transaction =
+        database.transaction("recordings", "readwrite");
+      transaction.objectStore("recordings").put(recording);
+      transaction.oncomplete = function () { resolve(); };
+      transaction.onerror = function () {
+        reject(transaction.error);
+      };
+      transaction.onabort = function () { reject(transaction.error || new Error("Storage transaction aborted")); };
+    });
+  }
+
+  async function updateRecordingFields(id, fields) {
+    const database = await openDatabase();
+    return new Promise(function (resolve, reject) {
+      const transaction = database.transaction("recordings", "readwrite");
+      const store = transaction.objectStore("recordings");
+      const request = store.get(id);
+      let updated = false;
+      request.onsuccess = function () {
+        // A delayed notes save or transcription must never resurrect a deletion.
+        if (!request.result) return;
+        store.put(Object.assign({}, request.result, fields));
+        updated = true;
+      };
+      transaction.oncomplete = function () { resolve(updated); };
+      transaction.onerror = transaction.onabort = function () {
+        reject(transaction.error || new Error("Local edit transaction failed"));
+      };
+    });
+  }
+
+  async function getAllRecordings() {
+    const database = await openDatabase();
+
+    return new Promise(function (resolve, reject) {
+      const transaction =
+        database.transaction("recordings", "readonly");
+      const request =
+        transaction.objectStore("recordings").getAll();
+      request.onsuccess = function () {
+        resolve(request.result || []);
+      };
+      request.onerror = function () {
+        reject(request.error);
+      };
+    });
+  }
+
+  async function deleteRecording(id) {
+    if (journal) return journal.remove(id);
+    const database = await openDatabase();
+
+    return new Promise(function (resolve, reject) {
+      const transaction =
+        database.transaction("recordings", "readwrite");
+      transaction.objectStore("recordings").delete(id);
+      transaction.oncomplete = function () { resolve(); };
+      transaction.onerror = function () {
+        reject(transaction.error);
+      };
+    });
+  }
+
+  async function clearAllRecordings() {
+    if (journal) return journal.clear();
+    const database = await openDatabase();
+
+    return new Promise(function (resolve, reject) {
+      const transaction =
+        database.transaction("recordings", "readwrite");
+      transaction.objectStore("recordings").clear();
+      transaction.oncomplete = function () { resolve(); };
+      transaction.onerror = function () {
+        reject(transaction.error);
+      };
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Recording library UI
+  // -------------------------------------------------------------------------
+
+  async function renderRecordings() {
+    renderedObjectUrls.forEach(function (url) {
+      URL.revokeObjectURL(url);
+    });
+    renderedObjectUrls = [];
+    ui.recordingsList.replaceChildren();
+
+    let recordings = [];
+
+    try {
+      recordings = await getAllRecordings();
+    } catch (error) {
+      log("Could not load recordings", friendlyError(error));
+      toast("Could not load local recordings", "error");
+      return;
+    }
+
+    recordings.sort(function (a, b) {
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+    ui.recordingsCount.textContent = String(recordings.length);
+
+    ui.emptyRecordings.classList.toggle(
+      "hidden",
+      recordings.length > 0
+    );
+    ui.clearRecordingsButton.classList.toggle(
+      "hidden",
+      recordings.length === 0
+    );
+
+    recordings.forEach(function (recording) {
+      ui.recordingsList.appendChild(
+        createRecordingCard(recording)
+      );
+    });
+  }
+
+  function createRecordingCard(recording) {
+    const card = document.createElement("article");
+    card.className = "recording-card";
+
+    const titleRow = document.createElement("div");
+    titleRow.className = "recording-title-row";
+
+    const title = document.createElement("input");
+    title.className = "recording-title";
+    title.value = recording.name;
+    title.setAttribute("aria-label", "Recording name");
+    title.addEventListener("change", async function () {
+      recording.name =
+        title.value.trim() || defaultRecordingName(new Date());
+      title.value = recording.name;
+      await updateRecordingFields(recording.id, { name: recording.name });
+      log("Recording renamed", { id: recording.id });
+    });
+    titleRow.appendChild(title);
+
+    const meta = document.createElement("div");
+    meta.className = "recording-meta";
+
+    [
+      formatDate(recording.createdAt),
+      formatDuration(recording.durationMs),
+      formatBytes(recording.sizeBytes),
+      String(recording.sampleRate || DEFAULT_SAMPLE_RATE) + " Hz",
+      recording.journal ? (recording.stats?.packetsReceived || 0) + " stored packets · " +
+        (recording.stats?.incompleteFrames || 0) + " incomplete · " +
+        (recording.stats?.missingFrames || 0) + " missing frames" : "Legacy WAV"
+    ].forEach(function (text) {
+      const item = document.createElement("span");
+      item.textContent = text;
+      meta.appendChild(item);
+    });
+
+    const audio = document.createElement("audio");
+    audio.controls = true;
+    audio.preload = "none";
+    if (recording.blob) {
+      const audioUrl = URL.createObjectURL(recording.blob);
+      renderedObjectUrls.push(audioUrl);audio.src = audioUrl;
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "recording-actions";
+    if (recording.journal) actions.appendChild(makeActionButton("Load audio", async function () {
+      const blob = await journal.blob(recording);
+      const url = URL.createObjectURL(blob);renderedObjectUrls.push(url);audio.src = url;audio.load();
+      toast("Audio loaded. Press Play.");
+    }));
+
+    actions.appendChild(
+      makeActionButton("Download", function () {
+        return downloadRecording(recording);
+      })
+    );
+
+    const transcribeButton =
+      makeActionButton("Run FIFO", async function () {
+        if (recordingConfirmed || finalizing || appState === "starting") {
+          toast("Stop and save before processing.");return;
+        }
+        if (!recording.journal) await journal.enqueueLegacy(recording.id);
+        return processor?.resume();
+      });
+    actions.appendChild(transcribeButton);
+
+    actions.appendChild(
+      makeActionButton("Delete", async function () {
+        if (!window.confirm("Delete this recording permanently?")) {
+          return;
+        }
+        processor?.pause();
+        await deleteRecording(recording.id);
+        log("Recording deleted", { id: recording.id });
+        await renderRecordings();
+      }, true)
+    );
+
+    const notes = document.createElement("textarea");
+    notes.className = "recording-notes";
+    notes.placeholder = "Add notes for this recording…";
+    notes.value = recording.notes || "";
+    notes.setAttribute("aria-label", "Recording notes");
+    bindDebouncedSave(notes, async function () {
+      recording.notes = notes.value;
+      await updateRecordingFields(recording.id, { notes: recording.notes });
+    });
+
+    card.appendChild(titleRow);
+    card.appendChild(meta);
+    card.appendChild(audio);
+    card.appendChild(actions);
+    card.appendChild(notes);
+
+    if (recording.transcript) {
+      const transcript = document.createElement("textarea");
+      transcript.className = "recording-transcript";
+      transcript.value = recording.transcript;
+      transcript.setAttribute("aria-label", "Transcript");
+      bindDebouncedSave(transcript, async function () {
+        recording.transcript = transcript.value;
+        await updateRecordingFields(recording.id, { transcript: recording.transcript });
+      });
+      card.appendChild(transcript);
+    }
+
+    if (recording.summary) {
+      const summary = document.createElement("p");
+      summary.className = "recording-summary";
+      summary.textContent = recording.summary;
+      card.appendChild(summary);
+    }
+
+    return card;
+  }
+
+  function makeActionButton(label, handler, danger) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className =
+      danger
+        ? "button button-danger button-small"
+        : "button button-secondary button-small";
+    button.textContent = label;
+    button.addEventListener("click", function (event) {
+      Promise.resolve().then(function () { return handler(event); }).catch(function (error) {
+        log(label + " failed", friendlyError(error));
+        toast(label + " failed: " + friendlyError(error), "error");
+      });
+    });
+    return button;
+  }
+
+  function bindDebouncedSave(element, saveFunction) {
+    let timeout = null;
+
+    element.addEventListener("input", function () {
+      clearTimeout(timeout);
+      timeout = window.setTimeout(function () {
+        Promise.resolve(saveFunction()).catch(function (error) {
+          log("Local edit save failed", friendlyError(error));
+          toast("Could not save your edit. Please try again.", "error");
+        });
+      }, 500);
+    });
+  }
+
+  async function downloadRecording(recording) {
+    const blob = recording.blob || await journal.blob(recording);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download =
+      sanitizeFilename(recording.name) + ".wav";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
+    log("Recording downloaded", { id: recording.id });
+  }
+
+  // -------------------------------------------------------------------------
+  // Settings and PWA lifecycle
+  // -------------------------------------------------------------------------
+
+  function loadSettings() {
+    try {
+      const stored =
+        JSON.parse(localStorage.getItem("dk-pendant-settings") || "{}");
+      settings = {
+        endpoint: stored.endpoint || "",
+        llmEndpoint: stored.llmEndpoint || "",
+        autoProcess: stored.autoProcess === true,
+        token: "",
+        wakeLock: stored.wakeLock !== false
+      };
+      // Migrate v3 preferences without retaining its plaintext access token.
+      if (stored.token) {
+        localStorage.setItem("dk-pendant-settings", JSON.stringify({
+          endpoint: settings.endpoint, llmEndpoint: settings.llmEndpoint,
+          autoProcess: settings.autoProcess, wakeLock: settings.wakeLock
+        }));
+      }
+    } catch (error) {
+      log("Settings could not be parsed; defaults restored");
+    }
+
+    ui.endpointInput.value = settings.endpoint;
+    ui.llmEndpointInput.value = settings.llmEndpoint;
+    ui.autoProcessInput.checked = settings.autoProcess;
+    ui.tokenInput.value = settings.token;
+    ui.wakeLockInput.checked = settings.wakeLock;
+  }
+
+  function saveSettings() {
+    const endpoint = ui.endpointInput.value.trim();
+    const llmEndpoint = ui.llmEndpointInput.value.trim();
+    if (llmEndpoint && new URL(llmEndpoint).protocol !== "https:") {
+      toast("Use an HTTPS LLM endpoint.", "error");return false;
+    }
+    if (endpoint && new URL(endpoint).protocol !== "https:") {
+      toast("Use an HTTPS transcription endpoint.", "error");
+      return false;
+    }
+    settings = {
+      endpoint: endpoint,
+      llmEndpoint: llmEndpoint,
+      autoProcess: ui.autoProcessInput.checked,
+      token: ui.tokenInput.value.trim(),
+      wakeLock: ui.wakeLockInput.checked
+    };
+
+    localStorage.setItem(
+      "dk-pendant-settings",
+      JSON.stringify({ endpoint: settings.endpoint, llmEndpoint: settings.llmEndpoint,
+        autoProcess: settings.autoProcess, wakeLock: settings.wakeLock })
+    );
+
+    log("Settings saved", {
+      endpointConfigured: Boolean(settings.endpoint),
+      tokenConfigured: Boolean(settings.token),
+      wakeLock: settings.wakeLock
+    });
+    toast("Settings saved");
+    return true;
+  }
+
+  function openSettings() {
+    ui.endpointInput.value = settings.endpoint;
+    ui.llmEndpointInput.value = settings.llmEndpoint;
+    ui.autoProcessInput.checked = settings.autoProcess;
+    ui.tokenInput.value = settings.token;
+    ui.wakeLockInput.checked = settings.wakeLock;
+    ui.settingsDialog.showModal();
+  }
+
+  async function registerServiceWorker() {
+    if (!("serviceWorker" in navigator)) return;
+
+    try {
+      const registration =
+        await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
+      await registration.update();
+      log("Service worker registered", {
+        scope: registration.scope
+      });
+    } catch (error) {
+      log("Service worker registration failed", friendlyError(error));
+    }
+  }
+
+  function setupInstallPrompt() {
+    window.addEventListener("beforeinstallprompt", function (event) {
+      event.preventDefault();
+      installPrompt = event;
+      ui.installButton.classList.remove("hidden");
+    });
+
+    window.addEventListener("appinstalled", function () {
+      installPrompt = null;
+      ui.installButton.classList.add("hidden");
+      toast("DK Pendant installed");
+      log("PWA installed");
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Formatting
+  // -------------------------------------------------------------------------
+
+  function defaultRecordingName(date) {
+    return (
+      "Recording " +
+      date.toLocaleDateString([], {
+        day: "2-digit",
+        month: "short"
+      }) +
+      " " +
+      date.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit"
+      })
+    );
+  }
+
+  function formatDate(value) {
+    return new Date(value).toLocaleString([], {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  }
+
+  function formatDuration(milliseconds) {
+    return formatClock(milliseconds || 0);
+  }
+
+  function formatBytes(bytes) {
+    if (!bytes) return "0 B";
+
+    const units = ["B", "KB", "MB", "GB"];
+    const index = Math.min(
+      Math.floor(Math.log(bytes) / Math.log(1024)),
+      units.length - 1
+    );
+
+    return (
+      (bytes / Math.pow(1024, index)).toFixed(index ? 1 : 0) +
+      " " +
+      units[index]
+    );
+  }
+
+  function sanitizeFilename(value) {
+    const cleaned = String(value || "recording")
+      .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    return cleaned.slice(0, 80) || "recording";
+  }
+
+  function delay(milliseconds) {
+    return new Promise(function (resolve) {
+      window.setTimeout(resolve, milliseconds);
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Event wiring
+  // -------------------------------------------------------------------------
+
+  function bindEvents() {
+    ui.runQueueButton.addEventListener("click", function () {
+      if (recordingConfirmed || finalizing || appState === "starting") {
+        toast("Stop and save before running processing jobs.");return;
+      }
+      processor?.retry();
+    });
+    ui.pauseQueueButton.addEventListener("click", function () {processor?.pause();});
+    ui.retrySaveButton.addEventListener("click", async function () {
+      if (!journal || finalizing || recordingConfirmed || appState === "starting") return;
+      try {
+        await journal.retryFlush();
+        if (currentRecordingId) await journal.close(currentRecordingId,"retried-local-save");
+        currentRecordingId=null;unsavedAudio=false;await renderRecordings();
+        setAppState(isGattConnected() && deviceStatus.state === 1 ? "idle" : "disconnected");
+        toast("Local save completed");
+      } catch(e){toast(friendlyError(e,"Local save"),"error");}
+    });
+    ui.connectButton.addEventListener("click", function () {
+      if (isGattConnected()) {
+        disconnectPendant();
+      } else {
+        connectPendant();
+      }
+    });
+
+    ui.startButton.addEventListener("click", startRecording);
+    ui.stopButton.addEventListener("click", stopRecording);
+    ui.settingsButton.addEventListener("click", openSettings);
+    ui.chooseDeviceButton.addEventListener("click", function () {
+      if (recordingConfirmed || finalizing || appState === "starting" || appState === "stopping") {
+        toast("Stop and save this recording before switching devices.", "error");
+        return;
+      }
+      manualDisconnect = true;
+      clearReconnectTimer(true);
+      if (isGattConnected()) bluetoothDevice.gatt.disconnect();
+      cleanupCharacteristics();
+      attachBluetoothDevice(null);
+      ui.settingsDialog.close();
+      connectPendant();
+    });
+    ui.recoveryButton.addEventListener("click", async function () {
+      if (appState === "recording" || appState === "starting" || finalizing) {
+        toast("Stop the recording first.", "error");
+        return;
+      }
+      if (journal && currentRecordingId) {
+        try { await downloadRecording(await journal.get("recordings",currentRecordingId)); }
+        catch(e){toast(friendlyError(e,"Recovery export"),"error");}
+        return;
+      }
+      if (!completedPcmFrames.length) {
+        toast("There is no unsaved audio in memory.");
+        return;
+      }
+      downloadRecording({
+        name: "Recovered recording", id: "recovery",
+        blob: createWavBlob(completedPcmFrames, DEFAULT_SAMPLE_RATE)
+      });
+      // Keep this copy until the user closes the page or starts a new take.
+    });
+
+    ui.closeSettingsButton.addEventListener("click", function () {
+      ui.settingsDialog.close();
+    });
+
+    ui.settingsForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      try {
+        if (saveSettings()) ui.settingsDialog.close();
+      } catch (error) {
+        toast("Could not save preferences: " + friendlyError(error), "error");
+      }
+    });
+
+    ui.installButton.addEventListener("click", async function () {
+      if (!installPrompt) return;
+      await installPrompt.prompt();
+      await installPrompt.userChoice;
+      installPrompt = null;
+      ui.installButton.classList.add("hidden");
+    });
+
+    ui.clearRecordingsButton.addEventListener(
+      "click",
+      async function () {
+        if (currentRecordingId || openingCapture || recordingConfirmed || finalizing) {
+          toast("Stop and save the active take before clearing recordings.", "error");return;
+        }
+        if (
+          !window.confirm(
+            "Delete all locally stored recordings permanently?"
+          )
+        ) {
+          return;
+        }
+
+        processor?.pause();
+        await clearAllRecordings();
+        log("All local recordings deleted");
+        await renderRecordings();
+      }
+    );
+
+    ui.copyDiagnosticsButton.addEventListener(
+      "click",
+      async function () {
+        const text = diagnosticLines.join("\n");
+
+        try {
+          await navigator.clipboard.writeText(text);
+          toast("Diagnostics copied");
+        } catch (error) {
+          const area = document.createElement("textarea");
+          area.value = text;
+          document.body.appendChild(area);
+          area.select();
+          document.execCommand("copy");
+          area.remove();
+          toast("Diagnostics copied");
+        }
+      }
+    );
+
+    ui.clearDiagnosticsButton.addEventListener("click", function () {
+      diagnosticLines = [];
+      ui.diagnosticsLog.textContent = "";
+      log("Diagnostics cleared");
+    });
+
+    document.addEventListener("visibilitychange", function () {
+      if (
+        document.visibilityState === "visible" &&
+        recordingConfirmed &&
+        settings.wakeLock
+      ) {
+        acquireWakeLock();
+      }
+    });
+
+    window.addEventListener("beforeunload", function (event) {
+      if (recordingConfirmed || finalizing || unsavedAudio) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Start-up
+  // -------------------------------------------------------------------------
+
+  async function initialize() {
+    if (!journal) throw new Error("Audio storage module did not load. Deploy all v5 files and reload.");
+    if (!navigator.locks) throw new Error("This build needs Web Locks for safe local storage. Use current Android Chrome over HTTPS.");
+    await new Promise(function (resolve, reject) {
+      navigator.locks.request("dk-pendant-app", {ifAvailable:true}, async function (lock) {
+        if (!lock) {reject(new Error("Another pendant tab is open. Close it before using this one."));return;}
+        resolve();await new Promise(function () {}); // Released automatically when this page closes.
+      }).catch(reject);
+    });
+    await journal.open();
+    const recovered = await journal.recover();
+    ui.appVersion.textContent = "PWA " + APP_VERSION;
+    loadSettings();
+    processor = new globalThis.DKFIFOProcessor(journal, {settings:()=>settings,onChange:function (message) {
+      ui.queueStatus.textContent=message;log("FIFO",message);
+      if (message === "Queue complete") renderRecordings();
+    }});
+    if (recovered) log("Recovered interrupted recordings from stored chunks", {count:recovered});
+    bindEvents();
+    setupInstallPrompt();
+    drawWaveform();
+    updateMetrics();
+
+    log("Application started", {
+      version: APP_VERSION,
+      protocol: PROTOCOL_VERSION,
+      secureContext: window.isSecureContext,
+      webBluetooth: Boolean(navigator.bluetooth),
+      userAgent: navigator.userAgent
+    });
+
+    if (!window.isSecureContext) {
+      setAppState(
+        "unsupported",
+        "This page must be hosted over HTTPS for Web Bluetooth."
+      );
+    } else if (!navigator.bluetooth) {
+      setAppState(
+        "unsupported",
+        "Use Android Chrome. Web Bluetooth is unavailable in this browser."
+      );
+    } else {
+      setAppState("disconnected");
+    }
+
+    await renderRecordings();
+    if (settings.autoProcess) processor.resume();
+    registerServiceWorker();
+    if (window.isSecureContext && navigator.bluetooth && await restoreKnownPendant()) {
+      await connectPendant({ silent: true, autoReconnect: true });
+    }
+  }
+
+  initialize().catch(function (error) {
+    const message = friendlyError(error);
+    log("Fatal initialization error", message);
+    setAppState("error", message);
+  });
+})();

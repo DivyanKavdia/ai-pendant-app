@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f5f7fa">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="DK Pendant — a quieter way to capture your thoughts.">
+  <title>DK Pendant · Capture what matters</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css?v=5.0.0">
+</head>
+<body data-state="disconnected">
+  <svg class="icon-defs" aria-hidden="true"><defs>
+    <symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 10v4m4-8v12m5-16v20m5-16v12m4-8v4"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4m-4 0h8"/></symbol>
+    <symbol id="i-library" viewBox="0 0 24 24"><path d="M4 4v16m5-16v16M14 5l5-1 3 15-5 1Z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></symbol>
+    <symbol id="i-bt" viewBox="0 0 24 24"><path d="m6 7 12 10-6 5V2l6 5L6 17"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M5 17v4h14v-4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-11v1"/></symbol>
+  </defs></svg>
+
+  <aside class="rail" aria-label="Main navigation">
+    <a class="monogram" href="#capture" aria-label="DK Pendant home">dk<span>.</span></a>
+    <nav class="rail-nav">
+      <a class="rail-link active" href="#capture" aria-label="Recorder"><svg><use href="#i-wave"/></svg><span>Record</span></a>
+      <a class="rail-link" href="#library" aria-label="Your recordings"><svg><use href="#i-library"/></svg><span>Library</span></a>
+      <a class="rail-link" href="#diagnostics" aria-label="Diagnostics"><svg><use href="#i-info"/></svg><span>Health</span></a>
+    </nav>
+    <span class="rail-signature">MADE FOR<br>THE MOMENT</span>
+  </aside>
+
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#capture"><span class="mobile-monogram">dk.</span><span>DK Pendant <small>PERSONAL AUDIO STUDIO</small></span></a>
+      <div class="top-actions">
+        <button id="installButton" class="icon-button hidden" type="button" title="Install app" aria-label="Install app"><svg><use href="#i-download"/></svg></button>
+        <button id="settingsButton" class="icon-button" type="button" title="Settings" aria-label="Open settings"><svg><use href="#i-settings"/></svg></button>
+      </div>
+    </header>
+
+    <main>
+      <div class="page-heading"><div><p class="eyebrow">LESS DISTRACTION. MORE PRESENCE.</p><h1>Keep the thought.<br><span>Stay in the moment.</span></h1></div><span class="edition">YOUR WORDS.<br>YOUR SPACE.</span></div>
+
+      <section id="capture" class="capture-layout" aria-label="Recorder">
+        <div class="hero-card">
+          <div class="connection-row">
+            <div id="connectionBadge" class="status-badge status-offline" role="status" aria-live="polite"><span class="status-dot"></span><span id="connectionText">Not connected</span></div>
+            <button id="connectButton" class="button button-secondary connect-button" type="button">Connect pendant</button>
+          </div>
+          <div class="session-heading"><div><p class="eyebrow">THE RECORDER</p><h2 id="recorderTitle">Ready when you are.</h2></div><span class="format-chip">16 kHz <span>·</span> MONO</span></div>
+          <p id="recorderSubtitle" class="recorder-subtitle">Connect your pendant to capture a little of your world.</p>
+          <div class="recording-stage">
+            <div class="stage-orbit" aria-hidden="true"></div>
+            <div id="timer" class="timer" aria-label="Recording duration">00:00</div>
+            <div class="canvas-wrap"><canvas id="waveformCanvas" aria-label="Audio level history"></canvas></div>
+            <div id="levelText" class="level-text">Waiting for pendant</div>
+          </div>
+          <div class="recorder-controls">
+            <button id="startButton" class="record-button" type="button" disabled><span class="record-dot"></span><span>Start recording</span><svg><use href="#i-arrow"/></svg></button>
+            <button id="stopButton" class="button stop-button" type="button" disabled><span class="stop-square"></span><span>Stop &amp; save</span></button>
+          </div>
+          <div class="privacy-line"><svg><use href="#i-check"/></svg>Saved on this device. Shared only when you choose.</div>
+        </div>
+
+        <aside class="device-panel">
+          <div class="panel-label"><p class="eyebrow">YOUR COMPANION</p><svg><use href="#i-bt"/></svg></div>
+          <div class="pendant-scene" aria-hidden="true"><div class="pendant-glow"></div><div class="pendant-cord"></div><div class="pendant-object"><span class="pendant-slot"></span><span class="pendant-emblem">dk.</span><span class="pendant-led"></span></div></div>
+          <h3>Small device.<br>Big possibilities.</h3>
+          <p class="device-caption">A visual status indicator.<br>Actual hardware appearance may vary.</p>
+          <div class="led-key"><span><i class="led-off"></i>Offline</span><span><i class="led-idle"></i>Ready</span><span><i class="led-live"></i>Recording</span></div>
+          <div class="metrics-grid" aria-label="Live transport health">
+            <div class="metric-card"><span>Audio level</span><strong id="signalMetric">—</strong><small id="signalDetail">No stream</small></div>
+            <div class="metric-card"><span>Frames</span><strong id="framesMetric">0</strong><small id="framesDetail">Complete</small></div>
+            <div class="metric-card"><span>Transport</span><strong id="transportMetric">—</strong><small id="transportDetail">MTU / chunks</small></div>
+            <div class="metric-card"><span>Quality</span><strong id="qualityMetric">—</strong><small id="qualityDetail">Waiting</small></div>
+          </div>
+        </aside>
+      </section>
+
+      <section id="library" class="section-card recordings-section">
+        <div class="section-heading"><div><p class="eyebrow">A PLACE FOR YOUR WORDS</p><h2>Your recordings <span id="recordingsCount" class="count-badge">0</span></h2></div><button id="clearRecordingsButton" class="text-button" type="button">Clear all</button></div>
+        <div id="emptyRecordings" class="empty-state">
+          <div class="empty-art" aria-hidden="true"><span></span><svg><use href="#i-wave"/></svg><span></span></div>
+          <h3>The good stuff starts here.</h3><p>Ideas, conversations, little reminders.<br>Your first recording is just a tap away.</p>
+          <span class="empty-note">No account. No automatic uploads.</span>
+        </div>
+        <div id="recordingsList" class="recordings-list"></div>
+      </section>
+
+      <details id="diagnostics" class="section-card diagnostics-section">
+        <summary><span class="health-summary"><svg><use href="#i-info"/></svg><span><strong>Connection &amp; diagnostics</strong><small>The details, when you need them.</small></span></span><span class="summary-chevron">+</span></summary>
+        <div class="diagnostic-actions"><button id="copyDiagnosticsButton" class="button button-secondary button-small" type="button">Copy diagnostics</button><button id="clearDiagnosticsButton" class="text-button" type="button">Clear log</button></div>
+        <pre id="diagnosticsLog" class="diagnostics-log"></pre>
+      </details>
+      <section class="section-card queue-panel" aria-label="Sequential processing queue">
+        <p class="eyebrow">SAVED FIRST. PROCESSED IN ORDER.</p>
+        <h2>Processing queue</h2>
+        <p id="queueStatus" role="status" aria-live="polite">Chunks save locally during recording. Configure your endpoints to process them.</p>
+        <p class="settings-note">30-second audio segments → transcription → segment summary → final consolidation. Failed jobs pause the FIFO queue.</p>
+        <div class="settings-actions"><button id="runQueueButton" class="button button-primary" type="button">Run / retry FIFO</button><button id="pauseQueueButton" class="button button-secondary" type="button">Pause processing</button></div>
+      </section>
+    </main>
+    <footer><span>Designed for presence.</span><span id="appVersion">PWA 5.0.0</span><span>PROTOCOL 02</span></footer>
+  </div>
+
+  <div id="toastRegion" class="toast-region" aria-live="polite"></div>
+
+  <dialog id="settingsDialog" class="modal">
+    <form id="settingsForm">
+      <div class="modal-header"><div><p class="eyebrow">MAKE IT YOURS</p><h2>Settings</h2></div><button id="closeSettingsButton" class="icon-button" type="button" aria-label="Close settings"><svg><use href="#i-close"/></svg></button></div>
+      <div class="settings-section"><h3>Device &amp; recording</h3>
+        <label class="toggle-row"><span><strong>Keep screen awake</strong><small>While recording, keep this app in the foreground.</small></span><input id="wakeLockInput" type="checkbox" checked></label>
+        <p class="settings-note">Previously authorised devices reconnect automatically when your browser supports it. Bluetooth cannot stay connected through a closed browser or an Android suspension.</p>
+        <div class="settings-actions"><button id="chooseDeviceButton" class="button button-secondary button-small" type="button">Choose another pendant</button><button id="recoveryButton" class="button button-secondary button-small" type="button">Download unsaved audio</button><button id="retrySaveButton" class="button button-secondary button-small" type="button">Retry local save</button></div>
+      </div>
+      <div class="settings-section"><h3>Optional transcription</h3>
+        <p class="settings-note">Run FIFO uploads audio to your transcription endpoint, then sends text to your LLM endpoint. Use trusted servers you control. Provider API keys belong on those servers.</p>
+        <label class="field"><span>HTTPS endpoint</span><input id="endpointInput" type="url" inputmode="url" placeholder="https://your-server.example/transcribe"><small>Multipart field <code>audio</code>; response: <code>text</code> or <code>transcript</code>.</small></label>
+        <label class="field"><span>Server access token <span class="optional">OPTIONAL</span></span><input id="tokenInput" type="password" autocomplete="off" placeholder="Not a provider API key"><small>Kept only for this page session; never saved to browser storage.</small></label>
+        <label class="field"><span>HTTPS LLM endpoint</span><input id="llmEndpointInput" type="url" inputmode="url" placeholder="https://your-server.example/summarize"><small>Accepts task + input JSON; returns a summary. See PROCESSING_API.md.</small></label>
+        <label class="toggle-row"><span><strong>Automatically process saved recordings</strong><small>Upload queued audio/text while this app is open. Off by default.</small></span><input id="autoProcessInput" type="checkbox"></label>
+      </div>
+      <div class="modal-actions"><button class="button button-primary" type="submit">Save preferences <svg><use href="#i-check"/></svg></button></div>
+    </form>
+  </dialog>
+  <script src="audio-store.js?v=5.0.0" defer></script>
+  <script src="app.js?v=5.0.0" defer></script>
+</body>
+</html>
