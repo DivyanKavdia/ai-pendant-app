@@ -5,7 +5,7 @@
   // Shared BLE Protocol v2
   // -------------------------------------------------------------------------
 
-  const APP_VERSION = "5.2.0";
+  const APP_VERSION = "5.2.1";
   const PROTOCOL_VERSION = 0x02;
 
   const SERVICE_UUID =
@@ -2481,8 +2481,6 @@
       return document.querySelector(link.getAttribute("href"));
     });
     let scheduled = false;
-    let clickedIndex = null;
-    let clickLockUntil = 0;
     function applySelection(selected) {
       links.forEach(function (link, index) {
         link.classList.toggle("active", index === selected);
@@ -2492,18 +2490,18 @@
     }
     links.forEach(function (link, index) {
       link.addEventListener("click", function () {
-        clickedIndex = index;
-        clickLockUntil = performance.now() + 900;
         applySelection(index);
       });
     });
     function update() {
       scheduled = false;
-      if (clickedIndex !== null && performance.now() < clickLockUntil) {
-        applySelection(clickedIndex);
+      const hashIndex = links.findIndex(function (link) {
+        return link.getAttribute("href") === window.location.hash;
+      });
+      if (hashIndex >= 0) {
+        applySelection(hashIndex);
         return;
       }
-      clickedIndex = null;
       let selected = 0;
       sections.forEach(function (section, index) {
         if (section && section.getBoundingClientRect().top <= 160) selected = index;
@@ -2518,6 +2516,7 @@
     }
     window.addEventListener("scroll", schedule, {passive:true});
     window.addEventListener("resize", schedule);
+    window.addEventListener("hashchange", schedule);
     update();
   }
 

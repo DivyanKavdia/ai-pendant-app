@@ -1,6 +1,6 @@
 # DK AI Pendant — PWA only
 
-Release 5.2.0. This repository contains only the browser application.
+Release 5.2.1. This repository contains only the browser application.
 ESP32-S3 firmware is maintained separately and must not be committed here.
 
 ## Deploy
@@ -9,7 +9,7 @@ Serve the repository root over HTTPS (for example, GitHub Pages). No npm
 installation, build step, or runtime framework is required. Upload all nine
 application assets together: `index.html`, `styles.css`, `app.js`,
 `audio-store.js`, `sw.js`, `manifest.webmanifest`, and the three icon files.
-Verify the footer shows 5.2.0. Do not clear site data to update the app:
+Verify the footer shows 5.2.1. Do not clear site data to update the app:
 recordings and pending processing jobs are stored there.
 
 Use a browser with Web Bluetooth, IndexedDB, and Web Locks support. Keep the
