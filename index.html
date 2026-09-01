@@ -234,7 +234,7 @@
             </div>
         </div>
 
-        <!-- 2. BLE Pendant Config (Independent Connection & Persistent Auto-Reconnect) -->
+        <!-- 2. BLE Pendant Config -->
         <div class="card">
             <h3>2. Pendant BLE</h3>
             <div class="status-box" style="margin-bottom: 12px;">
@@ -244,7 +244,7 @@
                 </div>
             </div>
 
-            <p style="font-size: 12px; color: var(--subtext); margin-top: 0;">Connects independently. Reconnects automatically on refresh until manually disconnected.</p>
+            <p style="font-size: 12px; color: var(--subtext); margin-top: 0;">Connects independently. Reconnects automatically on refresh unless manually disconnected.</p>
 
             <div class="btn-group" style="margin-top: 24px;">
                 <button id="bleConnectBtn" onclick="connectBLE()">Connect Pendant</button>
@@ -262,7 +262,7 @@
         <div id="notesContainer" class="notes-container"><em>Transcriptions and combined meeting notes will appear here in real-time...</em></div>
     </div>
 
-    <!-- Audio Storage Archive (Auto-Refreshing) -->
+    <!-- Audio Storage Archive -->
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <h3 style="margin: 0;">Hourly Audio Archive</h3>
@@ -328,6 +328,9 @@
 
             // Set up real-time auto-refresh interval for audio storage archive UI
             setInterval(renderStorageTree, 2500);
+
+            // Periodically verify GATT connection status to ensure UI reflects real ESP32 state
+            setInterval(verifyBLEState, 3000);
         });
 
         // Provider UI Control
@@ -427,10 +430,22 @@
             }
         }
 
-        // --- Persistent Auto-Reconnecting BLE Engine ---
+        // --- Persistent Auto-Reconnecting BLE Engine & Force Teardown ---
+
+        function verifyBLEState() {
+            if (gattServer) {
+                const actualConnected = gattServer.connected;
+                if (isBleConnected !== actualConnected) {
+                    console.warn(`BLE state mismatch detected. Syncing UI state to: ${actualConnected}`);
+                    isBleConnected = actualConnected;
+                    updateBLEUI(actualConnected, actualConnected && bleDevice ? bleDevice.name : "");
+                    updatePipelineStatus();
+                }
+            }
+        }
 
         async function autoReconnectBLE() {
-            if (!navigator.bluetooth || !navigator.bluetooth.getDevices) return;
+            if (!navigator.bluetooth || !navigator.bluetooth.getDevices || userIntentionalDisconnect) return;
 
             try {
                 const devices = await navigator.bluetooth.getDevices();
@@ -438,7 +453,6 @@
 
                 if (pendantDevice) {
                     bleDevice = pendantDevice;
-                    userIntentionalDisconnect = false;
                     await setupBLEConnection(bleDevice);
                 }
             } catch (err) {
@@ -461,6 +475,7 @@
             audioChar.addEventListener('characteristicvaluechanged', handleIncomingAudioChunk);
 
             isBleConnected = true;
+            userIntentionalDisconnect = false;
             updateBLEUI(true, device.name);
             updatePipelineStatus();
         }
@@ -483,13 +498,39 @@
             }
         }
 
-        function disconnectBLE() {
+        async function disconnectBLE() {
             userIntentionalDisconnect = true;
-            if (gattServer && gattServer.connected) {
-                gattServer.disconnect();
-            } else {
-                onBLEDisconnected();
+
+            // 1. Explicitly stop notifications to release the BLE characteristic handle
+            if (audioChar) {
+                try {
+                    audioChar.removeEventListener('characteristicvaluechanged', handleIncomingAudioChunk);
+                    await audioChar.stopNotifications();
+                } catch (e) {
+                    console.warn("Error stopping notifications:", e);
+                }
+                audioChar = null;
             }
+
+            // 2. Teardown GATT Server connection to force ESP32 disconnect event
+            if (gattServer) {
+                try {
+                    if (gattServer.connected) {
+                        gattServer.disconnect();
+                    }
+                } catch (e) {
+                    console.warn("Error disconnecting GATT server:", e);
+                }
+                gattServer = null;
+            }
+
+            if (bleDevice) {
+                bleDevice.removeEventListener('gattserverdisconnected', onBLEDisconnected);
+                bleDevice = null;
+            }
+
+            // 3. Immediately trigger UI reset without waiting on browser callback
+            onBLEDisconnected();
         }
 
         function onBLEDisconnected() {
@@ -499,7 +540,7 @@
 
             if (!userIntentionalDisconnect) {
                 document.getElementById("bleStatusText").innerText = "Reconnecting...";
-                setTimeout(autoReconnectBLE, 2000);
+                setTimeout(autoReconnectBLE, 3000);
             }
         }
 
@@ -785,7 +826,6 @@ Respond ONLY with valid raw JSON (no markdown fences) in this exact format:
             tx.objectStore("chunks").put(record);
 
             tx.oncomplete = () => {
-                // Instantly update tree view when a new file finishes saving
                 renderStorageTree();
             };
         }
