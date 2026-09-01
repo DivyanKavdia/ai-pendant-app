@@ -5,7 +5,7 @@
   // Shared BLE Protocol v2
   // -------------------------------------------------------------------------
 
-  const APP_VERSION = "5.1.0";
+  const APP_VERSION = "5.2.0";
   const PROTOCOL_VERSION = 0x02;
 
   const SERVICE_UUID =
@@ -75,6 +75,17 @@
     qualityDetail: document.getElementById("qualityDetail"),
     recordingsList: document.getElementById("recordingsList"),
     recordingsCount: document.getElementById("recordingsCount"),
+    datePicker: document.getElementById("datePicker"),
+    dateStrip: document.getElementById("dateStrip"),
+    selectedDateLabel: document.getElementById("selectedDateLabel"),
+    dayLensTitle: document.getElementById("dayLensTitle"),
+    glanceRecordings: document.getElementById("glanceRecordings"),
+    glanceDuration: document.getElementById("glanceDuration"),
+    glanceSummaries: document.getElementById("glanceSummaries"),
+    glanceTranscripts: document.getElementById("glanceTranscripts"),
+    insightsList: document.getElementById("insightsList"),
+    insightsCount: document.getElementById("insightsCount"),
+    emptyInsights: document.getElementById("emptyInsights"),
     emptyRecordings: document.getElementById("emptyRecordings"),
     clearRecordingsButton:
       document.getElementById("clearRecordingsButton"),
@@ -116,6 +127,7 @@
   let manualDisconnect = false;
   let connectInProgress = false;
   let needsDeviceSelection = false;
+  let selectedDayKey = localDateKey(new Date());
 
   let deviceStatus = {
     state: DEVICE_STATE.DISCONNECTED,
@@ -1769,6 +1781,138 @@
   // Recording library UI
   // -------------------------------------------------------------------------
 
+  function localDateKey(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0")].join("-");
+  }
+
+  function dateFromKey(key) {
+    const parts = String(key).split("-").map(Number);
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+
+  function selectDay(key) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return;
+    selectedDayKey = key;
+    ui.datePicker.value = key;
+    renderDateStrip();
+    renderRecordings();
+  }
+
+  function renderDateStrip() {
+    const today = new Date();
+    const todayKey = localDateKey(today);
+    ui.datePicker.max = todayKey;
+    ui.datePicker.value = selectedDayKey;
+    ui.dateStrip.replaceChildren();
+    for (let offset = 6; offset >= 0; offset -= 1) {
+      const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offset);
+      const key = localDateKey(date);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "date-chip";
+      button.setAttribute("role", "listitem");
+      button.classList.toggle("selected", key === selectedDayKey);
+      button.setAttribute("aria-pressed", String(key === selectedDayKey));
+      const weekday = document.createElement("span");
+      weekday.textContent = key === todayKey ? "Today" : date.toLocaleDateString([], { weekday: "short" });
+      const day = document.createElement("strong");
+      day.textContent = String(date.getDate());
+      button.append(weekday, day);
+      button.addEventListener("click", function () { selectDay(key); });
+      ui.dateStrip.appendChild(button);
+    }
+  }
+
+  function renderDayLens(recordings) {
+    const date = dateFromKey(selectedDayKey);
+    const todayKey = localDateKey(new Date());
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const relative = selectedDayKey === todayKey ? "Today" :
+      selectedDayKey === localDateKey(yesterday) ? "Yesterday" :
+        date.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+    const totalDuration = recordings.reduce(function (sum, recording) {
+      return sum + (Number(recording.durationMs) || 0);
+    }, 0);
+    ui.dayLensTitle.textContent = relative + " at a glance";
+    ui.selectedDateLabel.textContent = date.toLocaleDateString([], {
+      weekday: "long", day: "numeric", month: "long", year: "numeric"
+    });
+    ui.glanceRecordings.textContent = String(recordings.length);
+    ui.glanceDuration.textContent = totalDuration >= 3600000
+      ? (totalDuration / 3600000).toFixed(1) + "h"
+      : Math.round(totalDuration / 60000) + "m";
+    ui.glanceSummaries.textContent = String(recordings.filter(function (item) {
+      return Boolean(item.summary && item.summary.trim());
+    }).length);
+    ui.glanceTranscripts.textContent = String(recordings.filter(function (item) {
+      return Boolean(item.transcript && item.transcript.trim());
+    }).length);
+  }
+
+  function createInsightCard(recording) {
+    const card = document.createElement("article");
+    card.className = "insight-card";
+    const top = document.createElement("div");
+    top.className = "insight-top";
+    const heading = document.createElement("h3");
+    heading.textContent = recording.name;
+    const time = document.createElement("time");
+    time.dateTime = recording.createdAt;
+    time.textContent = new Date(recording.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    top.append(heading, time);
+    card.appendChild(top);
+    if (recording.summary && recording.summary.trim()) {
+      const label = document.createElement("span");
+      label.className = "insight-label";
+      label.textContent = "Meeting summary";
+      const summary = document.createElement("p");
+      summary.className = "insight-summary";
+      summary.textContent = recording.summary;
+      card.append(label, summary);
+    }
+    if (recording.transcript && recording.transcript.trim()) {
+      const transcript = document.createElement("details");
+      transcript.className = "transcript-preview";
+      const summary = document.createElement("summary");
+      summary.textContent = "View transcript";
+      const text = document.createElement("p");
+      text.textContent = recording.transcript;
+      transcript.append(summary, text);
+      card.appendChild(transcript);
+    }
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "text-button insight-open";
+    open.textContent = "Open recording";
+    open.addEventListener("click", function () {
+      const target = document.getElementById("recording-" + recording.id);
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        target.setAttribute("tabindex", "-1");
+        target.focus({ preventScroll: true });
+      }
+    });
+    card.appendChild(open);
+    return card;
+  }
+
+  function renderInsights(recordings) {
+    ui.insightsList.replaceChildren();
+    const processed = recordings.filter(function (recording) {
+      return Boolean((recording.summary && recording.summary.trim()) ||
+        (recording.transcript && recording.transcript.trim()));
+    });
+    ui.insightsCount.textContent = String(processed.length);
+    ui.emptyInsights.classList.toggle("hidden", processed.length > 0);
+    processed.forEach(function (recording) {
+      ui.insightsList.appendChild(createInsightCard(recording));
+    });
+  }
+
   async function renderRecordings() {
     renderedObjectUrls.forEach(function (url) {
       URL.revokeObjectURL(url);
@@ -1789,7 +1933,12 @@
     recordings.sort(function (a, b) {
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
+    recordings = recordings.filter(function (recording) {
+      return localDateKey(recording.createdAt) === selectedDayKey;
+    });
     ui.recordingsCount.textContent = String(recordings.length);
+    renderDayLens(recordings);
+    renderInsights(recordings);
 
     ui.emptyRecordings.classList.toggle(
       "hidden",
@@ -1810,6 +1959,7 @@
   function createRecordingCard(recording) {
     const card = document.createElement("article");
     card.className = "recording-card";
+    card.id = "recording-" + recording.id;
 
     const titleRow = document.createElement("div");
     titleRow.className = "recording-title-row";
@@ -2167,6 +2317,11 @@
   // -------------------------------------------------------------------------
 
   function bindEvents() {
+    ui.datePicker.addEventListener("change", function () {
+      if (ui.datePicker.value && ui.datePicker.value <= localDateKey(new Date())) {
+        selectDay(ui.datePicker.value);
+      }
+    });
     ui.runQueueButton.addEventListener("click", function () {
       if (recordingConfirmed || finalizing || appState === "starting") {
         toast("Stop and save before running processing jobs.");return;
@@ -2326,8 +2481,29 @@
       return document.querySelector(link.getAttribute("href"));
     });
     let scheduled = false;
+    let clickedIndex = null;
+    let clickLockUntil = 0;
+    function applySelection(selected) {
+      links.forEach(function (link, index) {
+        link.classList.toggle("active", index === selected);
+        if (index === selected) link.setAttribute("aria-current", "location");
+        else link.removeAttribute("aria-current");
+      });
+    }
+    links.forEach(function (link, index) {
+      link.addEventListener("click", function () {
+        clickedIndex = index;
+        clickLockUntil = performance.now() + 900;
+        applySelection(index);
+      });
+    });
     function update() {
       scheduled = false;
+      if (clickedIndex !== null && performance.now() < clickLockUntil) {
+        applySelection(clickedIndex);
+        return;
+      }
+      clickedIndex = null;
       let selected = 0;
       sections.forEach(function (section, index) {
         if (section && section.getBoundingClientRect().top <= 160) selected = index;
@@ -2335,11 +2511,7 @@
       if (window.scrollY > 0 && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 4) {
         selected = links.length - 1;
       }
-      links.forEach(function (link, index) {
-        link.classList.toggle("active", index === selected);
-        if (index === selected) link.setAttribute("aria-current", "location");
-        else link.removeAttribute("aria-current");
-      });
+      applySelection(selected);
     }
     function schedule() {
       if (!scheduled) { scheduled = true; window.requestAnimationFrame(update); }
@@ -2371,6 +2543,7 @@
     setupInstallPrompt();
     drawWaveform();
     updateMetrics();
+    renderDateStrip();
 
     log("Application started", {
       version: APP_VERSION,

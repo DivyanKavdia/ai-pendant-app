@@ -1,6 +1,6 @@
 # DK AI Pendant — PWA only
 
-Release 5.1.0. This repository contains only the browser application.
+Release 5.2.0. This repository contains only the browser application.
 ESP32-S3 firmware is maintained separately and must not be committed here.
 
 ## Deploy
@@ -9,7 +9,7 @@ Serve the repository root over HTTPS (for example, GitHub Pages). No npm
 installation, build step, or runtime framework is required. Upload all nine
 application assets together: `index.html`, `styles.css`, `app.js`,
 `audio-store.js`, `sw.js`, `manifest.webmanifest`, and the three icon files.
-Verify the footer shows 5.1.0. Do not clear site data to update the app:
+Verify the footer shows 5.2.0. Do not clear site data to update the app:
 recordings and pending processing jobs are stored there.
 
 Use a browser with Web Bluetooth, IndexedDB, and Web Locks support. Keep the
@@ -30,6 +30,15 @@ complete precached release; a persistent update notice asks you to finish your
 work and reload when a newer worker takes control. It never reloads automatically
 or clears IndexedDB. Compare the footer version on both devices. Recordings are
 device-local; this release does not add cloud sync between laptop and phone.
+
+## Daily timeline and insights
+
+The app opens on the current local calendar day. Seven recent-day controls and
+the date picker filter Saved moments, meeting summaries, and transcripts without
+changing or duplicating stored recordings. The day-at-a-glance card reports the
+selected day's recording count, captured duration, summaries, and transcripts.
+Insights appear only after the FIFO has produced a transcript or consolidated
+summary; all content remains in the same local IndexedDB as its source recording.
 
 ## Reconnect after reload
 
