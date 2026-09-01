@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AI Notetaker (PWA)</title>
+    <title>AI Pendant Notetaker</title>
 
     <link rel="manifest" href="manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2583/2583126.png">
 
     <style>
         :root {
             --primary: #007aff;
             --danger: #ff3b30;
             --success: #34c759;
+            --warning: #ff9500;
             --bg: #f2f2f7;
             --card-bg: #ffffff;
             --text: #1c1c1e;
@@ -28,13 +28,13 @@
             color: var(--text);
             margin: 0;
             padding: 16px;
-            max-width: 600px;
+            max-width: 680px;
             margin-left: auto;
             margin-right: auto;
         }
 
         h2 { margin-top: 8px; margin-bottom: 16px; font-weight: 700; }
-        h3 { margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: var(--subtext); }
+        h3 { margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: var(--subtext); text-transform: uppercase; letter-spacing: 0.5px; }
 
         .card {
             background: var(--card-bg);
@@ -42,6 +42,18 @@
             padding: 16px;
             margin-bottom: 16px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        @media (max-width: 500px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
         }
 
         .form-group {
@@ -78,10 +90,10 @@
 
         button {
             width: 100%;
-            padding: 14px;
+            padding: 12px 14px;
             border: none;
             border-radius: 10px;
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 600;
             color: white;
             background: var(--primary);
@@ -101,7 +113,7 @@
             padding: 10px 12px;
             background: #f8f8fc;
             border-radius: 8px;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 500;
         }
 
@@ -118,9 +130,28 @@
             background: var(--danger);
         }
         .dot.connected { background: var(--success); }
+        .dot.processing { background: var(--warning); animation: pulse 1s infinite alternate; }
+
+        @keyframes pulse {
+            0% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+
+        .notes-container {
+            background: #fafafa;
+            border: 1px solid #e5e5ea;
+            border-radius: 10px;
+            padding: 14px;
+            min-height: 120px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 14px;
+            line-height: 1.5;
+        }
 
         .storage-tree {
-            max-height: 200px;
+            max-height: 160px;
             overflow-y: auto;
             font-family: monospace;
             font-size: 12px;
@@ -131,118 +162,155 @@
         }
         .folder-item { font-weight: bold; color: var(--primary); margin-top: 6px; }
         .file-item { margin-left: 14px; color: var(--text); }
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; background: #e5e5ea; font-size: 11px; }
     </style>
 </head>
 <body>
 
-    <h2>AI Notetaker</h2>
+    <h2>AI Pendant Notetaker</h2>
 
-    <!-- 1. Model & Provider Configuration -->
-    <div class="card">
-        <h3>1. AI Provider & Key</h3>
-        
-        <div class="form-group">
-            <label for="providerSelect">Provider</label>
-            <select id="providerSelect" onchange="onProviderChange()">
-                <option value="openai">OpenAI</option>
-                <option value="anthropic">Anthropic (Claude)</option>
-                <option value="gemini">Google Gemini</option>
-                <option value="openrouter">OpenRouter (Free / Multi-Model)</option>
-            </select>
-        </div>
-
-        <div class="form-group">
-            <label for="modelSelect">Model</label>
-            <select id="modelSelect"></select>
-        </div>
-
-        <div class="form-group">
-            <label for="apiKeyInput">API Key</label>
-            <input type="password" id="apiKeyInput" placeholder="Enter API Key">
-        </div>
-
-        <div class="btn-group">
-            <button id="apiConnectBtn" onclick="connectAPI()">Connect Provider</button>
-            <button id="apiDisconnectBtn" class="danger" onclick="disconnectAPI()" disabled>Disconnect</button>
-        </div>
-    </div>
-
-    <!-- 2. AI Connection Status -->
-    <div class="card">
-        <h3>AI Status</h3>
+    <!-- System Pipeline Status -->
+    <div class="card" style="border-left: 4px solid var(--primary);">
+        <h3>Pipeline Status</h3>
         <div class="status-box">
             <div class="status-indicator">
-                <div id="apiDot" class="dot"></div>
-                <span id="apiStatusText">Disconnected</span>
+                <div id="pipelineDot" class="dot"></div>
+                <span id="pipelineStatusText">Waiting for API Key and Pendant connection...</span>
             </div>
         </div>
     </div>
 
-    <!-- 3. BLE Pendant Control -->
-    <div class="card">
-        <h3>2. Pendant Connection</h3>
-        <div class="status-box" style="margin-bottom: 12px;">
-            <div class="status-indicator">
-                <div id="bleDot" class="dot"></div>
-                <span id="bleStatusText">Pendant Disconnected</span>
+    <!-- Independent Setup Cards -->
+    <div class="grid-2">
+        <!-- 1. AI Provider & Key Config -->
+        <div class="card">
+            <h3>1. AI Config</h3>
+            
+            <div class="form-group">
+                <label for="providerSelect">Provider</label>
+                <select id="providerSelect" onchange="onProviderChange()">
+                    <option value="openai">OpenAI</option>
+                    <option value="gemini">Google Gemini</option>
+                    <option value="openrouter">OpenRouter (Free/Multi)</option>
+                </select>
             </div>
-            <span id="chunkCounter" style="font-size: 12px; color: var(--subtext);">0 files</span>
+
+            <div class="form-group">
+                <label for="modelSelect">Model</label>
+                <select id="modelSelect"></select>
+            </div>
+
+            <div class="form-group">
+                <label for="langSelect">Note Language</label>
+                <select id="langSelect">
+                    <option value="English">English</option>
+                    <option value="Hindi">Hindi</option>
+                    <option value="Spanish">Spanish</option>
+                    <option value="French">French</option>
+                    <option value="German">German</option>
+                    <option value="Japanese">Japanese</option>
+                    <option value="Auto">Auto / Original</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="apiKeyInput">API Key</label>
+                <input type="password" id="apiKeyInput" placeholder="Enter Key">
+            </div>
+
+            <div class="btn-group">
+                <button id="apiConnectBtn" onclick="connectAPI()">Connect API</button>
+                <button id="apiDisconnectBtn" class="danger" onclick="disconnectAPI()" disabled>Disconnect</button>
+            </div>
         </div>
 
-        <div class="btn-group">
-            <button id="bleConnectBtn" onclick="connectBLE()" disabled>Connect Pendant</button>
-            <button id="bleDisconnectBtn" class="secondary" onclick="disconnectBLE()" disabled>Disconnect</button>
+        <!-- 2. BLE Pendant Config (Independent Connection) -->
+        <div class="card">
+            <h3>2. Pendant BLE</h3>
+            <div class="status-box" style="margin-bottom: 12px;">
+                <div class="status-indicator">
+                    <div id="bleDot" class="dot"></div>
+                    <span id="bleStatusText">Disconnected</span>
+                </div>
+            </div>
+
+            <p style="font-size: 12px; color: var(--subtext); margin-top: 0;">Connects independently of AI setup. Audio will store locally until AI is ready.</p>
+
+            <div class="btn-group" style="margin-top: 24px;">
+                <button id="bleConnectBtn" onclick="connectBLE()">Connect Pendant</button>
+                <button id="bleDisconnectBtn" class="secondary" onclick="disconnectBLE()" disabled>Disconnect</button>
+            </div>
         </div>
     </div>
 
-    <!-- 4. Real-time Storage Monitor -->
+    <!-- Active Meeting Notes -->
     <div class="card">
-        <h3>Hourly Audio Storage</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h3 style="margin: 0;">Active Meeting Note</h3>
+            <span id="activeMeetingBadge" class="badge">No Active Meeting</span>
+        </div>
+        <div id="notesContainer" class="notes-container"><em>Transcriptions and combined meeting notes will appear here in real-time...</em></div>
+    </div>
+
+    <!-- Audio Storage Archive -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h3 style="margin: 0;">Hourly Audio Archive</h3>
+            <span id="chunkCounter" style="font-size: 12px; color: var(--subtext);">0 chunks saved</span>
+        </div>
         <div id="storageTree" class="storage-tree">
             <em>No audio chunks recorded yet.</em>
         </div>
     </div>
 
     <script>
-        // Preset Model Configurations per Provider
         const PROVIDER_MODELS = {
             openai: [
                 { id: "gpt-4o", name: "GPT-4o" },
                 { id: "gpt-4o-mini", name: "GPT-4o Mini" }
             ],
-            anthropic: [
-                { id: "claude-3-5-sonnet-20240620", name: "Claude 3.5 Sonnet" },
-                { id: "claude-3-haiku-20240307", name: "Claude 3 Haiku" }
-            ],
             gemini: [
                 { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" },
-                { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro" }
+                { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" }
             ],
             openrouter: [
                 { id: "google/gemini-2.5-flash-lite:free", name: "Gemini 2.5 Flash Lite (Free)" },
-                { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B (Free)" },
-                { id: "qwen/qwen-2.5-72b-instruct:free", name: "Qwen 2.5 72B (Free)" }
+                { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B (Free)" }
             ]
         };
 
         const SERVICE_UUID = "4fa12345-0000-1000-8000-00805f9b34fb";
         const AUDIO_CHAR_UUID = "4fa12346-0000-1000-8000-00805f9b34fb";
 
+        // Application State
+        let isApiConnected = false;
+        let isBleConnected = false;
         let bleDevice = null;
         let gattServer = null;
         let audioChar = null;
         let db = null;
-        let totalChunkCount = 0;
 
-        // Initialize state on boot
+        // Audio Accumulation State
+        let rawPcmBufferPool = [];
+        let totalPcmBytes = 0;
+        const BUFFER_FLUSH_THRESHOLD = 16000 * 2 * 12; // ~12s of 16kHz 16-bit mono PCM
+        let isProcessingChunk = false;
+
+        // Meeting Note Session State
+        let activeMeetingId = null;
+        let activeMeetingTitle = "";
+        let activeMeetingContent = "";
+
+        // Initialization
         window.addEventListener('load', async () => {
             await initDB();
             populateProviders();
             restoreAPIConnection();
             renderStorageTree();
+            updatePipelineStatus();
         });
 
-        // --- 1. Provider & Model UI Management ---
+        // Provider UI Control
         function populateProviders() {
             const providerSelect = document.getElementById("providerSelect");
             const savedProvider = localStorage.getItem("AI_PROVIDER") || "openai";
@@ -251,14 +319,13 @@
             onProviderChange();
             
             const savedModel = localStorage.getItem("AI_MODEL");
-            if (savedModel) {
-                document.getElementById("modelSelect").value = savedModel;
-            }
+            if (savedModel) document.getElementById("modelSelect").value = savedModel;
             
             const savedKey = localStorage.getItem("AI_KEY");
-            if (savedKey) {
-                document.getElementById("apiKeyInput").value = savedKey;
-            }
+            if (savedKey) document.getElementById("apiKeyInput").value = savedKey;
+
+            const savedLang = localStorage.getItem("AI_LANG");
+            if (savedLang) document.getElementById("langSelect").value = savedLang;
         }
 
         function onProviderChange() {
@@ -274,154 +341,76 @@
             });
         }
 
-        // --- 2. API Connection Management ---
+        // API Connection Logic
         function connectAPI() {
             const provider = document.getElementById("providerSelect").value;
             const model = document.getElementById("modelSelect").value;
             const apiKey = document.getElementById("apiKeyInput").value.trim();
+            const lang = document.getElementById("langSelect").value;
 
             if (!apiKey) {
                 alert("Please enter a valid API key.");
                 return;
             }
 
-            // Persist parameters
             localStorage.setItem("AI_PROVIDER", provider);
             localStorage.setItem("AI_MODEL", model);
             localStorage.setItem("AI_KEY", apiKey);
+            localStorage.setItem("AI_LANG", lang);
             localStorage.setItem("AI_CONNECTED", "true");
 
-            updateAPIUI(true, model);
+            isApiConnected = true;
+            updateAPIUI(true);
+            updatePipelineStatus();
         }
 
         function restoreAPIConnection() {
             const isConnected = localStorage.getItem("AI_CONNECTED") === "true";
-            const model = localStorage.getItem("AI_MODEL");
-            const key = localStorage.getItem("AI_KEY");
-
-            if (isConnected && key && model) {
-                updateAPIUI(true, model);
+            if (isConnected && localStorage.getItem("AI_KEY")) {
+                isApiConnected = true;
+                updateAPIUI(true);
             } else {
+                isApiConnected = false;
                 updateAPIUI(false);
             }
         }
 
         function disconnectAPI() {
             localStorage.setItem("AI_CONNECTED", "false");
+            isApiConnected = false;
             updateAPIUI(false);
+            updatePipelineStatus();
         }
 
-        function updateAPIUI(connected, modelName = "") {
-            const apiDot = document.getElementById("apiDot");
-            const apiStatusText = document.getElementById("apiStatusText");
-            const apiConnectBtn = document.getElementById("apiConnectBtn");
-            const apiDisconnectBtn = document.getElementById("apiDisconnectBtn");
-            const bleConnectBtn = document.getElementById("bleConnectBtn");
+        function updateAPIUI(connected) {
+            document.getElementById("apiConnectBtn").disabled = connected;
+            document.getElementById("apiDisconnectBtn").disabled = !connected;
+        }
 
-            if (connected) {
-                apiDot.classList.add("connected");
-                apiStatusText.innerText = `Connected using model: ${modelName}`;
-                apiConnectBtn.disabled = true;
-                apiDisconnectBtn.disabled = false;
-                bleConnectBtn.disabled = false;
+        // Status Tracker Updates
+        function updatePipelineStatus() {
+            const dot = document.getElementById("pipelineDot");
+            const text = document.getElementById("pipelineStatusText");
+
+            dot.className = "dot";
+
+            if (isApiConnected && isBleConnected) {
+                dot.classList.add("connected");
+                text.innerText = "🟢 System Ready: Streaming, Transcribing & Summarizing";
+            } else if (!isApiConnected && isBleConnected) {
+                dot.classList.add("processing");
+                text.innerText = "🟡 Pendant Active: Storing audio locally (Connect API to generate notes)";
+            } else if (isApiConnected && !isBleConnected) {
+                text.innerText = "🔵 AI Connected: Connect Pendant to start recording";
             } else {
-                apiDot.classList.remove("connected");
-                apiStatusText.innerText = "Disconnected";
-                apiConnectBtn.disabled = false;
-                apiDisconnectBtn.disabled = true;
-                bleConnectBtn.disabled = true;
-
-                // If AI disconnects, disconnect BLE as well
-                if (gattServer && gattServer.connected) {
-                    disconnectBLE();
-                }
+                text.innerText = "Waiting for API Key and Pendant connection...";
             }
         }
 
-        // --- 3. IndexedDB Hourly Folder Storage ---
-        function initDB() {
-            return new Promise((resolve, reject) => {
-                const request = indexedDB.open("PendantAudioDB", 1);
-                request.onupgradeneeded = (e) => {
-                    db = e.target.result;
-                    if (!db.objectStoreNames.contains("chunks")) {
-                        const store = db.createObjectStore("chunks", { keyPath: "id" });
-                        store.createIndex("folder", "folder", { unique: false });
-                    }
-                };
-                request.onsuccess = (e) => {
-                    db = e.target.result;
-                    resolve();
-                };
-                request.onerror = (e) => reject(e);
-            });
-        }
-
-        async function saveAudioChunk(blob) {
-            const now = new Date();
-            // Create hourly folder format: YYYY-MM-DD_HH-00
-            const folderName = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}-00`;
-            // Auto-generated timestamp filename
-            const fileName = `chunk_${now.getTime()}.pcm`;
-            const fileId = `${folderName}/${fileName}`;
-
-            const record = {
-                id: fileId,
-                folder: folderName,
-                filename: fileName,
-                timestamp: now.toISOString(),
-                data: blob
-            };
-
-            const tx = db.transaction("chunks", "readwrite");
-            const store = tx.objectStore("chunks");
-            store.put(record);
-
-            tx.oncomplete = () => {
-                totalChunkCount++;
-                document.getElementById("chunkCounter").innerText = `${totalChunkCount} files`;
-                renderStorageTree();
-            };
-        }
-
-        function renderStorageTree() {
-            if (!db) return;
-            const tx = db.transaction("chunks", "readonly");
-            const store = tx.objectStore("chunks");
-            const request = store.getAll();
-
-            request.onsuccess = () => {
-                const records = request.result;
-                const treeEl = document.getElementById("storageTree");
-                
-                if (records.length === 0) {
-                    treeEl.innerHTML = "<em>No audio chunks recorded yet.</em>";
-                    return;
-                }
-
-                // Group by folder
-                const folders = {};
-                records.forEach(r => {
-                    if (!folders[r.folder]) folders[r.folder] = [];
-                    folders[r.folder].push(r.filename);
-                });
-
-                let html = "";
-                Object.keys(folders).sort().reverse().forEach(folder => {
-                    html += `<div class="folder-item">📁 ${folder}/</div>`;
-                    folders[folder].slice(-5).forEach(file => { // Show last 5 per folder
-                        html += `<div class="file-item">📄 ${file}</div>`;
-                    });
-                });
-
-                treeEl.innerHTML = html;
-            };
-        }
-
-        // --- 4. BLE Connection & Ingestion ---
+        // BLE Connection (Independent)
         async function connectBLE() {
             try {
-                document.getElementById("bleStatusText").innerText = "Scanning Pendants...";
+                document.getElementById("bleStatusText").innerText = "Scanning...";
                 
                 bleDevice = await navigator.bluetooth.requestDevice({
                     filters: [{ namePrefix: 'dk-' }, { name: 'dk-pendant' }],
@@ -439,21 +428,50 @@
                 await audioChar.startNotifications();
                 audioChar.addEventListener('characteristicvaluechanged', handleIncomingAudioChunk);
 
+                isBleConnected = true;
                 updateBLEUI(true, bleDevice.name);
+                updatePipelineStatus();
             } catch (err) {
                 alert("BLE Error: " + err.message);
                 updateBLEUI(false);
+                updatePipelineStatus();
             }
         }
 
         function handleIncomingAudioChunk(event) {
             const rawBuffer = event.target.value;
-            // Create a safe detached slice
             const chunkData = new Uint8Array(rawBuffer.buffer.slice(rawBuffer.byteOffset, rawBuffer.byteOffset + rawBuffer.byteLength));
-            const blob = new Blob([chunkData], { type: 'audio/pcm' });
             
-            // Store continuously into hourly database structures
-            saveAudioChunk(blob);
+            rawPcmBufferPool.push(chunkData);
+            totalPcmBytes += chunkData.length;
+
+            if (totalPcmBytes >= BUFFER_FLUSH_THRESHOLD) {
+                flushAndProcessAudioBuffer();
+            }
+        }
+
+        async function flushAndProcessAudioBuffer() {
+            if (rawPcmBufferPool.length === 0) return;
+
+            const mergedPcm = new Uint8Array(totalPcmBytes);
+            let offset = 0;
+            for (const chunk of rawPcmBufferPool) {
+                mergedPcm.set(chunk, offset);
+                offset += chunk.length;
+            }
+
+            rawPcmBufferPool = [];
+            totalPcmBytes = 0;
+
+            const wavBlob = pcmToWav(mergedPcm, 16000, 1, 16);
+
+            // Store audio chunk locally in IndexedDB
+            await saveAudioChunk(wavBlob);
+
+            // Process AI pipeline ONLY if both API and BLE connections are active
+            if (isApiConnected && isBleConnected && !isProcessingChunk) {
+                processAudioWithAI(wavBlob);
+            }
         }
 
         function disconnectBLE() {
@@ -465,7 +483,9 @@
         }
 
         function onBLEDisconnected() {
+            isBleConnected = false;
             updateBLEUI(false);
+            updatePipelineStatus();
         }
 
         function updateBLEUI(connected, deviceName = "") {
@@ -476,15 +496,283 @@
 
             if (connected) {
                 bleDot.classList.add("connected");
-                bleStatusText.innerText = `Connected: ${deviceName}`;
+                bleStatusText.innerText = deviceName || "Pendant Connected";
                 bleConnectBtn.disabled = true;
                 bleDisconnectBtn.disabled = false;
             } else {
                 bleDot.classList.remove("connected");
-                bleStatusText.innerText = "Pendant Disconnected";
-                bleConnectBtn.disabled = localStorage.getItem("AI_CONNECTED") !== "true";
+                bleStatusText.innerText = "Disconnected";
+                bleConnectBtn.disabled = false;
                 bleDisconnectBtn.disabled = true;
             }
+        }
+
+        // AI Processing Pipeline
+        async function processAudioWithAI(wavBlob) {
+            isProcessingChunk = true;
+            const dot = document.getElementById("pipelineDot");
+            dot.className = "dot processing";
+
+            try {
+                const provider = localStorage.getItem("AI_PROVIDER");
+                const model = localStorage.getItem("AI_MODEL");
+                const apiKey = localStorage.getItem("AI_KEY");
+                const targetLang = localStorage.getItem("AI_LANG") || "English";
+
+                let transcript = "";
+                if (provider === "openai") {
+                    transcript = await transcribeWithOpenAI(wavBlob, apiKey);
+                } else {
+                    transcript = await transcribeWithGeminiOrFallback(wavBlob, provider, apiKey);
+                }
+
+                if (!transcript || transcript.trim().length === 0) {
+                    isProcessingChunk = false;
+                    updatePipelineStatus();
+                    return;
+                }
+
+                await analyzeAndMergeNote(transcript, targetLang, provider, model, apiKey);
+
+            } catch (err) {
+                console.error("AI Pipeline Error:", err);
+            } finally {
+                isProcessingChunk = false;
+                updatePipelineStatus();
+            }
+        }
+
+        async function transcribeWithOpenAI(wavBlob, apiKey) {
+            const formData = new FormData();
+            formData.append("file", wavBlob, "audio.wav");
+            formData.append("model", "whisper-1");
+
+            const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${apiKey}` },
+                body: formData
+            });
+
+            if (!res.ok) throw new Error("Whisper STT failed");
+            const data = await res.json();
+            return data.text;
+        }
+
+        async function transcribeWithGeminiOrFallback(wavBlob, provider, apiKey) {
+            const base64Audio = await blobToBase64(wavBlob);
+            
+            if (provider === "gemini") {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+                const payload = {
+                    contents: [{
+                        parts: [
+                            { text: "Transcribe the following audio accurately. Output only the transcript text." },
+                            { inline_data: { mime_type: "audio/wav", data: base64Audio } }
+                        ]
+                    }]
+                };
+
+                const res = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            } else {
+                return "Audio chunk captured.";
+            }
+        }
+
+        async function analyzeAndMergeNote(transcript, targetLang, provider, model, apiKey) {
+            const prompt = `You are an AI meeting notes assistant.
+Target Language for Notes: ${targetLang}
+
+Existing Active Meeting Context:
+"""
+${activeMeetingContent || "NO_PREVIOUS_CONTEXT"}
+"""
+
+New Transcribed Audio Segment:
+"""
+${transcript}
+"""
+
+Task:
+1. Determine if the new audio segment is a continuation of the Existing Active Meeting context or if it starts a COMPLETELY NEW meeting/topic.
+2. If related, set "isSameMeeting": true, and merge/update the notes incorporating the new transcript into structured Markdown.
+3. If unrelated or new topic, set "isSameMeeting": false, generate a new concise meeting title, and write fresh structured Markdown notes.
+
+Respond ONLY with valid raw JSON (no markdown fences) in this exact format:
+{
+  "isSameMeeting": true,
+  "meetingTitle": "Title of Meeting",
+  "updatedNotesMarkdown": "Structured markdown meeting notes..."
+}`;
+
+            let responseText = "";
+
+            if (provider === "openai") {
+                const res = await fetch("https://api.openai.com/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${apiKey}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        response_format: { type: "json_object" },
+                        messages: [{ role: "user", content: prompt }]
+                    })
+                });
+                const data = await res.json();
+                responseText = data.choices[0].message.content;
+            } else if (provider === "gemini") {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                const res = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { responseMimeType: "application/json" }
+                    })
+                });
+                const data = await res.json();
+                responseText = data.candidates[0].content.parts[0].text;
+            }
+
+            const result = JSON.parse(responseText);
+
+            if (result.isSameMeeting && activeMeetingId) {
+                activeMeetingContent = result.updatedNotesMarkdown;
+            } else {
+                activeMeetingId = `meeting_${Date.now()}`;
+                activeMeetingTitle = result.meetingTitle || "New Meeting";
+                activeMeetingContent = result.updatedNotesMarkdown;
+            }
+
+            document.getElementById("activeMeetingBadge").innerText = activeMeetingTitle;
+            document.getElementById("notesContainer").innerText = activeMeetingContent;
+
+            await saveNoteToDB(activeMeetingId, activeMeetingTitle, activeMeetingContent);
+        }
+
+        // Audio Conversion & Utilities
+        function pcmToWav(pcmData, sampleRate = 16000, numChannels = 1, bitsPerSample = 16) {
+            const headerLength = 44;
+            const dataLength = pcmData.length;
+            const buffer = new ArrayBuffer(headerLength + dataLength);
+            const view = new DataView(buffer);
+
+            const writeString = (view, offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + dataLength, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * numChannels * (bitsPerSample / 8), true);
+            view.setUint16(32, numChannels * (bitsPerSample / 8), true);
+            view.setUint16(34, bitsPerSample, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, dataLength, true);
+
+            const outputBytes = new Uint8Array(buffer, headerLength);
+            outputBytes.set(pcmData);
+
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+
+        function blobToBase64(blob) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        // IndexedDB Operations
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open("PendantAudioDB", 2);
+                request.onupgradeneeded = (e) => {
+                    db = e.target.result;
+                    if (!db.objectStoreNames.contains("chunks")) {
+                        const store = db.createObjectStore("chunks", { keyPath: "id" });
+                        store.createIndex("folder", "folder", { unique: false });
+                    }
+                    if (!db.objectStoreNames.contains("notes")) {
+                        db.createObjectStore("notes", { keyPath: "id" });
+                    }
+                };
+                request.onsuccess = (e) => {
+                    db = e.target.result;
+                    resolve();
+                };
+                request.onerror = (e) => reject(e);
+            });
+        }
+
+        async function saveAudioChunk(blob) {
+            const now = new Date();
+            const folderName = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}-00`;
+            const fileName = `chunk_${now.getTime()}.wav`;
+            const fileId = `${folderName}/${fileName}`;
+
+            const record = { id: fileId, folder: folderName, filename: fileName, timestamp: now.toISOString(), data: blob };
+
+            const tx = db.transaction("chunks", "readwrite");
+            tx.objectStore("chunks").put(record);
+
+            tx.oncomplete = () => {
+                renderStorageTree();
+            };
+        }
+
+        async function saveNoteToDB(id, title, content) {
+            const record = { id, title, content, updatedAt: new Date().toISOString() };
+            const tx = db.transaction("notes", "readwrite");
+            tx.objectStore("notes").put(record);
+        }
+
+        function renderStorageTree() {
+            if (!db) return;
+            const tx = db.transaction("chunks", "readonly");
+            const request = tx.objectStore("chunks").getAll();
+
+            request.onsuccess = () => {
+                const records = request.result;
+                const treeEl = document.getElementById("storageTree");
+                document.getElementById("chunkCounter").innerText = `${records.length} chunks saved`;
+
+                if (records.length === 0) {
+                    treeEl.innerHTML = "<em>No audio chunks recorded yet.</em>";
+                    return;
+                }
+
+                const folders = {};
+                records.forEach(r => {
+                    if (!folders[r.folder]) folders[r.folder] = [];
+                    folders[r.folder].push(r.filename);
+                });
+
+                let html = "";
+                Object.keys(folders).sort().reverse().forEach(folder => {
+                    html += `<div class="folder-item">📁 ${folder}/</div>`;
+                    folders[folder].slice(-3).forEach(file => {
+                        html += `<div class="file-item">📄 ${file}</div>`;
+                    });
+                });
+
+                treeEl.innerHTML = html;
+            };
         }
     </script>
 </body>
