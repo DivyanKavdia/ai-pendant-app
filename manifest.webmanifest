@@ -1,17 +1,26 @@
 {
-  "name": "dk-pendant BLE Receiver",
-  "short_name": "dk-pendant",
-  "description": "Diagnostic BLE PCM audio receiver for the ESP32-S3 dk-pendant.",
+  "id": "./",
+  "name": "DK AI Pendant",
+  "short_name": "Pendant",
+  "description": "Private BLE audio recorder for the DK AI Pendant.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#080b12",
-  "theme_color": "#080b12",
+  "orientation": "portrait-primary",
+  "background_color": "#07111f",
+  "theme_color": "#07111f",
+  "categories": ["productivity", "utilities"],
   "icons": [
     {
-      "src": "./icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]

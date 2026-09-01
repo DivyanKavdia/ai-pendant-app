@@ -1,43 +1,65 @@
-const CACHE_NAME = "dk-pendant-v2-modern-20260901";
+const CACHE_NAME = "dk-pendant-pwa-v3.0.0";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css",
+  "./styles.css",
   "./app.js",
-  "./protocol.js",
   "./manifest.webmanifest",
   "./icon.svg",
+  "./icon-192.png",
+  "./icon-512.png"
 ];
 
-self.addEventListener("install", (event) => {
+self.addEventListener("install", function (event) {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+    caches.open(CACHE_NAME)
+      .then(function (cache) { return cache.addAll(APP_SHELL); })
+      .then(function () { return self.skipWaiting(); })
   );
-  self.skipWaiting();
 });
 
-self.addEventListener("activate", (event) => {
+self.addEventListener("activate", function (event) {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(
-      keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-    ))
+    caches.keys()
+      .then(function (keys) {
+        return Promise.all(keys.map(function (key) {
+          return key === CACHE_NAME ? Promise.resolve() : caches.delete(key);
+        }));
+      })
+      .then(function () { return self.clients.claim(); })
   );
-  self.clients.claim();
 });
 
-self.addEventListener("fetch", (event) => {
+self.addEventListener("fetch", function (event) {
   if (event.request.method !== "GET") return;
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
+
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then(function (response) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(function (cache) {
+            cache.put("./index.html", copy);
+          });
+          return response;
+        })
+        .catch(function () { return caches.match("./index.html"); })
+    );
+    return;
+  }
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
+    caches.match(event.request).then(function (cached) {
       if (cached) return cached;
-      return fetch(event.request).catch(() => {
-        if (event.request.mode === "navigate") {
-          return caches.match("./index.html");
+      return fetch(event.request).then(function (response) {
+        if (!response || response.status !== 200 || response.type === "opaque") {
+          return response;
         }
-        throw new Error("Offline resource is not cached");
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then(function (cache) {
+          cache.put(event.request, copy);
+        });
+        return response;
       });
     })
   );
