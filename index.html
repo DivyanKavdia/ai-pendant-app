@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07111f">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style"
+        content="black-translucent">
+  <meta name="description"
+        content="Private BLE recorder for the DK AI Pendant">
+
+  <title>DK AI Pendant</title>
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="DK AI Pendant home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32">
+            <path d="M6 16h4l2-6 4 13 4-17 4 13 2-5h2"/>
+          </svg>
+        </span>
+        <span>
+          <strong>DK Pendant</strong>
+          <small>Private voice capture</small>
+        </span>
+      </a>
+
+      <div class="top-actions">
+        <button id="installButton"
+                class="icon-button hidden"
+                type="button"
+                aria-label="Install app"
+                title="Install app">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v3h14v-3"/>
+          </svg>
+        </button>
+
+        <button id="settingsButton"
+                class="icon-button"
+                type="button"
+                aria-label="Open settings"
+                title="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 15.4A3.4 3.4 0 1 0 12 8.6a3.4 3.4 0 0 0 0 6.8Z"/>
+            <path d="m19 13.5 1.5 1.2-2 3.4-1.9-.8a7 7 0 0 1-2.1 1.2L14.2 21h-4.4l-.3-2.5a7 7 0 0 1-2.1-1.2l-1.9.8-2-3.4L5 13.5a7 7 0 0 1 0-3L3.5 9.3l2-3.4 1.9.8a7 7 0 0 1 2.1-1.2L9.8 3h4.4l.3 2.5a7 7 0 0 1 2.1 1.2l1.9-.8 2 3.4-1.5 1.2a7 7 0 0 1 0 3Z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero-card">
+        <div class="connection-row">
+          <div id="connectionBadge"
+               class="status-badge status-offline"
+               role="status"
+               aria-live="polite">
+            <span class="status-dot"></span>
+            <span id="connectionText">Not connected</span>
+          </div>
+
+          <button id="connectButton"
+                  class="button button-secondary"
+                  type="button">
+            Connect pendant
+          </button>
+        </div>
+
+        <div class="recorder-copy">
+          <p class="eyebrow">AI pendant notetaker</p>
+          <h1 id="recorderTitle">Ready when you are.</h1>
+          <p id="recorderSubtitle">
+            Connect your pendant to capture private, local audio.
+          </p>
+        </div>
+
+        <div class="visualizer-wrap">
+          <canvas id="waveformCanvas"
+                  aria-label="Live audio waveform"></canvas>
+          <div class="visualizer-overlay">
+            <div id="timer" class="timer">00:00</div>
+            <div id="levelText" class="level-text">Waiting for pendant</div>
+          </div>
+        </div>
+
+        <div class="recorder-controls">
+          <button id="startButton"
+                  class="record-button"
+                  type="button"
+                  disabled>
+            <span class="record-button-core"></span>
+            <span>Start</span>
+          </button>
+
+          <button id="stopButton"
+                  class="button button-danger"
+                  type="button"
+                  disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="7" y="7" width="10" height="10" rx="2"/>
+            </svg>
+            Stop
+          </button>
+        </div>
+
+        <div class="privacy-line">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 10V8a5 5 0 0 1 10 0v2"/>
+            <rect x="5" y="10" width="14" height="11" rx="3"/>
+          </svg>
+          Audio stays on this device unless you choose Transcribe.
+        </div>
+      </section>
+
+      <section class="metrics-grid" aria-label="Transport diagnostics">
+        <article class="metric-card">
+          <span>Signal</span>
+          <strong id="signalMetric">—</strong>
+          <small id="signalDetail">No stream</small>
+        </article>
+        <article class="metric-card">
+          <span>Frames</span>
+          <strong id="framesMetric">0</strong>
+          <small id="framesDetail">Complete</small>
+        </article>
+        <article class="metric-card">
+          <span>Transport</span>
+          <strong id="transportMetric">—</strong>
+          <small id="transportDetail">MTU / chunks</small>
+        </article>
+        <article class="metric-card">
+          <span>Quality</span>
+          <strong id="qualityMetric">—</strong>
+          <small id="qualityDetail">Waiting</small>
+        </article>
+      </section>
+
+      <section class="section-card recordings-section">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Your library</p>
+            <h2>Recordings</h2>
+          </div>
+          <button id="clearRecordingsButton"
+                  class="text-button"
+                  type="button">
+            Clear all
+          </button>
+        </div>
+
+        <div id="emptyRecordings" class="empty-state">
+          <span class="empty-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="8" y="3" width="8" height="12" rx="4"/>
+              <path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/>
+            </svg>
+          </span>
+          <h3>No recordings yet</h3>
+          <p>Your completed sessions will appear here.</p>
+        </div>
+
+        <div id="recordingsList" class="recordings-list"></div>
+      </section>
+
+      <details class="section-card diagnostics-section">
+        <summary>
+          <span>
+            <span class="eyebrow">Troubleshooting</span>
+            <strong>Diagnostics</strong>
+          </span>
+          <span class="summary-chevron">⌄</span>
+        </summary>
+
+        <div class="diagnostic-actions">
+          <button id="copyDiagnosticsButton"
+                  class="button button-secondary button-small"
+                  type="button">
+            Copy diagnostics
+          </button>
+          <button id="clearDiagnosticsButton"
+                  class="text-button"
+                  type="button">
+            Clear
+          </button>
+        </div>
+
+        <pre id="diagnosticsLog"
+             class="diagnostics-log"
+             aria-live="polite"></pre>
+      </details>
+    </main>
+
+    <footer>
+      <span>Protocol v2 · PCM16 · 16 kHz mono</span>
+      <span id="appVersion">PWA 3.0.0</span>
+    </footer>
+  </div>
+
+  <div id="toastRegion"
+       class="toast-region"
+       aria-live="assertive"
+       aria-atomic="true"></div>
+
+  <dialog id="settingsDialog" class="modal">
+    <form id="settingsForm" method="dialog">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">Optional integration</p>
+          <h2>Transcription settings</h2>
+        </div>
+        <button id="closeSettingsButton"
+                class="icon-button"
+                type="button"
+                aria-label="Close settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18"/>
+          </svg>
+        </button>
+      </div>
+
+      <label class="field">
+        <span>Transcription endpoint</span>
+        <input id="endpointInput"
+               type="url"
+               inputmode="url"
+               placeholder="https://your-server.example/transcribe">
+        <small>
+          The app sends a multipart POST with the WAV file in the
+          <code>audio</code> field.
+        </small>
+      </label>
+
+      <label class="field">
+        <span>Bearer token</span>
+        <input id="tokenInput"
+               type="password"
+               autocomplete="off"
+               placeholder="Optional">
+      </label>
+
+      <label class="toggle-row">
+        <span>
+          <strong>Keep screen awake</strong>
+          <small>Prevents sleep while recording.</small>
+        </span>
+        <input id="wakeLockInput" type="checkbox" checked>
+      </label>
+
+      <div class="modal-actions">
+        <button id="saveSettingsButton"
+                class="button button-primary"
+                value="save"
+                type="submit">
+          Save settings
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
