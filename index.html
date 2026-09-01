@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#080b12">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>dk pendant</title>
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="icon" href="./icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body data-streaming="false">
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+
+    <main class="app-shell">
+      <header class="app-bar">
+        <a class="brand" href="./" aria-label="dk pendant home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" role="img">
+              <path d="M5 17c3.3-7 6-10.5 8.2-10.5 3.8 0 4.6 19 8.6 19 2.1 0 3.8-2.8 5.2-8.3"/>
+            </svg>
+          </span>
+          <span><strong>dk</strong> pendant</span>
+        </a>
+
+        <div id="connectionStatus" class="connection-pill" data-state="disconnected">
+          <span class="status-dot"></span>
+          <span>Disconnected</span>
+        </div>
+      </header>
+
+      <section class="device-strip glass-card">
+        <div class="device-identity">
+          <div class="device-orb" aria-hidden="true">
+            <svg viewBox="0 0 48 48">
+              <rect x="13" y="8" width="22" height="32" rx="11"/>
+              <circle cx="24" cy="21" r="5"/>
+              <path d="M20 33h8"/>
+            </svg>
+          </div>
+          <div>
+            <p class="micro-label">Nearby device</p>
+            <h2 id="deviceName">No pendant connected</h2>
+          </div>
+        </div>
+
+        <div class="device-meta">
+          <div>
+            <span>Firmware</span>
+            <strong id="firmwareStatus">Waiting</strong>
+          </div>
+          <div>
+            <span>BLE transport</span>
+            <strong id="transportStatus">Not negotiated</strong>
+          </div>
+        </div>
+
+        <div class="connect-actions">
+          <button id="connectButton" class="button button-primary">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7 8 10-4 3V4l4 3L8 17"/></svg>
+            Connect
+          </button>
+          <button id="disconnectButton" class="button button-ghost icon-button" aria-label="Disconnect pendant" title="Disconnect">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <div class="dashboard-grid">
+        <section class="recorder-card glass-card">
+          <div class="recorder-heading">
+            <div>
+              <p class="micro-label accent-label"><span></span> Live audio console</p>
+              <h1>Capture the moment.</h1>
+              <p class="subtitle">Loss-aware PCM recording directly from your pendant.</p>
+            </div>
+            <div class="format-chip">PCM16 <span></span> 16 kHz</div>
+          </div>
+
+          <div class="waveform-stage">
+            <div class="waveform-grid"></div>
+            <canvas id="waveformCanvas" width="960" height="280" aria-label="Live audio waveform"></canvas>
+            <div class="waveform-glow"></div>
+            <div class="timecode" id="durationValue">0:00</div>
+          </div>
+
+          <div class="level-row">
+            <span>Input level</span>
+            <div class="meter"><div id="levelBar"></div></div>
+            <span>Live</span>
+          </div>
+
+          <p id="message" class="app-message" data-type="info">
+            Connect your pendant to begin.
+          </p>
+
+          <div class="record-controls">
+            <button id="startButton" class="record-button">
+              <span class="record-icon"><span></span></span>
+              <span><strong>Start recording</strong><small>Begin BLE capture</small></span>
+            </button>
+            <button id="stopButton" class="button button-secondary">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+              Stop
+            </button>
+          </div>
+        </section>
+
+        <aside class="side-stack">
+          <section class="glass-card health-card">
+            <div class="section-heading">
+              <div>
+                <p class="micro-label">Stream health</p>
+                <h2>Reception quality</h2>
+              </div>
+              <span class="quality-badge">Live diagnostics</span>
+            </div>
+
+            <div class="health-ring" aria-hidden="true">
+              <svg viewBox="0 0 120 120">
+                <circle class="ring-track" cx="60" cy="60" r="48"/>
+                <circle class="ring-value" cx="60" cy="60" r="48"/>
+              </svg>
+              <div><strong id="framesValue">0</strong><span>frames</span></div>
+            </div>
+
+            <div class="health-details">
+              <div><span class="detail-dot good"></span><span>Notifications</span><strong id="packetsValue">0</strong></div>
+              <div><span class="detail-dot warning"></span><span>Missing</span><strong id="missingValue">0</strong></div>
+              <div><span class="detail-dot danger"></span><span>Invalid</span><strong id="invalidValue">0</strong></div>
+            </div>
+          </section>
+
+          <section class="glass-card capture-card">
+            <div class="section-heading">
+              <div>
+                <p class="micro-label">Current capture</p>
+                <h2>Ready to keep</h2>
+              </div>
+              <div class="capture-size" id="bytesValue">0 B</div>
+            </div>
+
+            <div class="capture-meta">
+              <span>Notification size</span>
+              <strong id="packetSizeValue">—</strong>
+            </div>
+
+            <audio id="audioPlayer" controls preload="none"></audio>
+
+            <div class="capture-actions">
+              <button id="playButton" class="button button-ghost">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>
+                Play
+              </button>
+              <button id="downloadButton" class="button button-primary">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg>
+                Save WAV
+              </button>
+              <button id="clearButton" class="button button-ghost icon-button" aria-label="Clear capture" title="Clear capture">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16m-9 4v6m4-6v6M8 7l1-3h6l1 3m2 0-1 13H7L6 7"/></svg>
+              </button>
+            </div>
+          </section>
+        </aside>
+      </div>
+
+      <details class="glass-card diagnostics-card">
+        <summary>
+          <span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V8m5 10V4m5 14v-7m5 7V6"/></svg>
+            Developer diagnostics
+          </span>
+          <span class="summary-action">View event log</span>
+        </summary>
+        <div id="eventLog" class="event-log" aria-live="polite"></div>
+      </details>
+
+      <footer class="app-footer">
+        <span>Protocol v2</span>
+        <span class="footer-separator"></span>
+        <span>Secure Web Bluetooth session</span>
+        <span class="footer-separator"></span>
+        <span>Complete frames only</span>
+      </footer>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

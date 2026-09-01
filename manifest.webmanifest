@@ -1,0 +1,18 @@
+{
+  "name": "dk-pendant BLE Receiver",
+  "short_name": "dk-pendant",
+  "description": "Diagnostic BLE PCM audio receiver for the ESP32-S3 dk-pendant.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#080b12",
+  "theme_color": "#080b12",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
