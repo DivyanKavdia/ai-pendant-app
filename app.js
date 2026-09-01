@@ -5,7 +5,7 @@
   // Shared BLE Protocol v2
   // -------------------------------------------------------------------------
 
-  const APP_VERSION = "5.2.1";
+  const APP_VERSION = "5.2.2";
   const PROTOCOL_VERSION = 0x02;
 
   const SERVICE_UUID =
