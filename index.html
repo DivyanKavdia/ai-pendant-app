@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#f5f7fa">
   <meta name="color-scheme" content="light">
-  <meta name="description" content="DK Pendant — a quieter way to capture your thoughts.">
-  <title>DK Pendant · Capture what matters</title>
+  <meta name="description" content="synap — Stay present. Keep the memory">
+  <title>synap · Stay present. Keep the memory</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=5.2.2">
+  <link rel="stylesheet" href="styles.css?v=5.3.0">
 </head>
 <body data-state="disconnected">
   <a class="skip-link" href="#capture">Skip to recorder</a>
@@ -40,9 +40,13 @@
 
   <div class="app-shell">
     <header class="topbar">
-      <a class="brand" href="#capture"><span class="mobile-monogram">dk.</span><span>DK Pendant <small>PERSONAL AUDIO STUDIO</small></span></a>
+      <a class="brand" href="#capture" aria-label="synap"><img class="brand-logo" src="logo.webp?v=5.3.0" width="800" height="216" alt="synap"></a>
       <div class="top-actions">
-        <button id="installButton" class="icon-button hidden" type="button" title="Install app" aria-label="Install app"><svg><use href="#i-download"/></svg></button>
+        <button id="connectButton" class="connection-pill" type="button">
+          <span id="connectionBadge" class="status-badge status-offline"><span class="status-dot" aria-hidden="true"></span><span id="connectionText" role="status" aria-live="polite">Not connected</span></span>
+          <span id="connectButtonLabel" class="connection-action">Connect pendant</span>
+        </button>
+        <button id="installButton" class="icon-button" type="button" title="Download / install synap" aria-label="Download or install synap"><svg aria-hidden="true"><use href="#i-download"/></svg></button>
         <button id="settingsButton" class="icon-button" type="button" title="Settings" aria-label="Open settings"><svg><use href="#i-settings"/></svg></button>
       </div>
     </header>
@@ -59,10 +63,6 @@
 
       <section id="capture" class="capture-layout" aria-label="Recorder" tabindex="-1">
         <div class="hero-card">
-          <div class="connection-row">
-            <div id="connectionBadge" class="status-badge status-offline" role="status" aria-live="polite"><span class="status-dot"></span><span id="connectionText">Not connected</span></div>
-            <button id="connectButton" class="button button-secondary connect-button" type="button">Connect pendant</button>
-          </div>
           <div class="session-heading"><div><p class="eyebrow">THE RECORDER</p><h2 id="recorderTitle">Ready when you are.</h2></div><span class="format-chip">16 kHz <span>·</span> MONO</span></div>
           <p id="recorderSubtitle" class="recorder-subtitle">Connect your pendant to capture a little of your world.</p>
           <div class="recording-stage">
@@ -120,7 +120,7 @@
         <div class="settings-actions"><button id="runQueueButton" class="button button-primary" type="button">Process recordings</button><button id="pauseQueueButton" class="button button-secondary" type="button">Pause queue</button></div>
       </section>
     </main>
-    <footer><span>Designed for presence.</span><span id="appVersion">PWA 5.2.2</span><span>PROTOCOL 02</span></footer>
+    <footer><span>Designed for presence.</span><span id="appVersion">PWA 5.3.0</span><span>PROTOCOL 02</span></footer>
   </div>
 
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
@@ -143,7 +143,7 @@
       <div class="modal-actions"><button class="button button-primary" type="submit">Save preferences <svg><use href="#i-check"/></svg></button></div>
     </form>
   </dialog>
-  <script src="audio-store.js?v=5.2.2" defer></script>
-  <script src="app.js?v=5.2.2" defer></script>
+  <script src="audio-store.js?v=5.3.0" defer></script>
+  <script src="app.js?v=5.3.0" defer></script>
 </body>
 </html>

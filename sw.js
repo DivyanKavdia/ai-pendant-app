@@ -1,10 +1,10 @@
-/* Release 5.2.2. Only this application's public shell is cached. */
-const APP_VERSION = "5.2.2";
+/* Release 5.3.0. Only this application's public shell is cached. */
+const APP_VERSION = "5.3.0";
 const ENTRY_PATH = "./index.html?v=" + APP_VERSION;
 const CACHE_NAME = "dk-pendant-pwa-v" + APP_VERSION;
 const APP_SHELL = [
-  ENTRY_PATH, "./styles.css?v=5.2.2", "./audio-store.js?v=5.2.2", "./app.js?v=5.2.2",
-  "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png"
+  ENTRY_PATH, "./styles.css?v=5.3.0", "./audio-store.js?v=5.3.0", "./app.js?v=5.3.0",
+  "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png", "./logo.webp?v=5.3.0"
 ];
 const SHELL_URLS = new Set(APP_SHELL.map(path => new URL(path, self.registration.scope).href));
 

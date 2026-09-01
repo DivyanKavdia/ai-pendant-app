@@ -1,15 +1,17 @@
-# DK AI Pendant — PWA only
+# synap — PWA only
 
-Release 5.2.2. This repository contains only the browser application.
+Stay present. Keep the memory
+
+Release 5.3.0. This repository contains only the browser application.
 ESP32-S3 firmware is maintained separately and must not be committed here.
 
 ## Deploy
 
 Serve the repository root over HTTPS (for example, GitHub Pages). No npm
-installation, build step, or runtime framework is required. Upload all nine
+installation, build step, or runtime framework is required. Upload all ten
 application assets together: `index.html`, `styles.css`, `app.js`,
-`audio-store.js`, `sw.js`, `manifest.webmanifest`, and the three icon files.
-Verify the footer shows 5.2.2. Do not clear site data to update the app:
+`audio-store.js`, `sw.js`, `manifest.webmanifest`, `logo.webp`, and the three icon files.
+Verify the footer shows 5.3.0. Do not clear site data to update the app:
 recordings and pending processing jobs are stored there.
 
 Use a browser with Web Bluetooth, IndexedDB, and Web Locks support. Keep the
@@ -25,7 +27,9 @@ transport metrics stay visible, and Settings opens as a bottom sheet on small
 screens. Inputs use readable 16 px text, controls have large touch targets,
 safe-area insets are respected, and reduced-motion preferences are supported.
 This release does not change BLE commands, audio storage, or FIFO processing.
-It adds no runtime dependencies or deployed files. The service worker serves a
+Branding adds one optimized logo asset and no runtime dependencies. Existing
+Bluetooth device names and storage identifiers are preserved for compatibility.
+The service worker serves a
 complete precached release; a persistent update notice asks you to finish your
 work and reload when a newer worker takes control. It never reloads automatically
 or clears IndexedDB. Compare the footer version on both devices. Recordings are

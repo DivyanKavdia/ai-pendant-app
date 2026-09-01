@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "DK AI Pendant",
-  "short_name": "Pendant",
-  "description": "Private BLE audio recorder for the DK AI Pendant.",
+  "name": "synap",
+  "short_name": "synap",
+  "description": "Stay present. Keep the memory",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

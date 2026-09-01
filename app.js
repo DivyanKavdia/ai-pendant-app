@@ -5,7 +5,7 @@
   // Shared BLE Protocol v2
   // -------------------------------------------------------------------------
 
-  const APP_VERSION = "5.2.2";
+  const APP_VERSION = "5.3.0";
   const PROTOCOL_VERSION = 0x02;
 
   const SERVICE_UUID =
@@ -58,6 +58,7 @@
     connectionBadge: document.getElementById("connectionBadge"),
     connectionText: document.getElementById("connectionText"),
     connectButton: document.getElementById("connectButton"),
+    connectButtonLabel: document.getElementById("connectButtonLabel"),
     startButton: document.getElementById("startButton"),
     stopButton: document.getElementById("stopButton"),
     recorderTitle: document.getElementById("recorderTitle"),
@@ -280,7 +281,7 @@
     if (nextState === "unsupported") {
       ui.connectionBadge.classList.add("status-error");
       ui.connectionText.textContent = "Bluetooth unavailable";
-      ui.connectButton.textContent = "Not supported";
+      ui.connectButtonLabel.textContent = "Not supported";
       ui.connectButton.disabled = true;
       ui.recorderTitle.textContent = "Browser not supported.";
       ui.recorderSubtitle.textContent =
@@ -293,7 +294,7 @@
     if (nextState === "disconnected") {
       ui.connectionBadge.classList.add("status-offline");
       ui.connectionText.textContent = "Not connected";
-      ui.connectButton.textContent =
+      ui.connectButtonLabel.textContent =
         needsDeviceSelection ? "Reselect pendant" : (bluetoothDevice ? "Reconnect" : "Connect pendant");
       ui.recorderTitle.textContent = "Ready when you are.";
       ui.recorderSubtitle.textContent =
@@ -306,7 +307,7 @@
     if (nextState === "connecting") {
       ui.connectionBadge.classList.add("status-offline");
       ui.connectionText.textContent = "Connecting";
-      ui.connectButton.textContent = "Connecting…";
+      ui.connectButtonLabel.textContent = "Connecting…";
       ui.connectButton.disabled = true;
       ui.recorderTitle.textContent = "Finding your pendant…";
       ui.recorderSubtitle.textContent =
@@ -318,7 +319,7 @@
     if (nextState === "idle") {
       ui.connectionBadge.classList.add("status-ready");
       ui.connectionText.textContent = "Connected";
-      ui.connectButton.textContent = "Disconnect";
+      ui.connectButtonLabel.textContent = "Disconnect";
       ui.startButton.disabled = deviceStatus.error !== 0 || finalizing;
       ui.recorderTitle.textContent = "Ready to capture.";
       ui.recorderSubtitle.textContent =
@@ -331,7 +332,7 @@
     if (nextState === "starting") {
       ui.connectionBadge.classList.add("status-ready");
       ui.connectionText.textContent = "Starting";
-      ui.connectButton.textContent = "Disconnect";
+      ui.connectButtonLabel.textContent = "Disconnect";
       ui.connectButton.disabled = true;
       ui.stopButton.disabled = false;
       ui.recorderTitle.textContent = "Starting stream…";
@@ -344,7 +345,7 @@
     if (nextState === "recording") {
       ui.connectionBadge.classList.add("status-recording");
       ui.connectionText.textContent = "Recording";
-      ui.connectButton.textContent = "Disconnect";
+      ui.connectButtonLabel.textContent = "Disconnect";
       ui.connectButton.disabled = true;
       ui.stopButton.disabled = false;
       ui.recorderTitle.textContent = "Capturing the moment.";
@@ -357,7 +358,7 @@
     if (nextState === "stopping" || nextState === "saving") {
       ui.connectionBadge.classList.add("status-ready");
       ui.connectionText.textContent = "Finishing";
-      ui.connectButton.textContent = "Disconnect";
+      ui.connectButtonLabel.textContent = "Disconnect";
       ui.connectButton.disabled = true;
       ui.recorderTitle.textContent = "Finishing recording…";
       ui.recorderSubtitle.textContent =
@@ -371,7 +372,7 @@
     if (nextState === "error") {
       ui.connectionBadge.classList.add("status-error");
       ui.connectionText.textContent = "Needs attention";
-      ui.connectButton.textContent =
+      ui.connectButtonLabel.textContent =
         isGattConnected() ? "Disconnect" : "Reconnect";
       ui.recorderTitle.textContent = "Pendant needs attention.";
       ui.recorderSubtitle.textContent =
@@ -2237,13 +2238,13 @@
     window.addEventListener("beforeinstallprompt", function (event) {
       event.preventDefault();
       installPrompt = event;
-      ui.installButton.classList.remove("hidden");
+      ui.installButton.title = "Install synap";
     });
 
     window.addEventListener("appinstalled", function () {
       installPrompt = null;
-      ui.installButton.classList.add("hidden");
-      toast("DK Pendant installed");
+      ui.installButton.title = "synap is installed";
+      toast("synap installed");
       log("PWA installed");
     });
   }
@@ -2398,11 +2399,23 @@
     });
 
     ui.installButton.addEventListener("click", async function () {
-      if (!installPrompt) return;
-      await installPrompt.prompt();
-      await installPrompt.userChoice;
+      if (!installPrompt) {
+        toast(window.matchMedia("(display-mode: standalone)").matches
+          ? "synap is already running as an installed app."
+          : "No install prompt is available. Check your browser menu for Install app or Add to Home Screen, or open synap if already installed.");
+        return;
+      }
+      const prompt = installPrompt;
       installPrompt = null;
-      ui.installButton.classList.add("hidden");
+      ui.installButton.disabled = true;
+      try {
+        await prompt.prompt();
+        await prompt.userChoice;
+      } catch (error) {
+        toast("Could not open the install prompt. Try your browser's install menu.", "error");
+      } finally {
+        ui.installButton.disabled = false;
+      }
     });
 
     ui.clearRecordingsButton.addEventListener(
