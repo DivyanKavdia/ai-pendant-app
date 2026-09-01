@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=5.4.0">
+  <link rel="stylesheet" href="styles.css?v=5.5.0">
 </head>
 <body data-state="disconnected">
   <a class="skip-link" href="#capture">Skip to recorder</a>
@@ -39,7 +39,7 @@
 
   <div class="app-shell">
     <header class="topbar">
-      <a class="brand" href="#capture" aria-label="synap"><img class="brand-logo" src="logo.webp?v=5.4.0" width="800" height="216" alt="synap"></a>
+      <a class="brand" href="#capture" aria-label="synap"><img class="brand-logo" src="logo.webp?v=5.5.0" width="800" height="216" alt="synap"></a>
       <div class="top-actions">
         <button id="connectButton" class="connection-pill" type="button">
           <span id="connectionBadge" class="status-badge status-offline"><span class="status-dot" aria-hidden="true"></span><span id="connectionText" role="status" aria-live="polite">Not connected</span></span>
@@ -105,6 +105,13 @@
           <span class="empty-note">No account. No automatic uploads.</span>
         </div>
         <div id="recordingsList" class="recordings-list"></div>
+        <div id="libraryPagination" class="library-pagination" hidden>
+          <p id="libraryCountLabel" role="status" aria-live="polite"></p>
+          <div class="library-page-actions">
+            <button id="showMoreRecordingsButton" class="button button-secondary button-small" type="button" aria-controls="recordingsList">Show more</button>
+            <button id="showLessRecordingsButton" class="text-button" type="button" aria-controls="recordingsList" hidden>Show less</button>
+          </div>
+        </div>
       </section>
 
       <section id="processing" class="section-card queue-panel" aria-label="Sequential processing queue">
@@ -121,7 +128,7 @@
         <pre id="diagnosticsLog" class="diagnostics-log"></pre>
       </details>
     </main>
-    <footer><span>Designed for presence.</span><span id="appVersion">PWA 5.4.0</span><span>PROTOCOL 02</span></footer>
+    <footer><span>Designed for presence.</span><span id="appVersion">PWA 5.5.0</span><span>PROTOCOL 02</span></footer>
   </div>
 
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
@@ -144,7 +151,7 @@
       <div class="modal-actions"><button class="button button-primary" type="submit">Save preferences <svg><use href="#i-check"/></svg></button></div>
     </form>
   </dialog>
-  <script src="audio-store.js?v=5.4.0" defer></script>
-  <script src="app.js?v=5.4.0" defer></script>
+  <script src="audio-store.js?v=5.5.0" defer></script>
+  <script src="app.js?v=5.5.0" defer></script>
 </body>
 </html>

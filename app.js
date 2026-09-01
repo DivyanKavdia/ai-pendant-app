@@ -5,7 +5,7 @@
   // Shared BLE Protocol v2
   // -------------------------------------------------------------------------
 
-  const APP_VERSION = "5.4.0";
+  const APP_VERSION = "5.5.0";
   const PROTOCOL_VERSION = 0x02;
 
   const SERVICE_UUID =
@@ -75,6 +75,10 @@
     qualityMetric: document.getElementById("qualityMetric"),
     qualityDetail: document.getElementById("qualityDetail"),
     recordingsList: document.getElementById("recordingsList"),
+    libraryPagination: document.getElementById("libraryPagination"),
+    libraryCountLabel: document.getElementById("libraryCountLabel"),
+    showMoreRecordingsButton: document.getElementById("showMoreRecordingsButton"),
+    showLessRecordingsButton: document.getElementById("showLessRecordingsButton"),
     recordingsCount: document.getElementById("recordingsCount"),
     datePicker: document.getElementById("datePicker"),
     dateStrip: document.getElementById("dateStrip"),
@@ -129,6 +133,10 @@
   let connectInProgress = false;
   let needsDeviceSelection = false;
   let selectedDayKey = localDateKey(new Date());
+  const LIBRARY_PAGE_SIZE = 5;
+  let libraryRecordings = [];
+  let libraryVisibleCount = LIBRARY_PAGE_SIZE;
+  let libraryRenderEpoch = 0;
 
   let deviceStatus = {
     state: DEVICE_STATE.DISCONNECTED,
@@ -1890,12 +1898,7 @@
     open.className = "text-button insight-open";
     open.textContent = "Open recording";
     open.addEventListener("click", function () {
-      const target = document.getElementById("recording-" + recording.id);
-      if (target) {
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
-        target.setAttribute("tabindex", "-1");
-        target.focus({ preventScroll: true });
-      }
+      revealRecording(recording.id);
     });
     card.appendChild(open);
     return card;
@@ -1915,27 +1918,36 @@
   }
 
   async function renderRecordings() {
+    const epoch = ++libraryRenderEpoch;
+    const dayKey = selectedDayKey;
+    ui.recordingsList.querySelectorAll("audio").forEach(function (audio) { audio.pause(); });
     renderedObjectUrls.forEach(function (url) {
       URL.revokeObjectURL(url);
     });
     renderedObjectUrls = [];
     ui.recordingsList.replaceChildren();
+    libraryRecordings = [];
+    libraryVisibleCount = LIBRARY_PAGE_SIZE;
+    ui.libraryPagination.hidden = true;
 
     let recordings = [];
 
     try {
       recordings = await getAllRecordings();
     } catch (error) {
+      if (epoch !== libraryRenderEpoch) return;
       log("Could not load recordings", friendlyError(error));
       toast("Could not load local recordings", "error");
       return;
     }
 
+    if (epoch !== libraryRenderEpoch) return;
+
     recordings.sort(function (a, b) {
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
     recordings = recordings.filter(function (recording) {
-      return localDateKey(recording.createdAt) === selectedDayKey;
+      return localDateKey(recording.createdAt) === dayKey;
     });
     ui.recordingsCount.textContent = String(recordings.length);
     renderDayLens(recordings);
@@ -1950,17 +1962,80 @@
       recordings.length === 0
     );
 
-    recordings.forEach(function (recording) {
-      ui.recordingsList.appendChild(
-        createRecordingCard(recording)
-      );
+    libraryRecordings = recordings;
+    renderLibraryPage();
+  }
+
+  function renderLibraryPage() {
+    const count = Math.min(libraryVisibleCount, libraryRecordings.length);
+    for (let index = ui.recordingsList.children.length; index < count; index += 1) {
+      ui.recordingsList.appendChild(createRecordingCard(libraryRecordings[index]));
+    }
+    Array.from(ui.recordingsList.children).forEach(function (card, index) {
+      card.hidden = index >= count;
+      if (card.hidden) {
+        card.open = false;
+        card.querySelectorAll("audio").forEach(function (audio) { audio.pause(); });
+      }
+    });
+    const remaining = libraryRecordings.length - count;
+    ui.libraryPagination.hidden = libraryRecordings.length === 0;
+    ui.libraryCountLabel.textContent = "Showing " + count + " of " + libraryRecordings.length + " recordings for this day";
+    ui.showMoreRecordingsButton.hidden = remaining <= 0;
+    ui.showMoreRecordingsButton.textContent = "Show " + Math.min(LIBRARY_PAGE_SIZE, remaining) + " more";
+    ui.showLessRecordingsButton.hidden = count <= LIBRARY_PAGE_SIZE;
+  }
+
+  function revealRecording(id) {
+    const index = libraryRecordings.findIndex(function (recording) { return recording.id === id; });
+    if (index < 0) return;
+    libraryVisibleCount = Math.max(libraryVisibleCount, Math.ceil((index + 1) / LIBRARY_PAGE_SIZE) * LIBRARY_PAGE_SIZE);
+    renderLibraryPage();
+    const target = document.getElementById("recording-" + id);
+    target.open = true;
+    window.location.hash = "#library";
+    window.requestAnimationFrame(function () {
+      target.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+      target.querySelector("summary").focus({ preventScroll: true });
     });
   }
 
   function createRecordingCard(recording) {
-    const card = document.createElement("article");
-    card.className = "recording-card";
+    const card = document.createElement("details");
+    card.className = "recording-card recording-accordion";
     card.id = "recording-" + recording.id;
+    const summary = document.createElement("summary");
+    summary.className = "recording-row";
+    const info = document.createElement("span");
+    info.className = "recording-row-info";
+    const name = document.createElement("span");
+    name.className = "recording-row-name";
+    name.textContent = recording.name || "Untitled recording";
+    const meta = document.createElement("span");
+    meta.className = "recording-row-meta";
+    meta.textContent = new Date(recording.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " · " + formatDuration(recording.durationMs);
+    const chevron = document.createElement("span");
+    chevron.className = "recording-row-chevron";
+    chevron.textContent = "+";
+    chevron.setAttribute("aria-hidden", "true");
+    info.append(name, meta);
+    summary.append(info, chevron);
+    card.appendChild(summary);
+    let loaded = false;
+    card.addEventListener("toggle", function () {
+      if (card.open && !loaded) {
+        card.appendChild(createRecordingContent(recording, name));
+        loaded = true;
+      } else if (!card.open) {
+        card.querySelectorAll("audio").forEach(function (audio) { audio.pause(); });
+      }
+    });
+    return card;
+  }
+
+  function createRecordingContent(recording, rowName) {
+    const card = document.createElement("div");
+    card.className = "recording-content";
 
     const titleRow = document.createElement("div");
     titleRow.className = "recording-title-row";
@@ -1973,6 +2048,7 @@
       recording.name =
         title.value.trim() || defaultRecordingName(new Date());
       title.value = recording.name;
+      rowName.textContent = recording.name;
       await updateRecordingFields(recording.id, { name: recording.name });
       log("Recording renamed", { id: recording.id });
     });
@@ -2318,6 +2394,17 @@
   // -------------------------------------------------------------------------
 
   function bindEvents() {
+    ui.showMoreRecordingsButton.addEventListener("click", function () {
+      libraryVisibleCount += LIBRARY_PAGE_SIZE;
+      renderLibraryPage();
+      if (ui.showMoreRecordingsButton.hidden) ui.showLessRecordingsButton.focus();
+    });
+    ui.showLessRecordingsButton.addEventListener("click", function () {
+      libraryVisibleCount = LIBRARY_PAGE_SIZE;
+      ui.recordingsList.querySelectorAll("details").forEach(function (card) { card.open = false; });
+      renderLibraryPage();
+      ui.showMoreRecordingsButton.focus();
+    });
     ui.datePicker.addEventListener("change", function () {
       if (ui.datePicker.value && ui.datePicker.value <= localDateKey(new Date())) {
         selectDay(ui.datePicker.value);
