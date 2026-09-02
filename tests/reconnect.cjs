@@ -61,7 +61,7 @@ async function connectionTest({fail=false,reselect=false,auto=false,orphan=false
   const audio=characteristic('audio'),control=characteristic('control');
   const device={id:'known',gatt:{connected:false,async connect(){calls.push('connect');if(fail)throw new Error('timeout');this.connected=true;return this;},
     disconnect(){calls.push('disconnect');this.connected=false;},async getPrimaryService(){return {async getCharacteristic(id){return id==='audio'?audio:control;}};}}};
-  const c={console,Boolean,Error,connectInProgress:false,finalizing:false,needsDeviceSelection:reselect,bluetoothDevice:missing?null:device,manualDisconnect:false,connectionEpoch:0,gattServer:null,
+  const c={console,Boolean,Error,checkFirmwareRelease:null,connectInProgress:false,finalizing:false,needsDeviceSelection:reselect,bluetoothDevice:missing?null:device,manualDisconnect:false,connectionEpoch:0,gattServer:null,
     navigator:{bluetooth:{requestDevice(){calls.push('chooser');return cancel?Promise.reject(Object.assign(new Error('cancel'),{name:'NotFoundError'})):Promise.resolve(device);}}},
     SERVICE_UUID:'service',AUDIO_CHAR_UUID:'audio',CONTROL_CHAR_UUID:'control',CMD_STOP:0,CMD_GET_STATUS:2,
     DEVICE_STATE:{CONNECTED_IDLE:1,STREAMING:2,ERROR:3},deviceStatus:{state:orphan?2:1,error:0},
@@ -89,11 +89,12 @@ async function workerTests(){
   vm.runInNewContext(fs.readFileSync(path.join(root,'sw.js'),'utf8'),ctx);handlers.install({waitUntil:p=>job=p});await job;
   installed.forEach(p=>assert(fs.existsSync(path.join(root,p.split('?')[0]))));
   async function fetch(url,mode='navigate',method='GET'){let result;handlers.fetch({request:{url,mode,method},respondWith:p=>result=p});return result;}
-  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=1.0.0');
-  assert.equal(await fetch(scope+'app.js?v=1.0.0','cors'),'./app.js?v=1.0.0');
-  assert.equal(await fetch(scope+'ota.js?v=1.0.0','cors'),'./ota.js?v=1.0.0');
+  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=1.0.0-ota1');
+  assert.equal(await fetch(scope+'app.js?v=1.0.0-ota1','cors'),'./app.js?v=1.0.0-ota1');
+  assert.equal(await fetch(scope+'ota.js?v=1.0.0-ota1','cors'),'./ota.js?v=1.0.0-ota1');
+  assert.equal(await fetch(scope+'releases.js?v=1.0.0-ota1','cors'),'./releases.js?v=1.0.0-ota1');
   assert.equal(await fetch(scope+'api','cors','POST'),undefined);
-  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'1.0.0');
+  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'1.0.0-ota1');assert.equal(reply.release,'1.0.0');
 }
 (async()=>{
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);

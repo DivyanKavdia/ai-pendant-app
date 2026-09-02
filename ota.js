@@ -38,18 +38,25 @@
     }
     throw new Error("This firmware lacks the Synap OTA compatibility marker. Use a trusted Synap build.");
   }
-  async function authorize(begin, challenge, ownerKey) {
-    if (!/^[a-fA-F0-9]{64}$/.test(ownerKey.trim())) throw new Error("Enter the 64-character owner key from this pendant's USB Serial OTAKEY command.");
-    if (!challenge || challenge.byteLength!==16) throw new Error("Invalid pendant authorization challenge.");
+  function isOwnerKey(key) {
+    return key && key.type==='secret' && key.extractable===false && key.algorithm?.name==='HMAC' &&
+      key.algorithm?.hash?.name==='SHA-256' && key.algorithm?.length===256 && key.usages?.includes('sign');
+  }
+  async function importOwnerKey(ownerKey) {
+    if (isOwnerKey(ownerKey)) return ownerKey;
+    if (typeof ownerKey!=='string' || !/^[a-fA-F0-9]{64}$/.test(ownerKey.trim())) throw new Error("Enter the 64-character owner key from this pendant's USB Serial OTAKEY command.");
     const raw=Uint8Array.from(ownerKey.trim().match(/../g),hex=>parseInt(hex,16));
-    try {
-      const key=await crypto.subtle.importKey("raw",raw,{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+    try { return await crypto.subtle.importKey("raw",raw,{name:"HMAC",hash:"SHA-256"},false,["sign"]); }
+    finally { raw.fill(0); }
+  }
+  async function authorize(begin, challenge, ownerKey) {
+    if (!challenge || challenge.byteLength!==16) throw new Error("Invalid pendant authorization challenge.");
+    const key=await importOwnerKey(ownerKey);
       const domain=new TextEncoder().encode("SYNAP-OTA-V2");
       const message=new Uint8Array(domain.length+16+41);
       message.set(domain);message.set(new Uint8Array(challenge.buffer,challenge.byteOffset,16),domain.length);
       message.set(begin.subarray(0,41),domain.length+16);
       begin.set(new Uint8Array(await crypto.subtle.sign("HMAC",key,message)),41);
-    } finally { raw.fill(0); }
   }
   class Client {
     constructor(io) { this.io=io;this.epoch=0;this.busy=false;this.committing=false;this.cancelled=false; }
@@ -122,7 +129,7 @@
         if(info.protocol===1 && info.state!==2) throw new Error("Legacy firmware: hold BOOT for 2 seconds and release for this migration update. Firmware 5.2+ does not need BOOT.");
         if(info.protocol===2 && ![1,6].includes(info.state)) throw new Error("Another update is pending. Wait for reboot or the transfer timeout.");
         if (info.maxData<(info.protocol===2 ? 64 : 36) || info.maxData>173) throw new Error("Unsupported BLE firmware packet size.");
-        if(info.protocol===2 && !/^[a-fA-F0-9]{64}$/.test(ownerKey.trim())) throw new Error("Enter the 64-character owner key from this pendant's USB Serial OTAKEY command.");
+        if(info.protocol===2) ownerKey=await importOwnerKey(ownerKey);
         if (!file || file.size<36 || file.size>info.capacity || file.size>16*1024*1024) throw new Error("Choose an application .bin that fits the available slot.");
         this.io.progress("Checking firmware…",0,false);
         const bytes=new Uint8Array(await file.arrayBuffer());validateImage(bytes,info.capacity,info.protocol);
@@ -164,6 +171,6 @@
       } finally { ownerKey="";this.busy=false; }
     }
   }
-  root.SynapOTA={Client,decode,packet,validateImage,authorize};
+  root.SynapOTA={Client,decode,packet,validateImage,authorize,importOwnerKey,isOwnerKey};
   if(typeof module!=="undefined" && module.exports) module.exports=root.SynapOTA;
 })(globalThis);

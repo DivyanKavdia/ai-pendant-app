@@ -52,6 +52,7 @@
 
     <main>
       <p id="updateNotice" class="update-notice" role="status" hidden></p>
+      <div id="firmwareNotice" class="update-notice" role="status" hidden><span id="firmwareNoticeText"></span> <button id="firmwareUpdateButton" class="button button-primary button-small" type="button">Update pendant</button></div>
       <div class="page-heading compact-heading"><div><p class="eyebrow">A LITTLE SPACE FOR YOUR MIND</p><h1>Your day, <span>remembered.</span></h1></div></div>
 
       <section id="capture" class="capture-layout compact-recorder" aria-label="Recorder" tabindex="-1">
@@ -146,8 +147,12 @@
       <div class="settings-section ota-section"><h3>Pendant firmware</h3>
         <p class="settings-note">Update over Bluetooth from this app—no Wi-Fi or button press on firmware 5.2+. One-time setup: install compatible firmware, then retrieve your owner key over USB Serial. Keep the pendant powered and this app in the foreground.</p>
         <button id="otaCheck" class="button button-secondary button-small" type="button">Check pendant</button>
-        <label class="field"><span>Trusted ESP32-S3 application .bin</span><input id="otaFile" type="file" accept=".bin"><small>Application image only. Do not select a merged/full-flash image, bootloader or partition table.</small></label>
-        <label class="field"><span>Pendant owner key</span><input id="otaOwnerKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="64-character key for this pendant"><small>One-time retrieval: send <code>OTAKEY</code> with a newline in USB Serial Monitor at 115200 baud. Keep it private. This app never saves the key; paste it again for each update. Not needed for legacy firmware migration.</small></label>
+        <button id="otaReleaseCheck" class="button button-secondary button-small" type="button">Check updates</button>
+        <button id="otaLatest" class="button button-primary button-small" type="button" hidden>Install GitHub update</button>
+        <label class="field"><span>Manual fallback: trusted application .bin</span><input id="otaFile" type="file" accept=".bin"><small>Not needed for GitHub updates. Application image only; never select a merged/full-flash image, bootloader or partition table.</small></label>
+        <label class="field"><span>Pendant owner key (one-time enrollment)</span><input id="otaOwnerKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="64-character key for this pendant"><small>Send <code>OTAKEY</code> with a newline in USB Serial Monitor at 115200 baud once. For future GitHub updates, remembered authorization removes the need for USB or pasting the key again. Keep your original key private.</small></label>
+        <label class="toggle-row"><span><strong>Remember authorization on this trusted browser</strong><small>Saved only after an authorized GitHub transfer. This browser can then approve future updates. Clearing site data removes authorization.</small></span><input id="otaRemember" type="checkbox"></label>
+        <button id="otaForget" class="button button-secondary button-small" type="button">Forget saved authorization</button>
         <label class="toggle-row"><span><strong>Approve this firmware update</strong><small>I trust this Synap firmware, have stopped recording, and have stable power. Keep the app open until the pendant reboots.</small></span><input id="otaConfirm" type="checkbox"></label>
         <div class="settings-actions"><button id="otaStart" class="button button-primary button-small" type="button">Update firmware</button><button id="otaCancel" class="button button-secondary button-small" type="button" disabled>Cancel transfer</button></div>
         <progress id="otaProgress" value="0" max="1" aria-label="Firmware transfer progress"></progress>
@@ -165,7 +170,8 @@
     </form>
   </dialog>
   <script src="audio-store.js?v=1.0.0" defer></script>
-  <script src="ota.js?v=1.0.0" defer></script>
-  <script src="app.js?v=1.0.0" defer></script>
+  <script src="ota.js?v=1.0.0-ota1" defer></script>
+  <script src="releases.js?v=1.0.0-ota1" defer></script>
+  <script src="app.js?v=1.0.0-ota1" defer></script>
 </body>
 </html>

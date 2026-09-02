@@ -1,9 +1,10 @@
 /* Release 1.0.0. Only this application's public shell is cached. */
 const APP_VERSION = "1.0.0";
-const ENTRY_PATH = "./index.html?v=" + APP_VERSION;
-const CACHE_NAME = "dk-pendant-pwa-v" + APP_VERSION;
+const APP_REVISION = "1.0.0-ota1";
+const ENTRY_PATH = "./index.html?v=" + APP_REVISION;
+const CACHE_NAME = "dk-pendant-pwa-v" + APP_REVISION;
 const APP_SHELL = [
-  ENTRY_PATH, "./ota.js?v=1.0.0", "./styles.css?v=1.0.0", "./audio-store.js?v=1.0.0", "./app.js?v=1.0.0",
+  ENTRY_PATH, "./ota.js?v=1.0.0-ota1", "./releases.js?v=1.0.0-ota1", "./styles.css?v=1.0.0", "./audio-store.js?v=1.0.0", "./app.js?v=1.0.0-ota1",
   "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png", "./logo.webp?v=1.0.0"
 ];
 const SHELL_URLS = new Set(APP_SHELL.map(path => new URL(path, self.registration.scope).href));
@@ -20,7 +21,8 @@ self.addEventListener("activate", event => {
 });
 self.addEventListener("message", event => {
   if (event.data && event.data.type === "GET_VERSION" && event.source) {
-    event.source.postMessage({ type: "APP_VERSION", version: APP_VERSION });
+    // The shell revision lets pre-OTA 1.0.0 clients notice this update.
+    event.source.postMessage({ type: "APP_VERSION", version: APP_REVISION, release: APP_VERSION, revision: APP_REVISION });
   }
 });
 self.addEventListener("fetch", event => {

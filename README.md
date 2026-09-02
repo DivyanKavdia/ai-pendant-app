@@ -5,6 +5,20 @@ Stay present. Keep the memory
 Release 1.0.0. This repository contains only the browser application.
 ESP32-S3 firmware is maintained separately and must not be committed here.
 
+## One-click firmware updates
+
+The synchronized public version remains **1.0.0**; increasing firmware build numbers identify newer binaries. After a pendant connects, the PWA checks the verified `synap-firmware` feed, displays **Update pendant** for a newer build, and installs only after explicit user confirmation. Checks also run when the app returns to the foreground, every minute while eligible, or when **Check updates** is tapped. Updating is blocked while connecting, recording, saving, opening a capture, or holding unsaved audio.
+
+Official target: **ESP32-S3FH4R2 / SuperMini, 4 MB QIO flash, 2 MB QSPI PSRAM, default two-slot OTA partition scheme**. Only protocol-2 application images with the exact target/build identity, size, SHA-256, chip ID and immutable raw GitHub URL from the manifest are accepted. Bootloaders, partition tables, merged images, incompatible hardware and downgrades are rejected before flashing.
+
+One-time enrollment still needs the owner key: with OTA-enabled firmware installed, send `OTAKEY` plus newline over USB Serial at 115200. Paste it once and enable **Remember authorization on this trusted browser**. The key is imported as a non-extractable HMAC-SHA-256 `CryptoKey`, saved per Bluetooth device ID in IndexedDB only after an authenticated GitHub transfer, and never stored as plaintext or localStorage. **Forget saved authorization** removes it. Anyone controlling that browser/origin can still authorize an update, so do not remember it on shared devices. Clearing site data or replacing/resetting the pendant requires enrollment again.
+
+After enrollment, normal updates need no USB or BOOT-button press: connect, approve, and keep the powered pendant and PWA foregrounded. The browser verifies the download before BLE transfer; the pendant independently verifies authorization and flashed SHA-256. Success appears only after reconnecting and reading the exact expected build and hardware identity. A lost commit acknowledgement is verified after reboot, never automatically retransmitted.
+
+Publisher trust is currently the GitHub repository/account plus HTTPS and reviewed workflow; the manifest hash is not an independent publisher signature. Stock Arduino bootloaders may not provide rollback, so protect firmware `main`, review workflow changes, and hardware-test releases before broad rollout.
+
+Release feed: https://raw.githubusercontent.com/DivyanKavdia/synap-firmware/ota-releases/latest.json
+
 ## Deploy
 
 Serve the repository root over HTTPS (for example, GitHub Pages). No npm
@@ -44,7 +58,7 @@ devices. Recordings are device-local; this release does not add cloud sync.
 
 Settings → Pendant firmware → Check pendant. Firmware without the OTA
 characteristics shows an initial-USB-install message and still records normally.
-Use [Synap ESP32-S3 firmware 1.0.0 / build 503](https://github.com/DivyanKavdia/synap-firmware).
+Use [Synap ESP32-S3 firmware releases](https://github.com/DivyanKavdia/synap-firmware/releases). Build 503 was the initial 1.0.0 baseline; official CI builds start at 1001.
 Firmware 5.2+ supports PWA-only approval with no BOOT press. An existing 5.1
 pendant needs its old BOOT unlock one final time to migrate, or a USB install.
 No firmware files belong in this PWA repository.
@@ -55,11 +69,15 @@ No firmware files belong in this PWA repository.
 2. After installing 5.2+, send `OTAKEY` with a newline in USB Serial Monitor at
    115200 baud. Save the device-generated 64-character owner key privately. This
    is a one-time setup step; subsequent updates need neither USB nor BOOT.
+The following steps describe the optional **manual file fallback**. For ordinary
+updates use **Update pendant / Install GitHub update** instead; no file selection
+is needed and remembered authorization is used automatically.
+
 3. Compile/export a trusted Synap **application .bin** for the same physical board,
    microphone configuration, flash and PSRAM settings. Do not use a merged image.
 4. Connect in the PWA and stop/save recording. Check pendant, select the .bin,
-   paste your owner key and approve the update. The key is never saved to browser
-   storage or sent over BLE. The input clears after an attempt or disconnect.
+   paste your owner key and approve the update. This manual fallback does not save
+   the key or send it over BLE. The input clears after an attempt or disconnect.
 5. Click Update firmware. The app hashes the local file and sends it directly over
    BLE, sequentially, waiting for the device's written-byte ACK for each chunk.
    The file is not sent to a web server or saved to IndexedDB.

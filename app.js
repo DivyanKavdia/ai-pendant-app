@@ -6,6 +6,7 @@
   // -------------------------------------------------------------------------
 
 const APP_VERSION = "1.0.0";
+const APP_REVISION = "1.0.0-ota1";
   const PROTOCOL_VERSION = 0x02;
 
   const SERVICE_UUID =
@@ -134,6 +135,7 @@ const APP_VERSION = "1.0.0";
   let needsDeviceSelection = false;
   let firmwareBusy = false;
   let firmwareUpdater = null;
+  let checkFirmwareRelease = null;
   let selectedDayKey = localDateKey(new Date());
   const LIBRARY_PAGE_SIZE = 5;
   let libraryRecordings = [];
@@ -786,6 +788,7 @@ const APP_VERSION = "1.0.0";
       }
     } finally {
       connectInProgress = false;
+      if (isGattConnected()) checkFirmwareRelease?.();
     }
   }
 
@@ -2390,6 +2393,9 @@ const APP_VERSION = "1.0.0";
       if (value) clearReconnectTimer(true);
       firmwareBusy=value;check.disabled=value;file.disabled=value;confirmation.disabled=value;ownerKey.disabled=value;
       start.disabled=value;cancel.disabled=true;ui.chooseDeviceButton.disabled=value;
+      for (const id of ["otaLatest","otaReleaseCheck","firmwareUpdateButton","otaForget","otaRemember"]) {
+        const control=document.getElementById(id);if(control)control.disabled=value;
+      }
       ui.runQueueButton.disabled=value;
       setAppState(isGattConnected() ? (deviceStatus.error ? "error" : "idle") : "disconnected");
     };
@@ -2433,6 +2439,119 @@ const APP_VERSION = "1.0.0";
     cancel.addEventListener("click",()=>{
       firmwareUpdater.cancel();cancel.disabled=true;status.textContent="Cancelling transfer…";
     });
+
+    if (!globalThis.SynapReleases) return;
+    const releases=globalThis.SynapReleases,vault=new releases.OwnerVault();
+    const notice=document.getElementById("firmwareNotice"),noticeText=document.getElementById("firmwareNoticeText");
+    const latestButton=document.getElementById("otaLatest"),bannerButton=document.getElementById("firmwareUpdateButton");
+    const remember=document.getElementById("otaRemember");
+    let offered=null,offeredDevice=null,lastCheck=0,downloadController=null,checkingRelease=false;
+    const pendingKey=id=>"synap-ota-pending:"+id;
+    const savePending=(id,m)=>{try{if(m)localStorage.setItem(pendingKey(id),JSON.stringify(m));else localStorage.removeItem(pendingKey(id));}catch(_){} };
+    const getPending=id=>{try{const m=JSON.parse(localStorage.getItem(pendingKey(id)));return m?releases.validateManifest(m):null;}catch(_){return null;}};
+    const announce=message=>{notice.hidden=false;noticeText.textContent=message;status.textContent=message;};
+    async function identity() {
+      const epoch=connectionEpoch;
+      try {
+        const service=await queueGattOperation(()=>gattServer.getPrimaryService(SERVICE_UUID),"Find firmware identity service");
+        const characteristic=await queueGattOperation(()=>service.getCharacteristic(releases.IDENTITY_UUID),"Find firmware identity");
+        const value=await queueGattOperation(()=>characteristic.readValue(),"Read firmware identity");
+        if(epoch!==connectionEpoch)throw Error("Pendant connection changed.");
+        return new TextDecoder().decode(value);
+      } catch(error){if(error.name==='NotFoundError')return null;throw error;}
+    }
+    async function inspect(force=false) {
+      if(checkingRelease||firmwareBusy||!eligible()||document.visibilityState==='hidden'||(!force&&Date.now()-lastCheck<60000))return;
+      checkingRelease=true;lastCheck=Date.now();lock(true);const id=bluetoothDevice.id;let locked=true;
+      try {
+        const info=await firmwareUpdater.check(),board=await identity(),pending=getPending(id);
+        let verified=false;
+        if(pending) {
+          verified=info.build===pending.build&&board===pending.identity;
+          if(verified){savePending(id,null);announce(`Update complete: firmware ${pending.version}, build ${info.build}, is running. Processing remains paused.`);}
+          else announce(`Update not confirmed. Pendant reports build ${info.build}; expected ${pending.build}. No automatic retry was started.`);
+        }
+        // A slow/offline public feed must not keep recording controls locked.
+        lock(false);locked=false;
+        const m=await releases.latest();
+        if(firmwareBusy||!eligible())return;
+        if(id!==bluetoothDevice?.id||!isGattConnected())throw Error('Pendant connection changed.');
+        if(releases.compatible(m,info,board)) {
+          offered=m;offeredDevice=id;bannerButton.hidden=false;latestButton.hidden=false;
+          announce(`Firmware ${m.version} (build ${m.build}) available. Update now? Stop and save recording first.`);
+        } else {
+          offered=null;bannerButton.hidden=true;latestButton.hidden=true;
+          if(!pending&&!verified)status.textContent=`Firmware build ${info.build} is up to date.`;
+          if(!pending)notice.hidden=true;
+        }
+      }catch(error){if(firmwareBusy&&!locked)return;offered=null;bannerButton.hidden=true;latestButton.hidden=true;
+        status.textContent="Automatic update check: "+friendlyError(error)+" You can retry Check updates; manual update remains available.";
+      }finally{checkingRelease=false;if(locked)lock(false);}
+    }
+    checkFirmwareRelease=()=>inspect().catch(error=>log('Firmware check',friendlyError(error)));
+    document.getElementById("otaReleaseCheck").addEventListener("click",()=>inspect(true));
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkFirmwareRelease();});
+    setInterval(()=>checkFirmwareRelease(),60000);
+    document.getElementById("otaForget").addEventListener("click",async()=>{
+      if(firmwareBusy||!bluetoothDevice)return;
+      try{await vault.forget(bluetoothDevice.id);ownerKey.value='';remember.checked=false;status.textContent='Saved update authorization forgotten for this pendant.';}
+      catch(error){status.textContent=friendlyError(error);}
+    });
+    cancel.addEventListener('click',()=>downloadController?.abort());
+    async function updateLatest() {
+      if(firmwareBusy)return;
+      if(!eligible()){openSettings();status.textContent='Connect the pendant, then stop and save any recording first.';return;}
+      if(!offered||offeredDevice!==bluetoothDevice.id){await inspect(true);return;}
+      const m=offered,id=bluetoothDevice.id;
+      if(!window.confirm(`Install Synap ${m.version}, build ${m.build}, from DivyanKavdia/synap-firmware?\n\nThis release is only for ESP32-S3FH4R2 (4 MB flash, 2 MB QSPI PSRAM). Confirm this is your board. Keep stable power, Bluetooth and this app in the foreground. Recording and processing will pause.`))return;
+      openSettings();lock(true);processor?.pause();progress.value=0;
+      let key=null,commitSent=false,saveAuthorization=false;
+      try {
+        key=ownerKey.value.trim()?await globalThis.SynapOTA.importOwnerKey(ownerKey.value):await vault.get(id).catch(()=>null);
+        ownerKey.value='';
+        if(!key)throw Error('One-time setup: paste this pendant’s OTAKEY below and choose Remember authorization on this trusted browser, then tap Install GitHub update.');
+        saveAuthorization=remember.checked;
+        const info=await firmwareUpdater.check(),board=await identity();
+        if(!releases.compatible(m,info,board))throw Error('This release is already installed or older than the running firmware.');
+        if(![1,6].includes(info.state))throw Error('An update is already pending. Wait for reboot or transfer timeout.');
+        const epoch=connectionEpoch;
+        await acquireWakeLock();status.textContent='Downloading verified GitHub firmware…';cancel.disabled=false;
+        downloadController=new AbortController();
+        const binary=await releases.download(m,info.capacity,undefined,downloadController.signal);
+        if(downloadController.signal.aborted)throw Error('Download cancelled. Nothing was flashed.');
+        if(epoch!==connectionEpoch||id!==bluetoothDevice?.id||!isGattConnected())throw Error('Pendant connection changed during download. Nothing was flashed.');
+        savePending(id,m);
+        try{await firmwareUpdater.update(binary,key);commitSent=true;}
+        catch(error){if(!firmwareUpdater.committing){savePending(id,null);throw error;}commitSent=true;}
+        if(saveAuthorization) {
+          try{await vault.put(id,key);}catch(_){announce('Firmware sent, but authorization could not be saved. Keep your owner key for next time.');}
+        }
+        status.textContent='Firmware committed. Waiting for reboot and checking the running build…';cancel.disabled=true;
+        const deadline=Date.now()+8000;
+        while(isGattConnected()&&Date.now()<deadline)await delay(100);
+        if(isGattConnected())bluetoothDevice.gatt.disconnect();
+        await delay(1500);
+        let verified=false;
+        for(let attempt=0;attempt<4;attempt++) {
+          if(id!==bluetoothDevice?.id)throw Error('Reconnect the original pendant to verify its update.');
+          if(!isGattConnected())await connectPendant({silent:true,autoReconnect:true});
+          if(isGattConnected()) {
+            const running=await firmwareUpdater.check(),runningIdentity=await identity();
+            if(running.build===m.build&&runningIdentity===m.identity){verified=true;break;}
+          }
+          await delay(2000);
+        }
+        if(!verified)throw Error(`Update not confirmed: reconnect this pendant to verify build ${m.build}. Do not assume it installed successfully.`);
+        savePending(id,null);offered=null;bannerButton.hidden=true;latestButton.hidden=true;
+        announce(`Update complete: firmware ${m.version}, build ${m.build}, is running. Processing remains paused.`);
+      }catch(error){announce(friendlyError(error)+' Processing remains paused.');}
+      finally{
+        key=null;ownerKey.value='';downloadController=null;firmwareUpdater.reset();confirmation.checked=false;
+        await releaseWakeLock();lock(false);
+        if(commitSent&&!isGattConnected())recoverRememberedConnection('firmware-update',true);
+      }
+    }
+    latestButton.addEventListener('click',updateLatest);bannerButton.addEventListener('click',updateLatest);
   }
 
   async function registerServiceWorker() {
@@ -2440,7 +2559,7 @@ const APP_VERSION = "1.0.0";
 
     try {
       const showUpdate = function (event) {
-        if (event.data && event.data.type === "APP_VERSION" && event.data.version !== APP_VERSION) {
+        if (event.data && event.data.type === "APP_VERSION" && (event.data.revision || event.data.version) !== APP_REVISION) {
           const notice = document.getElementById("updateNotice");
           notice.hidden = false;
           notice.textContent = "Update " + event.data.version + " is ready. Finish recording and processing, then reload. Saved recordings stay on this device.";
