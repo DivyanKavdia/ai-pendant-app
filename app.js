@@ -5,7 +5,7 @@
   // Shared BLE Protocol v2
   // -------------------------------------------------------------------------
 
-const APP_VERSION = "5.6.1";
+const APP_VERSION = "5.7.0";
   const PROTOCOL_VERSION = 0x02;
 
   const SERVICE_UUID =
@@ -848,6 +848,8 @@ const APP_VERSION = "5.6.1";
   }
 
   function cleanupCharacteristics() {
+    const ownerKeyInput=document.getElementById("otaOwnerKey");
+    if(ownerKeyInput) ownerKeyInput.value="";
     firmwareUpdater?.reset();
     connectionEpoch += 1;
     gattQueue = Promise.resolve();
@@ -2373,6 +2375,7 @@ const APP_VERSION = "5.6.1";
     const status = document.getElementById("otaStatus");
     const progress = document.getElementById("otaProgress");
     const confirmation = document.getElementById("otaConfirm");
+    const ownerKey = document.getElementById("otaOwnerKey");
     firmwareUpdater = new globalThis.SynapOTA.Client({
       connected:isGattConnected, queue:queueGattOperation,
       getService:()=>queueGattOperation(()=>gattServer.getPrimaryService(SERVICE_UUID),"Find pendant service"),
@@ -2385,7 +2388,7 @@ const APP_VERSION = "5.6.1";
       !["starting","stopping","saving"].includes(appState);
     const lock = value=>{
       if (value) clearReconnectTimer(true);
-      firmwareBusy=value;check.disabled=value;file.disabled=value;confirmation.disabled=value;
+      firmwareBusy=value;check.disabled=value;file.disabled=value;confirmation.disabled=value;ownerKey.disabled=value;
       start.disabled=value;cancel.disabled=true;ui.chooseDeviceButton.disabled=value;
       ui.runQueueButton.disabled=value;
       setAppState(isGattConnected() ? (deviceStatus.error ? "error" : "idle") : "disconnected");
@@ -2398,9 +2401,10 @@ const APP_VERSION = "5.6.1";
         const info=await firmwareUpdater.check();
         status.textContent="Firmware build "+info.build+" · OTA slot "+(info.capacity/1048576).toFixed(2)+" MB. "+
           (info.state===0 ? "OTA unavailable: check the partition layout and BLE MTU." :
-            info.state===2 ? "Unlocked. Select a trusted .bin and start within 90 seconds." :
-              info.state===3 || info.state===4 || info.state===5 ? "An update is pending. Wait for reboot or the 45-second transfer timeout." :
-                "Hold BOOT for 2 seconds and release while connected and idle to unlock.");
+            info.state===3 || info.state===4 || info.state===5 ? "An update is pending. Wait for reboot or the 45-second transfer timeout." :
+              info.protocol===2 ? "PWA-only updates enabled. Enter your owner key and select a trusted .bin; no button press needed." :
+                info.state===2 ? "Legacy firmware unlocked. Select a trusted .bin and start within 90 seconds." :
+                  "Legacy firmware: hold BOOT for 2 seconds and release for this migration. Firmware 5.2+ uses PWA-only approval.");
       } catch(error) { status.textContent=friendlyError(error); }
       finally { lock(false); }
     });
@@ -2413,7 +2417,8 @@ const APP_VERSION = "5.6.1";
         // Refresh handles/status here too: supports unlocking after the initial check.
         await firmwareUpdater.check();
         await acquireWakeLock();
-        const result=await firmwareUpdater.update(file.files[0]);
+        const key=ownerKey.value;ownerKey.value="";
+        const result=await firmwareUpdater.update(file.files[0],key);
         log("Firmware verified and boot partition committed",{sha256:result.sha256});
         status.textContent="Firmware verified. Pendant is rebooting; reconnect, then Check pendant to read the running build. Processing remains paused.";
         // Keep recording disabled until the expected reboot or a bounded fallback.
@@ -2421,7 +2426,7 @@ const APP_VERSION = "5.6.1";
         while(isGattConnected() && Date.now()<deadline) await delay(100);
       } catch(error) { status.textContent=friendlyError(error)+" Processing remains paused.";log("Firmware update",status.textContent); }
       finally {
-        firmwareUpdater.reset();confirmation.checked=false;await releaseWakeLock();lock(false);
+        ownerKey.value="";firmwareUpdater.reset();confirmation.checked=false;await releaseWakeLock();lock(false);
         if (!isGattConnected()) recoverRememberedConnection("firmware-update",true);
       }
     });

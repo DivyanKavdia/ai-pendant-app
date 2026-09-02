@@ -2,7 +2,7 @@
 
 Stay present. Keep the memory
 
-Release 5.6.1. This repository contains only the browser application.
+Release 5.7.0. This repository contains only the browser application.
 ESP32-S3 firmware is maintained separately and must not be committed here.
 
 ## Deploy
@@ -11,7 +11,7 @@ Serve the repository root over HTTPS (for example, GitHub Pages). No npm
 installation, build step, or runtime framework is required. Upload all eleven
 application assets together: `index.html`, `styles.css`, `app.js`,
 `audio-store.js`, `ota.js`, `sw.js`, `manifest.webmanifest`, `logo.webp`, and the three icon files.
-Verify the footer shows 5.6.1. Do not clear site data to update the app:
+Verify the footer shows 5.7.0. Do not clear site data to update the app:
 recordings and pending processing jobs are stored there.
 
 Use a browser with Web Bluetooth, IndexedDB, and Web Locks support. Keep the
@@ -44,59 +44,78 @@ devices. Recordings are device-local; this release does not add cloud sync.
 
 Settings → Pendant firmware → Check pendant. Firmware without the OTA
 characteristics shows an initial-USB-install message and still records normally.
-Use the separately supplied Synap ESP32-S3 firmware 5.1.0 (build 501) initially.
+Use [Synap ESP32-S3 firmware 5.2.0 / build 502](https://github.com/DivyanKavdia/synap-firmware).
+Firmware 5.2+ supports PWA-only approval with no BOOT press. An existing 5.1
+pendant needs its old BOOT unlock one final time to migrate, or a USB install.
 No firmware files belong in this PWA repository.
 
 1. Install the OTA-enabled firmware once by USB, using a partition scheme with
    `ota_0`, `ota_1`, and `otadata`. A later BLE update cannot change the partition
    table or bootloader. The application image must fit the displayed inactive slot.
-2. Compile/export a trusted Synap **application .bin** for the same physical board,
+2. After installing 5.2+, send `OTAKEY` with a newline in USB Serial Monitor at
+   115200 baud. Save the device-generated 64-character owner key privately. This
+   is a one-time setup step; subsequent updates need neither USB nor BOOT.
+3. Compile/export a trusted Synap **application .bin** for the same physical board,
    microphone configuration, flash and PSRAM settings. Do not use a merged image.
-3. Connect in the PWA and stop/save recording. Check pendant, select the .bin,
-   confirm stable power and trusted firmware, then hold BOOT/GPIO0 for two seconds
-   and release while connected and idle. Update must begin within 90 seconds.
-4. Click Update firmware. The app hashes the local file and sends it directly over
+4. Connect in the PWA and stop/save recording. Check pendant, select the .bin,
+   paste your owner key and approve the update. The key is never saved to browser
+   storage or sent over BLE. The input clears after an attempt or disconnect.
+5. Click Update firmware. The app hashes the local file and sends it directly over
    BLE, sequentially, waiting for the device's written-byte ACK for each chunk.
    The file is not sent to a web server or saved to IndexedDB.
-5. The ESP checks SHA-256, the full ESP image, and the Synap compatibility marker,
+6. The ESP checks SHA-256, the full ESP image, and the Synap compatibility marker,
    then selects the new application slot and reboots. Reconnect and Check pendant
    to read its running build. Resume processing from Queue when ready.
 
 Keep the app visible and the pendant close and powered throughout (transfers may
 take several minutes). Cancel is available before final commit. A dropped link,
 reload or 45-second stalled transfer aborts an uncommitted session; reconnect,
-unlock and restart from byte zero. An ACK lost during commit is reported as
+authorize and restart from byte zero. An ACK lost during commit is reported as
 uncertain, not as a successful or cancelled installation: reconnect and verify.
 Normal remembered-device reconnect remains subject to browser support.
 
-Security: GPIO0 physical approval is scoped to the current BLE connection.
-SHA-256 and the product marker detect corruption/compatibility mistakes; neither
-authenticates the publisher. This build does not provision signing keys, enforce
+Security: a per-device 256-bit key authorizes the exact image using a one-use
+challenge and HMAC-SHA256. The ESP checks authorization before opening flash.
+Wrong keys and replayed approval fail; rate limiting survives BLE reconnect.
+Normal OTA retains the owner key in device NVS; erasing NVS/all flash replaces it.
+Anyone with Serial access can retrieve the key; device NVS encryption is not set up.
+The owner key, SHA-256 and product marker do not prove publisher identity.
+This build does not provision signing keys, enforce
 BLE bonding, burn eFuses, or enable secure boot. Install only trusted local files.
 Cryptographically signed releases should precede unattended/distributed updates.
 Keeping the old slot does not guarantee recovery from a valid but broken new app:
 automatic boot rollback requires a rollback-enabled bootloader; otherwise use USB.
 
-### OTA protocol 1
+### OTA protocol 2 (protocol 1 migration supported)
 
 The existing pendant service UUID is reused, so no new permission scope is needed.
 Write-with-response: `4fa12348-0000-1000-8000-00805f9b34fb`.
 Read/notify status: `4fa12349-0000-1000-8000-00805f9b34fb`.
+Read-only 16-byte challenge: `4fa1234a-0000-1000-8000-00805f9b34fb`.
 All integer fields are little-endian. Every command includes a nonzero random
 32-bit transfer ID immediately after its command byte.
 
 | Command | Byte layout after command + transfer ID |
 | --- | --- |
-| 1 Begin | image size u32, SHA-256 32 bytes |
+| 1 Begin | image size u32, SHA-256 32 bytes, HMAC-SHA256 32 bytes (HMAC omitted in legacy v1) |
 | 2 Data | byte offset u32, data (up to advertised maxData) |
 | 3 Verify | none; allowed only after exactly image size bytes |
 | 4 Commit | none; allowed only after successful Verify |
 | 5 Abort | none; not accepted after Commit |
 
-Status is 20 bytes: magic `D7`, protocol `01`, state u8, error u8, transfer ID u32,
+MAC input: UTF-8 `SYNAP-OTA-V2` (no NUL), challenge 16 bytes, BEGIN's first 41
+bytes. MAC key: the raw 32 bytes decoded from the owner's 64 hex characters.
+Every consumed attempt changes the challenge; reconnect changes it too. The
+PWA uses native WebCrypto; there is no new runtime dependency. Firmware 5.2+
+requires the `SYNAP-ESP32S3-OTA-AUTH-V2` marker to avoid accidental legacy downgrade.
+The public marker is a compatibility check, not a signature.
+
+Status is 20 bytes: magic `D7`, protocol `02` (`01` for legacy), state u8, error u8, transfer ID u32,
 next offset u32, inactive slot size u32, maxData u16, firmware build u16. States:
-0 unavailable, 1 locked, 2 armed, 3 receiving, 4 verified, 5 committed, 6 failed.
-The ESP caps writes at 182 bytes and requires at least 36 data bytes per packet;
+0 unavailable, 1 awaiting owner approval, 2 legacy armed, 3 receiving, 4 verified, 5 committed, 6 failed.
+Errors 12/13 are failed/throttled authorization. Wait 30 seconds after throttling.
+The ESP caps writes at 182 bytes and requires data capacity of at least 64 bytes
+(MTU 76) for v2, so the 73-byte BEGIN fits; legacy v1 requires 36 data bytes.
 the app uses the advertised size. Notifications have a read-back fallback.
 Only an identical repeat of the immediately preceding data packet is idempotent.
 Old sessions and out-of-order/corrupt duplicate data cannot advance the transfer.
