@@ -22,8 +22,8 @@ Release feed: https://raw.githubusercontent.com/DivyanKavdia/synap-firmware/ota-
 ## Deploy
 
 Serve the repository root over HTTPS (for example, GitHub Pages). No npm
-installation, build step, or runtime framework is required. Upload all thirteen
-application assets together: `index.html`, `styles.css`, `app.js`,
+installation, build step, or runtime framework is required. Upload all fourteen
+application assets together: `index.html`, `styles.css`, `app.js`, `theme.js`,
 `audio-store.js`, `ota.js`, `releases.js`, `device-identity.js`, `sw.js`, `manifest.webmanifest`, `logo.webp`, and the three icon files.
 Verify the footer shows 1.0.0. Do not clear site data to update the app:
 recordings and pending processing jobs are stored there.
@@ -33,6 +33,13 @@ application open while recording or processing; background execution is not
 guaranteed. Only one tab may own the recorder at a time.
 
 ## Mobile-first interface
+
+Settings → Appearance offers Auto, Light and Dark. Auto follows the system theme;
+an explicit choice is remembered in `synap-appearance` and applied before first paint.
+Shared color roles keep cards, controls and status colors consistent in both modes.
+Bottom navigation follows section positions while scrolling, including after content
+expands, regardless of an earlier anchor link. Run `node tests/theme.cjs` and
+`node tests/navigation.cjs` for theme/contrast and scroll-selection regressions.
 
 All screen sizes use Insights, Library and Queue in that order in the bottom
 navigation and page content. The compact recorder sits above the timeline;

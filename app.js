@@ -6,7 +6,7 @@
   // -------------------------------------------------------------------------
 
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-timeline1";
+const APP_REVISION = "1.0.0-color1";
   let deviceAssociation = null;
   let deviceIdentityMessage = "Not connected";
   const PROTOCOL_VERSION = 0x02;
@@ -1712,9 +1712,10 @@ const APP_REVISION = "1.0.0-timeline1";
 
     const centerY = height / 2;
     const gradient = context.createLinearGradient(0, 0, width, 0);
-    gradient.addColorStop(0, "rgba(8,107,220,.15)");
-    gradient.addColorStop(.5, "rgba(8,107,220,.90)");
-    gradient.addColorStop(1, "rgba(8,107,220,.15)");
+    const dark = document.documentElement.dataset.theme === "dark";
+    gradient.addColorStop(0, dark ? "#5ce1ce55" : "#047a7055");
+    gradient.addColorStop(.5, dark ? "#c4adff" : "#6d28d9");
+    gradient.addColorStop(1, dark ? "#f798b855" : "#b72b5555");
 
     context.strokeStyle = "rgba(173,207,235,.08)";
     context.lineWidth = ratio;
@@ -2905,16 +2906,12 @@ const APP_REVISION = "1.0.0-timeline1";
     });
     function update() {
       scheduled = false;
-      const hashIndex = links.findIndex(function (link) {
-        return link.getAttribute("href") === window.location.hash;
-      });
-      if (hashIndex >= 0) {
-        applySelection(hashIndex);
-        return;
-      }
+      // A prior anchor must never override the section currently on screen.
+      const header = document.querySelector(".topbar");
+      const boundary = (header ? header.getBoundingClientRect().bottom : 80) + 32;
       let selected = 0;
       sections.forEach(function (section, index) {
-        if (section && section.getBoundingClientRect().top <= 160) selected = index;
+        if (section && section.getBoundingClientRect().top <= boundary) selected = index;
       });
       if (window.scrollY > 0 && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 4) {
         selected = links.length - 1;
@@ -2927,6 +2924,12 @@ const APP_REVISION = "1.0.0-timeline1";
     window.addEventListener("scroll", schedule, {passive:true});
     window.addEventListener("resize", schedule);
     window.addEventListener("hashchange", schedule);
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(schedule);
+      const main = document.querySelector("main");
+      if (main) observer.observe(main);
+      sections.forEach(section => { if (section) observer.observe(section); });
+    }
     update();
   }
 
