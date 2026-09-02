@@ -5,7 +5,7 @@
   // Shared BLE Protocol v2
   // -------------------------------------------------------------------------
 
-const APP_VERSION = "5.5.1";
+const APP_VERSION = "5.6.0";
   const PROTOCOL_VERSION = 0x02;
 
   const SERVICE_UUID =
@@ -132,6 +132,8 @@ const APP_VERSION = "5.5.1";
   let manualDisconnect = false;
   let connectInProgress = false;
   let needsDeviceSelection = false;
+  let firmwareBusy = false;
+  let firmwareUpdater = null;
   let selectedDayKey = localDateKey(new Date());
   const LIBRARY_PAGE_SIZE = 5;
   let libraryRecordings = [];
@@ -280,6 +282,7 @@ const APP_VERSION = "5.5.1";
   // -------------------------------------------------------------------------
 
   function setAppState(nextState, message) {
+    if (firmwareBusy) nextState = "updating";
     appState = nextState;
     document.body.dataset.state = nextState;
 
@@ -287,6 +290,16 @@ const APP_VERSION = "5.5.1";
     ui.connectButton.disabled = false;
     ui.startButton.disabled = true;
     ui.stopButton.disabled = true;
+
+    if (nextState === "updating") {
+      ui.connectButton.disabled = true;
+      ui.connectionText.textContent = "Firmware update";
+      ui.connectButtonLabel.textContent = "Updating…";
+      ui.recorderTitle.textContent = "Updating your pendant.";
+      ui.recorderSubtitle.textContent = "Keep this app open and the pendant powered. Progress is in Settings.";
+      ui.levelText.textContent = "Recording paused during update";
+      return;
+    }
 
     if (nextState === "unsupported") {
       ui.connectionBadge.classList.add("status-error");
@@ -534,6 +547,7 @@ const APP_VERSION = "5.5.1";
   }
 
   async function recoverRememberedConnection(reason, force) {
+    if (firmwareBusy) return;
     if (!autoReconnectEnabled() || manualDisconnect || connectInProgress || reloadRecoveryRunning ||
         finalizing || currentRecordingId || isGattConnected() || document.visibilityState === "hidden") return;
     if (!window.isSecureContext || !navigator.bluetooth) {
@@ -776,6 +790,7 @@ const APP_VERSION = "5.5.1";
   }
 
   async function disconnectPendant() {
+    if (firmwareBusy) return;
     manualDisconnect = true;
     clearReconnectTimer(true);
 
@@ -833,6 +848,7 @@ const APP_VERSION = "5.5.1";
   }
 
   function cleanupCharacteristics() {
+    firmwareUpdater?.reset();
     connectionEpoch += 1;
     gattQueue = Promise.resolve();
     clearStartTimeout();
@@ -1081,6 +1097,7 @@ const APP_VERSION = "5.5.1";
   }
 
   async function startRecording() {
+    if (firmwareBusy) return;
     if (appState !== "idle" || finalizing || !isGattConnected()) return;
     if (journal && unsavedAudio) {
       toast("Resolve the pending local save in Settings before starting another take.", "error");return;
@@ -1626,8 +1643,8 @@ const APP_VERSION = "5.5.1";
     try {
       const sessionId = recordingSessionId;
       const lock = await navigator.wakeLock.request("screen");
-      if (!isCurrentSession(sessionId) ||
-          (appState !== "starting" && appState !== "recording") || wakeLock) {
+      if ((!firmwareBusy && (!isCurrentSession(sessionId) ||
+          (appState !== "starting" && appState !== "recording"))) || wakeLock) {
         await lock.release();
         return;
       }
@@ -2168,7 +2185,7 @@ const APP_VERSION = "5.5.1";
 
     const transcribeButton =
       makeActionButton("Run FIFO", async function () {
-        if (recordingConfirmed || finalizing || appState === "starting") {
+        if (firmwareBusy || recordingConfirmed || finalizing || appState === "starting") {
           toast("Stop and save before processing.");return;
         }
         if (!recording.journal) await journal.enqueueLegacy(recording.id);
@@ -2348,6 +2365,71 @@ const APP_VERSION = "5.5.1";
     ui.settingsDialog.showModal();
   }
 
+  function bindFirmwareUpdate() {
+    const check = document.getElementById("otaCheck");
+    const file = document.getElementById("otaFile");
+    const start = document.getElementById("otaStart");
+    const cancel = document.getElementById("otaCancel");
+    const status = document.getElementById("otaStatus");
+    const progress = document.getElementById("otaProgress");
+    const confirmation = document.getElementById("otaConfirm");
+    firmwareUpdater = new globalThis.SynapOTA.Client({
+      connected:isGattConnected, queue:queueGattOperation,
+      getService:()=>queueGattOperation(()=>gattServer.getPrimaryService(SERVICE_UUID),"Find pendant service"),
+      progress:(message,value,committing)=>{
+        status.textContent=message;progress.value=value;cancel.disabled=committing;
+      }
+    });
+    const eligible = ()=>isGattConnected() && !connectInProgress && !recordingConfirmed &&
+      !finalizing && !currentRecordingId && !openingCapture && !unsavedAudio &&
+      !["starting","stopping","saving"].includes(appState);
+    const lock = value=>{
+      if (value) clearReconnectTimer(true);
+      firmwareBusy=value;check.disabled=value;file.disabled=value;confirmation.disabled=value;
+      start.disabled=value;cancel.disabled=true;ui.chooseDeviceButton.disabled=value;
+      ui.runQueueButton.disabled=value;
+      setAppState(isGattConnected() ? (deviceStatus.error ? "error" : "idle") : "disconnected");
+    };
+    check.addEventListener("click",async()=>{
+      if (firmwareBusy) return;
+      if (!eligible()) { status.textContent="Connect the pendant, then stop and save any recording first.";return; }
+      lock(true);
+      try {
+        const info=await firmwareUpdater.check();
+        status.textContent="Firmware build "+info.build+" · OTA slot "+(info.capacity/1048576).toFixed(2)+" MB. "+
+          (info.state===0 ? "OTA unavailable: check the partition layout and BLE MTU." :
+            info.state===2 ? "Unlocked. Select a trusted .bin and start within 90 seconds." :
+              info.state===3 || info.state===4 || info.state===5 ? "An update is pending. Wait for reboot or the 45-second transfer timeout." :
+                "Hold BOOT for 2 seconds and release while connected and idle to unlock.");
+      } catch(error) { status.textContent=friendlyError(error); }
+      finally { lock(false); }
+    });
+    start.addEventListener("click",async()=>{
+      if (firmwareBusy) return;
+      if (!eligible()) { status.textContent="Connect the pendant, then stop and save any recording first.";return; }
+      if (!file.files[0] || !confirmation.checked) { status.textContent="Select a trusted application .bin and confirm the safety checklist.";return; }
+      lock(true);processor?.pause();progress.value=0;
+      try {
+        // Refresh handles/status here too: supports unlocking after the initial check.
+        await firmwareUpdater.check();
+        await acquireWakeLock();
+        const result=await firmwareUpdater.update(file.files[0]);
+        log("Firmware verified and boot partition committed",{sha256:result.sha256});
+        status.textContent="Firmware verified. Pendant is rebooting; reconnect, then Check pendant to read the running build. Processing remains paused.";
+        // Keep recording disabled until the expected reboot or a bounded fallback.
+        const deadline=Date.now()+8000;
+        while(isGattConnected() && Date.now()<deadline) await delay(100);
+      } catch(error) { status.textContent=friendlyError(error)+" Processing remains paused.";log("Firmware update",status.textContent); }
+      finally {
+        firmwareUpdater.reset();confirmation.checked=false;await releaseWakeLock();lock(false);
+        if (!isGattConnected()) recoverRememberedConnection("firmware-update",true);
+      }
+    });
+    cancel.addEventListener("click",()=>{
+      firmwareUpdater.cancel();cancel.disabled=true;status.textContent="Cancelling transfer…";
+    });
+  }
+
   async function registerServiceWorker() {
     if (!("serviceWorker" in navigator)) return;
 
@@ -2484,7 +2566,7 @@ const APP_VERSION = "5.5.1";
       }
     });
     ui.runQueueButton.addEventListener("click", function () {
-      if (recordingConfirmed || finalizing || appState === "starting") {
+      if (firmwareBusy || recordingConfirmed || finalizing || appState === "starting") {
         toast("Stop and save before running processing jobs.");return;
       }
       processor?.retry();
@@ -2512,6 +2594,7 @@ const APP_VERSION = "5.5.1";
     ui.stopButton.addEventListener("click", stopRecording);
     ui.settingsButton.addEventListener("click", openSettings);
     ui.chooseDeviceButton.addEventListener("click", function () {
+      if (firmwareBusy) return;
       if (recordingConfirmed || finalizing || appState === "starting" || appState === "stopping") {
         toast("Stop and save this recording before switching devices.", "error");
         return;
@@ -2628,7 +2711,7 @@ const APP_VERSION = "5.5.1";
     document.addEventListener("visibilitychange", function () {
       if (
         document.visibilityState === "visible" &&
-        recordingConfirmed &&
+        (recordingConfirmed || firmwareBusy) &&
         settings.wakeLock
       ) {
         acquireWakeLock();
@@ -2636,7 +2719,7 @@ const APP_VERSION = "5.5.1";
     });
 
     window.addEventListener("beforeunload", function (event) {
-      if (recordingConfirmed || finalizing || unsavedAudio) {
+      if (firmwareBusy || recordingConfirmed || finalizing || unsavedAudio) {
         event.preventDefault();
         event.returnValue = "";
       }
@@ -2706,12 +2789,13 @@ const APP_VERSION = "5.5.1";
     const recovered = await journal.recover();
     ui.appVersion.textContent = "PWA " + APP_VERSION;
     loadSettings();
-    processor = new globalThis.DKFIFOProcessor(journal, {settings:()=>settings,onChange:function (message) {
+    processor = new globalThis.DKFIFOProcessor(journal, {settings:()=>settings,canRun:()=>!firmwareBusy,onChange:function (message) {
       ui.queueStatus.textContent=message;log("FIFO",message);
       if (message === "Queue complete") renderRecordings();
     }});
     if (recovered) log("Recovered interrupted recordings from stored chunks", {count:recovered});
     bindEvents();
+    bindFirmwareUpdate();
     bindReconnectRecovery();
     setupInstallPrompt();
     drawWaveform();

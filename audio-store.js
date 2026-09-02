@@ -262,22 +262,24 @@
 
   class FIFOProcessor {
     constructor(store,{settings,fetch:fetcher=root.fetch?.bind(root),locks=root.navigator?.locks,
-      onChange=()=>{},now=()=>Date.now()}={}){
+      onChange=()=>{},now=()=>Date.now(),canRun=()=>true}={}){
       this.store=store;this.settings=settings;this.fetch=fetcher;this.locks=locks;
       this.onChange=onChange;this.now=now;this.running=false;this.paused=true;this.controller=null;this.timer=null;
+      this.canRun=canRun;
     }
     pause(){this.paused=true;clearTimeout(this.timer);this.controller?.abort();this.onChange('Queue paused');}
-    async resume(){this.paused=false;return this.run();}
+    async resume(){if(!this.canRun())return;this.paused=false;return this.run();}
     async retry(){const head=await this.store.head();if(head)await this.store.patchJob(head.id,{state:'pending',attempts:0,nextAt:0,lastError:''});return this.resume();}
     async run(){
-      if(this.paused || this.running)return;
+      if(this.paused || this.running || !this.canRun())return;
       if(!this.locks){this.onChange('FIFO requires Web Locks. Use current Android Chrome.');return;}
       this.running=true;
       try {
         await this.locks.request('dk-pendant-processing',{ifAvailable:true},async lock=>{
           if(!lock){this.onChange('Another tab is processing the queue');return;}
-          while(!this.paused){
+          while(!this.paused && this.canRun()){
             const job=await this.store.head();
+            if(this.paused || !this.canRun())return;
             if(!job){this.onChange('Queue complete');return;}
             if(job.state==='failed'){this.onChange('Queue blocked at job '+job.id+': '+job.lastError);return;}
             const delay=job.nextAt-this.now();
@@ -287,6 +289,9 @@
             if(!url){this.onChange('Queue waiting: configure '+(job.kind==='transcribe'?'transcription':'LLM')+' endpoint');return;}
             if(new URL(url).protocol!=='https:')throw new Error('Processing endpoints must use HTTPS');
             await this.store.patchJob(job.id,{state:'running',startedAt:this.now()});
+            if(this.paused || !this.canRun()){
+              await this.store.patchJob(job.id,{state:'pending'});return;
+            }
             this.onChange('Job '+job.id+' · '+job.kind+' · segment '+(job.segmentIndex+1));
             try {
               const output=await this.process(job,config,url);

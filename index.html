@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=5.5.1">
+  <link rel="stylesheet" href="styles.css?v=5.6.0">
 </head>
 <body data-state="disconnected">
   <a class="skip-link" href="#capture">Skip to recorder</a>
@@ -39,7 +39,7 @@
 
   <div class="app-shell">
     <header class="topbar">
-      <a class="brand" href="#capture" aria-label="synap"><img class="brand-logo" src="logo.webp?v=5.5.1" width="800" height="216" alt="synap"></a>
+      <a class="brand" href="#capture" aria-label="synap"><img class="brand-logo" src="logo.webp?v=5.6.0" width="800" height="216" alt="synap"></a>
       <div class="top-actions">
         <button id="connectButton" class="connection-pill" type="button">
           <span id="connectionBadge" class="status-badge status-offline"><span class="status-dot" aria-hidden="true"></span><span id="connectionText" role="status" aria-live="polite">Not connected</span></span>
@@ -128,7 +128,7 @@
         <pre id="diagnosticsLog" class="diagnostics-log"></pre>
       </details>
     </main>
-    <footer><span>Designed for presence.</span><span id="appVersion">PWA 5.5.1</span><span>PROTOCOL 02</span></footer>
+    <footer><span>Designed for presence.</span><span id="appVersion">PWA 5.6.0</span><span>PROTOCOL 02</span></footer>
   </div>
 
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
@@ -143,6 +143,16 @@
         <p class="settings-note">Previously authorised devices reconnect automatically when your browser supports it. Bluetooth cannot stay connected through a closed browser or an Android suspension.</p>
         <div class="settings-actions"><button id="chooseDeviceButton" class="button button-secondary button-small" type="button">Choose another pendant</button><button id="recoveryButton" class="button button-secondary button-small" type="button">Download unsaved audio</button><button id="retrySaveButton" class="button button-secondary button-small" type="button">Retry local save</button></div>
       </div>
+      <div class="settings-section ota-section"><h3>Pendant firmware</h3>
+        <p class="settings-note">Update over Bluetooth—no Wi-Fi needed. The first OTA-enabled firmware must be installed by USB. Keep the pendant powered and this app in the foreground.</p>
+        <button id="otaCheck" class="button button-secondary button-small" type="button">Check pendant</button>
+        <label class="field"><span>Trusted ESP32-S3 application .bin</span><input id="otaFile" type="file" accept=".bin"><small>Application image only. Do not select a merged/full-flash image, bootloader or partition table.</small></label>
+        <label class="toggle-row"><span><strong>Ready for a safe update</strong><small>I trust this Synap firmware, have stopped recording, and have stable power. I will hold BOOT for 2 seconds, then release, to unlock. Do not hold BOOT during reboot.</small></span><input id="otaConfirm" type="checkbox"></label>
+        <div class="settings-actions"><button id="otaStart" class="button button-primary button-small" type="button">Update firmware</button><button id="otaCancel" class="button button-secondary button-small" type="button" disabled>Cancel transfer</button></div>
+        <progress id="otaProgress" value="0" max="1" aria-label="Firmware transfer progress"></progress>
+        <p id="otaStatus" class="settings-note" role="status" aria-live="polite">Connect your pendant, then check its firmware and available update space.</p>
+        <p class="settings-note">SHA-256 checks transfer integrity, not the publisher's identity. Interrupted transfers restart from zero. Processing stays paused after an update; resume it from Queue.</p>
+      </div>
       <div class="settings-section"><h3>Optional transcription</h3>
         <p class="settings-note">Run FIFO uploads audio to your transcription endpoint, then sends text to your LLM endpoint. Use trusted servers you control. Provider API keys belong on those servers.</p>
         <label class="field"><span>HTTPS endpoint</span><input id="endpointInput" type="url" inputmode="url" placeholder="https://your-server.example/transcribe"><small>Multipart field <code>audio</code>; response: <code>text</code> or <code>transcript</code>.</small></label>
@@ -153,7 +163,8 @@
       <div class="modal-actions"><button class="button button-primary" type="submit">Save preferences <svg><use href="#i-check"/></svg></button></div>
     </form>
   </dialog>
-  <script src="audio-store.js?v=5.5.1" defer></script>
-  <script src="app.js?v=5.5.1" defer></script>
+  <script src="audio-store.js?v=5.6.0" defer></script>
+  <script src="ota.js?v=5.6.0" defer></script>
+  <script src="app.js?v=5.6.0" defer></script>
 </body>
 </html>

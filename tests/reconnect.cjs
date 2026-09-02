@@ -10,7 +10,7 @@ const recoverySource = app.slice(app.indexOf('  async function restoreKnownPenda
 const connectSource = app.slice(app.indexOf('  async function connectPendant('), app.indexOf('  async function disconnectPendant('));
 function context(devices = []) {
   const saved = new Map(), calls = [], listeners = {}, control = {checked: true, addEventListener(t, f) {listeners.preference = f;}};
-  const c = {console, Boolean, Number, String, Date, Error, Promise,
+  const c = {firmwareBusy:false,console, Boolean, Number, String, Date, Error, Promise,
     navigator: {bluetooth: {getDevices: async () => devices, addEventListener(t, f) {listeners[t] = f;}}},
     document: {visibilityState: 'visible', getElementById: id => id === 'autoReconnectInput' ? control : {set textContent(v) {calls.push(['status', v]);}},
       addEventListener(t, f) {listeners[t] = f;}},
@@ -38,7 +38,7 @@ async function recoveryTests() {
   t = context([pendant]);await t.c.recoverRememberedConnection('page-load',true);
   assert.equal(t.calls.filter(x=>x[0]==='connect').length,1);assert.equal(t.c.reloadRecoveryRunning,false);
   await t.c.recoverRememberedConnection('foreground',false);assert.equal(t.calls.filter(x=>x[0]==='connect').length,1,'foreground cooldown');
-  for(const flag of ['manualDisconnect','connectInProgress','finalizing','reloadRecoveryRunning']){
+  for(const flag of ['manualDisconnect','connectInProgress','finalizing','reloadRecoveryRunning','firmwareBusy']){
     t=context([pendant]);t.c[flag]=true;await t.c.recoverRememberedConnection('page-load',true);assert(!t.calls.some(x=>x[0]==='connect'),flag);
   }
   t=context([pendant]);t.c.currentRecordingId='active';await t.c.recoverRememberedConnection('foreground',true);assert(!t.calls.some(x=>x[0]==='connect'));
@@ -89,10 +89,11 @@ async function workerTests(){
   vm.runInNewContext(fs.readFileSync(path.join(root,'sw.js'),'utf8'),ctx);handlers.install({waitUntil:p=>job=p});await job;
   installed.forEach(p=>assert(fs.existsSync(path.join(root,p.split('?')[0]))));
   async function fetch(url,mode='navigate',method='GET'){let result;handlers.fetch({request:{url,mode,method},respondWith:p=>result=p});return result;}
-  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=5.5.1');
-  assert.equal(await fetch(scope+'app.js?v=5.5.1','cors'),'./app.js?v=5.5.1');
+  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=5.6.0');
+  assert.equal(await fetch(scope+'app.js?v=5.6.0','cors'),'./app.js?v=5.6.0');
+  assert.equal(await fetch(scope+'ota.js?v=5.6.0','cors'),'./ota.js?v=5.6.0');
   assert.equal(await fetch(scope+'api','cors','POST'),undefined);
-  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'5.5.1');
+  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'5.6.0');
 }
 (async()=>{
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);

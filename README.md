@@ -2,16 +2,16 @@
 
 Stay present. Keep the memory
 
-Release 5.5.1. This repository contains only the browser application.
+Release 5.6.0. This repository contains only the browser application.
 ESP32-S3 firmware is maintained separately and must not be committed here.
 
 ## Deploy
 
 Serve the repository root over HTTPS (for example, GitHub Pages). No npm
-installation, build step, or runtime framework is required. Upload all ten
+installation, build step, or runtime framework is required. Upload all eleven
 application assets together: `index.html`, `styles.css`, `app.js`,
-`audio-store.js`, `sw.js`, `manifest.webmanifest`, `logo.webp`, and the three icon files.
-Verify the footer shows 5.5.1. Do not clear site data to update the app:
+`audio-store.js`, `ota.js`, `sw.js`, `manifest.webmanifest`, `logo.webp`, and the three icon files.
+Verify the footer shows 5.6.0. Do not clear site data to update the app:
 recordings and pending processing jobs are stored there.
 
 Use a browser with Web Bluetooth, IndexedDB, and Web Locks support. Keep the
@@ -31,14 +31,81 @@ and collapsing a recording pauses playback. Insights can reveal older recordings
 Settings opens as a bottom sheet on small
 screens. Inputs use readable 16 px text, controls have large touch targets,
 safe-area insets are respected, and reduced-motion preferences are supported.
-This release does not change BLE commands, audio storage, or FIFO processing.
+This release preserves audio BLE commands and the audio storage schema. It adds
+an optional BLE firmware updater and prevents FIFO work from starting during OTA.
 Branding adds one optimized logo asset and no runtime dependencies. Existing
 Bluetooth device names and storage identifiers are preserved for compatibility.
-The service worker serves a
-complete precached release; a persistent update notice asks you to finish your
-work and reload when a newer worker takes control. It never reloads automatically
-or clears IndexedDB. Compare the footer version on both devices. Recordings are
-device-local; this release does not add cloud sync between laptop and phone.
+The service worker serves a complete precached release; an update notice asks
+you to finish your work and reload when a newer worker takes control. It never
+reloads automatically or clears IndexedDB. Compare the footer version on both
+devices. Recordings are device-local; this release does not add cloud sync.
+
+## Firmware updates over BLE
+
+Settings → Pendant firmware → Check pendant. Firmware without the OTA
+characteristics shows an initial-USB-install message and still records normally.
+Use the separately supplied Synap ESP32-S3 firmware 5.1.0 (build 501) initially.
+No firmware files belong in this PWA repository.
+
+1. Install the OTA-enabled firmware once by USB, using a partition scheme with
+   `ota_0`, `ota_1`, and `otadata`. A later BLE update cannot change the partition
+   table or bootloader. The application image must fit the displayed inactive slot.
+2. Compile/export a trusted Synap **application .bin** for the same physical board,
+   microphone configuration, flash and PSRAM settings. Do not use a merged image.
+3. Connect in the PWA and stop/save recording. Check pendant, select the .bin,
+   confirm stable power and trusted firmware, then hold BOOT/GPIO0 for two seconds
+   and release while connected and idle. Update must begin within 90 seconds.
+4. Click Update firmware. The app hashes the local file and sends it directly over
+   BLE, sequentially, waiting for the device's written-byte ACK for each chunk.
+   The file is not sent to a web server or saved to IndexedDB.
+5. The ESP checks SHA-256, the full ESP image, and the Synap compatibility marker,
+   then selects the new application slot and reboots. Reconnect and Check pendant
+   to read its running build. Resume processing from Queue when ready.
+
+Keep the app visible and the pendant close and powered throughout (transfers may
+take several minutes). Cancel is available before final commit. A dropped link,
+reload or 45-second stalled transfer aborts an uncommitted session; reconnect,
+unlock and restart from byte zero. An ACK lost during commit is reported as
+uncertain, not as a successful or cancelled installation: reconnect and verify.
+Normal remembered-device reconnect remains subject to browser support.
+
+Security: GPIO0 physical approval is scoped to the current BLE connection.
+SHA-256 and the product marker detect corruption/compatibility mistakes; neither
+authenticates the publisher. This build does not provision signing keys, enforce
+BLE bonding, burn eFuses, or enable secure boot. Install only trusted local files.
+Cryptographically signed releases should precede unattended/distributed updates.
+Keeping the old slot does not guarantee recovery from a valid but broken new app:
+automatic boot rollback requires a rollback-enabled bootloader; otherwise use USB.
+
+### OTA protocol 1
+
+The existing pendant service UUID is reused, so no new permission scope is needed.
+Write-with-response: `4fa12348-0000-1000-8000-00805f9b34fb`.
+Read/notify status: `4fa12349-0000-1000-8000-00805f9b34fb`.
+All integer fields are little-endian. Every command includes a nonzero random
+32-bit transfer ID immediately after its command byte.
+
+| Command | Byte layout after command + transfer ID |
+| --- | --- |
+| 1 Begin | image size u32, SHA-256 32 bytes |
+| 2 Data | byte offset u32, data (up to advertised maxData) |
+| 3 Verify | none; allowed only after exactly image size bytes |
+| 4 Commit | none; allowed only after successful Verify |
+| 5 Abort | none; not accepted after Commit |
+
+Status is 20 bytes: magic `D7`, protocol `01`, state u8, error u8, transfer ID u32,
+next offset u32, inactive slot size u32, maxData u16, firmware build u16. States:
+0 unavailable, 1 locked, 2 armed, 3 receiving, 4 verified, 5 committed, 6 failed.
+The ESP caps writes at 182 bytes and requires at least 36 data bytes per packet;
+the app uses the advertised size. Notifications have a read-back fallback.
+Only an identical repeat of the immediately preceding data packet is idempotent.
+Old sessions and out-of-order/corrupt duplicate data cannot advance the transfer.
+
+### Verification
+
+Run `node tests/reconnect.cjs`, `node tests/ota.cjs`, and `node tests/ota-ui.cjs`.
+These are mock transport/integration tests, not a physical BLE or firmware compile
+claim. Firmware protocol tests and the board-test checklist ship separately.
 
 ## Daily timeline and insights
 
