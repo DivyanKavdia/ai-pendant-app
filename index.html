@@ -10,8 +10,8 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <script src="theme.js?v=1.0.0-color1"></script>
-  <link rel="stylesheet" href="styles.css?v=1.0.0-color1">
+  <script src="theme.js?v=1.0.0-library1"></script>
+  <link rel="stylesheet" href="styles.css?v=1.0.0-library1">
 </head>
 <body data-state="disconnected">
   <a class="skip-link" href="#capture">Skip to recorder</a>
@@ -105,11 +105,11 @@
         <div id="insightsList" class="insights-list"></div>
       </section>
 
-      <section id="library" class="section-card recordings-section">
-        <div class="section-heading"><div><p class="eyebrow">YOUR LIBRARY</p><h2>Saved moments <span id="recordingsCount" class="count-badge">0</span></h2></div><button id="clearRecordingsButton" class="text-button" type="button">Clear all</button></div>
+      <section id="library" class="section-card recordings-section" aria-labelledby="libraryTitle">
+        <div class="section-heading"><h2 id="libraryTitle">Library <span id="recordingsCount" class="count-badge">0</span></h2><button id="clearRecordingsButton" class="text-button library-clear" type="button" aria-label="Delete all recordings from this browser" title="Delete all recordings from this browser"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/></svg></button></div>
         <div id="emptyRecordings" class="empty-state">
           <div class="empty-art" aria-hidden="true"><span></span><svg><use href="#i-wave"/></svg><span></span></div>
-          <h3>No recordings yet</h3><p>Tap Record to start.</p>
+          <p>No moments saved for this day.</p>
         </div>
         <div id="recordingsList" class="recordings-list"></div>
         <div id="libraryPagination" class="library-pagination" hidden>
@@ -181,9 +181,9 @@
     </form>
   </dialog>
   <script src="audio-store.js?v=1.0.0-device1" defer></script>
-  <script src="ota.js?v=1.0.0-color1" defer></script>
+  <script src="ota.js?v=1.0.0-library1" defer></script>
   <script src="releases.js?v=1.0.0-idota1" defer></script>
   <script src="device-identity.js?v=1.0.0-device1" defer></script>
-  <script src="app.js?v=1.0.0-color1" defer></script>
+  <script src="app.js?v=1.0.0-library1" defer></script>
 </body>
 </html>

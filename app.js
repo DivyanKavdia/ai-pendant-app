@@ -6,7 +6,7 @@
   // -------------------------------------------------------------------------
 
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-color1";
+const APP_REVISION = "1.0.0-library1";
   let deviceAssociation = null;
   let deviceIdentityMessage = "Not connected";
   const PROTOCOL_VERSION = 0x02;
@@ -2091,8 +2091,8 @@ const APP_REVISION = "1.0.0-color1";
       }
     });
     const remaining = libraryRecordings.length - count;
-    ui.libraryPagination.hidden = libraryRecordings.length === 0;
-    ui.libraryCountLabel.textContent = "Showing " + count + " of " + libraryRecordings.length + " recordings for this day";
+    ui.libraryPagination.hidden = libraryRecordings.length <= LIBRARY_PAGE_SIZE;
+    ui.libraryCountLabel.textContent = count + " of " + libraryRecordings.length;
     ui.showMoreRecordingsButton.hidden = remaining <= 0;
     ui.showMoreRecordingsButton.textContent = "Show " + Math.min(LIBRARY_PAGE_SIZE, remaining) + " more";
     ui.showLessRecordingsButton.hidden = count <= LIBRARY_PAGE_SIZE;
@@ -2128,10 +2128,13 @@ const APP_REVISION = "1.0.0-color1";
     meta.textContent = new Date(recording.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " · " + formatDuration(recording.durationMs);
     const chevron = document.createElement("span");
     chevron.className = "recording-row-chevron";
-    chevron.textContent = "+";
+    chevron.appendChild(recordingIcon("i-chevron"));
     chevron.setAttribute("aria-hidden", "true");
     info.append(name, meta);
-    summary.append(info, chevron);
+    const badge = document.createElement("span");
+    badge.className = "recording-row-icon";
+    badge.appendChild(recordingIcon("i-wave"));
+    summary.append(badge, info, chevron);
     card.appendChild(summary);
     let loaded = false;
     card.addEventListener("toggle", function () {
@@ -2206,7 +2209,7 @@ const APP_REVISION = "1.0.0-color1";
     );
 
     const transcribeButton =
-      makeActionButton("Run FIFO", async function () {
+      makeActionButton("Process queue", async function () {
         if (firmwareBusy || recordingConfirmed || finalizing || appState === "starting") {
           toast("Stop and save before processing.");return;
         }
@@ -2229,7 +2232,7 @@ const APP_REVISION = "1.0.0-color1";
 
     const notes = document.createElement("textarea");
     notes.className = "recording-notes";
-    notes.placeholder = "Add notes for this recording…";
+    notes.placeholder = "Add a note…";
     notes.value = recording.notes || "";
     notes.setAttribute("aria-label", "Recording notes");
     bindDebouncedSave(notes, async function () {
@@ -2237,11 +2240,9 @@ const APP_REVISION = "1.0.0-color1";
       await updateRecordingFields(recording.id, { notes: recording.notes });
     });
 
-    card.appendChild(titleRow);
-    card.appendChild(meta);
     card.appendChild(audio);
     card.appendChild(actions);
-    card.appendChild(notes);
+    card.appendChild(recordingDisclosure("Notes", notes));
 
     if (recording.transcript) {
       const transcript = document.createElement("textarea");
@@ -2252,17 +2253,37 @@ const APP_REVISION = "1.0.0-color1";
         recording.transcript = transcript.value;
         await updateRecordingFields(recording.id, { transcript: recording.transcript });
       });
-      card.appendChild(transcript);
+      card.appendChild(recordingDisclosure("Transcript", transcript));
     }
 
     if (recording.summary) {
       const summary = document.createElement("p");
       summary.className = "recording-summary";
       summary.textContent = recording.summary;
-      card.appendChild(summary);
+      card.appendChild(recordingDisclosure("Summary", summary));
     }
 
+    card.appendChild(recordingDisclosure("Edit name & details", titleRow, meta));
     return card;
+  }
+
+  function recordingIcon(id) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("aria-hidden", "true");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", "#" + id);
+    svg.appendChild(use);
+    return svg;
+  }
+
+  function recordingDisclosure(label, ...contents) {
+    const details = document.createElement("details");
+    details.className = "recording-disclosure";
+    const summary = document.createElement("summary");
+    summary.textContent = label;
+    summary.appendChild(recordingIcon("i-chevron"));
+    details.append(summary, ...contents);
+    return details;
   }
 
   function makeActionButton(label, handler, danger) {
