@@ -65,7 +65,7 @@ async function connect({id=A, local=storage(), stale=false, mismatch=false}={}) 
   vm.createContext(c);vm.runInContext(rememberSource+connectSource,c);await c.connectPendant();return c;
 }
 test('actual connect handler enrolls only an acknowledged connection; missing or failed identity is never marked complete', async () => {
-  let c=await connect();assert.equal(c.state,'idle');assert.equal(c.deviceAssociation.deviceId,A);assert.match(c.deviceIdentityMessage,/Setup complete/);
+  let c=await connect();assert.equal(c.state,'idle');assert.equal(c.deviceAssociation.deviceId,A);assert.match(c.deviceIdentityMessage,/Connected/);
   c=await connect({id:null});assert.equal(c.state,'idle');assert.equal(c.deviceAssociation,null);assert.match(c.deviceIdentityMessage,/no permanent/);
   c=await connect({id:'bad'});assert.equal(c.state,'idle');assert.equal(c.deviceAssociation,null);assert.match(c.deviceIdentityMessage,/could not be read/);
   const local=storage();c=await connect({local,stale:true});assert.equal(c.state,'disconnected');assert.equal(local.getItem(devices.KEY),null);

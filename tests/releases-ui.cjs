@@ -13,7 +13,9 @@ function setup(options={}){
     async check(){calls.push('check');return{protocol:options.legacy?2:3,deviceId:options.wrongIdentity?OTHER:c.deviceAssociation?.deviceId,state:options.resumeState?3:1,session:options.resumeState?55:0,offset:options.resumeState?500:0,build,capacity:2048,maxData:503};}
     async update(blob,id){assert.equal(id,ID);assert(c.firmwareBusy);calls.push('flash');
       if(options.pause){connected=false;const e=Error('paused');e.resumable=true;throw e;}
+      this.io.progress('Updating · 50%',0.5,false);assert.equal(node('otaProgress').hidden,false);assert.equal(node('otaCancel').disabled,false);
       if(options.flashFail)throw Error('Flash failed');
+      this.io.progress('Restarting pendant…',1,true);assert(node('otaCancel').disabled);
       this.committing=true;connected=false;
       if(options.commitDrop)throw Error('Lost acknowledgement');return{committed:true};}
   }
@@ -25,7 +27,7 @@ function setup(options={}){
       if(options.switchDownload)c.deviceAssociation={deviceId:OTHER};return{};}};
   const c={deviceAssociation:options.noIdentity?null:{deviceId:ID},console,Promise,Error,TextDecoder,AbortController,Date:{now:()=>clock},globalThis:{SynapOTA:{Client,MIGRATION_MESSAGE:'Install by USB once'},SynapReleases:releases},
     document:{getElementById:node,visibilityState:'visible',addEventListener(t,f){events[t]=f;}},window:{confirm:message=>{assert(message.includes(ID));return !options.decline;}},
-    ui:{chooseDeviceButton:node('choose'),runQueueButton:node('queue')},localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
+    ui:{chooseDeviceButton:node('choose'),runQueueButton:node('queue'),queueStatus:node('queueStatus')},localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
     firmwareUpdater:null,firmwareBusy:false,checkFirmwareRelease:null,connectionEpoch:0,bluetoothDevice:{id:'device',gatt:{disconnect:()=>connected=false}},
     isGattConnected:()=>connected,connectInProgress:false,recordingConfirmed:false,finalizing:false,currentRecordingId:null,openingCapture:null,unsavedAudio:false,
     appState:'idle',deviceStatus:{error:0},SERVICE_UUID:'service',queueGattOperation:f=>f(),
@@ -48,6 +50,7 @@ function setup(options={}){
   await t.click('firmwareUpdateButton');
   assert(t.calls.includes('flash'));assert(t.calls.includes('reconnect'));assert.match(t.node('otaStatus').textContent,/Update complete/);assert.equal(t.storage.size,0);assert(!t.c.firmwareBusy);
   t=setup({commitDrop:true});await t.click('otaReleaseCheck');await t.click('otaLatest');assert.match(t.node('otaStatus').textContent,/Update complete/);
+  t=setup({flashFail:true});await t.click('otaReleaseCheck');await t.click('otaLatest');assert.match(t.node('otaStatus').textContent,/Flash failed/);assert(!t.c.firmwareBusy);assert(t.node('otaCancel').hidden);assert(t.node('otaProgress').hidden);assert(t.calls.includes('release'));
   for(const options of [{decline:true},{noIdentity:true},{wrongIdentity:true},{legacy:true},{badDownload:true},{disconnectDownload:true},{switchDownload:true}]){
     t=setup(options);await t.click('otaReleaseCheck');await t.click('otaLatest');assert(!t.calls.includes('flash'),JSON.stringify(options));assert(!t.c.firmwareBusy);
   }

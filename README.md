@@ -56,20 +56,15 @@ devices. Recordings are device-local; this release does not add cloud sync.
 
 ## Firmware updates over BLE
 
-Settings → Pendant firmware → Check pendant shows the device ID and updater build.
-Protocol 3 is required for updates. Old protocol-1/2 firmware remains usable for audio but
-must be upgraded once by a developer/factory USB flash. This app does not ask for keys or
-attempt to bypass an older firmware's authorization.
+Settings → Device update checks for a verified release. When one is available, tap Update now.
+Progress and Cancel appear only during an update; interrupted transfers offer Continue update.
+The app verifies the pendant's permanent identity before transfer and checks the installed build
+on reconnect. The only customer update flow is OTA from the verified release feed; local file
+selection, developer controls and owner-key input have been removed.
 
-For normal updates, use Update pendant / Install GitHub update. No file selection or
-authorization enrollment is required. The connected device ID must match the ID retained
-during setup, and the firmware receives that ID in BEGIN before any image data.
-
-For the developer manual fallback, select a trusted protocol-3 application .bin for the same
-board, flash/PSRAM/partition and microphone configuration, stop/save recording, approve and
-click Update firmware. Never select merged, bootloader or partition images. Manual uploads
-are checked for chip/header/slot/protocol compatibility but do not enforce increasing builds.
-The GitHub path additionally enforces exact target/build identity and a newer build.
+Settings uses a compact connection card, recording switches, and collapsed AI processing and
+audio recovery sections. Device associations remain stored internally. Diagnostic details stay
+in the diagnostic log rather than the normal settings flow. No recording storage is cleared.
 
 Transfer confirms each chunk with a Bluetooth write response and a written-byte ACK before sending
 the next offset, with a SHA-256 check and read fallback for lost notifications. This also works with
@@ -150,7 +145,7 @@ The last successfully connected device ID is remembered locally. On reload,
 the app uses `navigator.bluetooth.getDevices()` when available to recover that
 permitted device, reconnect GATT, and subscribe again to audio and status.
 For older installations without a saved ID, exactly one permitted device named
-`dk-pendant` is accepted. Ambiguous or revoked devices require manual selection.
+`synap` or `dk-pendant` is accepted. Ambiguous or revoked devices require manual selection.
 After a failed automatic connection, up to three retries are scheduled. A manual
 retry then offers Reselect pendant, opening the chooser directly in the user's
 click so the same pendant can be selected again without visiting Settings.

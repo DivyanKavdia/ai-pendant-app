@@ -6,9 +6,9 @@
   // -------------------------------------------------------------------------
 
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-otaack2";
+const APP_REVISION = "1.0.0-settings2";
   let deviceAssociation = null;
-  let deviceIdentityMessage = "Connect a pendant to set it up. No update key is needed.";
+  let deviceIdentityMessage = "Not connected";
   const PROTOCOL_VERSION = 0x02;
 
   const SERVICE_UUID =
@@ -301,7 +301,7 @@ const APP_REVISION = "1.0.0-otaack2";
       ui.connectionText.textContent = "Firmware update";
       ui.connectButtonLabel.textContent = "Updating…";
       ui.recorderTitle.textContent = "Updating your pendant.";
-      ui.recorderSubtitle.textContent = "Keep this app open and the pendant powered. Progress is in Settings.";
+      ui.recorderSubtitle.textContent = "Keep this app open until the update finishes.";
       ui.levelText.textContent = "Recording paused during update";
       return;
     }
@@ -327,7 +327,7 @@ const APP_REVISION = "1.0.0-otaack2";
       ui.recorderTitle.textContent = "Ready when you are.";
       ui.recorderSubtitle.textContent =
         message ||
-        "Connect your pendant to capture private, local audio.";
+        "Connect to start recording.";
       ui.levelText.textContent = "Waiting for pendant";
       return;
     }
@@ -339,7 +339,7 @@ const APP_REVISION = "1.0.0-otaack2";
       ui.connectButton.disabled = true;
       ui.recorderTitle.textContent = "Finding your pendant…";
       ui.recorderSubtitle.textContent =
-        "Keep the pendant powered on and close to this phone.";
+        "Keep your pendant nearby.";
       ui.levelText.textContent = "Opening Bluetooth connection";
       return;
     }
@@ -352,7 +352,7 @@ const APP_REVISION = "1.0.0-otaack2";
       ui.recorderTitle.textContent = "Ready to capture.";
       ui.recorderSubtitle.textContent =
         message ||
-        "Your pendant is connected. Start when the conversation begins.";
+        "";
       ui.levelText.textContent = "Pendant ready";
       return;
     }
@@ -365,7 +365,7 @@ const APP_REVISION = "1.0.0-otaack2";
       ui.stopButton.disabled = false;
       ui.recorderTitle.textContent = "Starting stream…";
       ui.recorderSubtitle.textContent =
-        "Negotiating audio transport with the pendant.";
+        "";
       ui.levelText.textContent = "Waiting for first audio frame";
       return;
     }
@@ -378,8 +378,8 @@ const APP_REVISION = "1.0.0-otaack2";
       ui.stopButton.disabled = false;
       ui.recorderTitle.textContent = "Capturing the moment.";
       ui.recorderSubtitle.textContent =
-        "Capturing audio from your pendant. Keep this app open.";
-      ui.levelText.textContent = "Live PCM audio";
+        "Keep this app open.";
+      ui.levelText.textContent = "Recording";
       return;
     }
 
@@ -391,8 +391,8 @@ const APP_REVISION = "1.0.0-otaack2";
       ui.recorderTitle.textContent = "Finishing recording…";
       ui.recorderSubtitle.textContent =
         nextState === "saving"
-          ? "Saving the completed WAV on this device."
-          : "Waiting for the pendant to acknowledge Stop.";
+          ? "Saving audio…"
+          : "Finishing…";
       ui.levelText.textContent = "Finalising locally";
       return;
     }
@@ -515,7 +515,7 @@ const APP_REVISION = "1.0.0-otaack2";
       try { rememberedId = localStorage.getItem("dk-pendant-device-id"); }
       catch (_) { /* Storage restrictions must not block manual Bluetooth use. */ }
       const namedPendants = devices.filter(function (device) {
-        return device.name === "dk-pendant";
+        return device.name === "synap" || device.name === "dk-pendant";
       });
       const pendant = rememberedId
         ? devices.find(function (device) { return device.id === rememberedId; })
@@ -542,8 +542,7 @@ const APP_REVISION = "1.0.0-otaack2";
   }
 
   function setReconnectCapability(message) {
-    const status = document.getElementById("reconnectCapability");
-    if (status) status.textContent = message;
+    log("Reconnect", message);
   }
 
   function autoReconnectEnabled() {
@@ -868,7 +867,7 @@ const APP_REVISION = "1.0.0-otaack2";
 
   function cleanupCharacteristics() {
     deviceAssociation = null;
-    deviceIdentityMessage = "Connect a pendant to identify it. Saved associations remain in this browser.";
+    deviceIdentityMessage = "Not connected";
     firmwareUpdater?.reset();
     connectionEpoch += 1;
     gattQueue = Promise.resolve();
@@ -1245,7 +1244,7 @@ const APP_REVISION = "1.0.0-otaack2";
         toast(saved?.durationMs ? "Recording saved; processing jobs queued" : "No complete frames received; partial chunks retained");
         currentRecordingId = null;unsavedAudio = false;
         resetCollector();await renderRecordings();
-        ui.queueStatus.textContent = "Saved locally. FIFO jobs ready; configure endpoints and press Run / retry.";
+        ui.queueStatus.textContent = "Ready to process";
         if (settings.autoProcess) processor?.resume();
         return;
       }
@@ -2383,7 +2382,7 @@ const APP_REVISION = "1.0.0-otaack2";
     if (!id) return;
     try {
       deviceAssociation = new globalThis.SynapDevices.Registry(localStorage).associate(id, device);
-      deviceIdentityMessage = "Setup complete. This pendant is remembered in this browser.";
+      deviceIdentityMessage = "Connected";
     } catch (error) {
       if (error.code === "DEVICE_ID_CHANGED") throw error;
       deviceAssociation = { deviceId: id };
@@ -2395,24 +2394,21 @@ const APP_REVISION = "1.0.0-otaack2";
   function renderDeviceSetup() {
     const status = document.getElementById("setupDeviceStatus");
     if (!status) return;
-    status.textContent = deviceIdentityMessage;
-    document.getElementById("setupDeviceId").textContent = deviceAssociation?.deviceId || "Not identified";
-    const list = document.getElementById("setupSavedDevices");
-    list.replaceChildren();
-    try {
-      const saved = new globalThis.SynapDevices.Registry(localStorage).load();
-      document.getElementById("setupInstallationId").textContent = saved.installationId || "Created when you connect a supported pendant";
-      for (const device of saved.devices) {
-        const item = document.createElement("li");
-        item.textContent = device.name + " · " + device.deviceId +
-          (isGattConnected() && deviceAssociation?.deviceId === device.deviceId ? " · Connected" : " · Saved");
-        list.appendChild(item);
+    const connected = isGattConnected();
+    const states = {connecting:"Connecting…",starting:"Starting…",recording:"Recording",saving:"Saving…",stopping:"Saving…",updating:"Updating…",error:"Needs attention"};
+    status.textContent = states[appState] || (connected ? "Connected" : "Not connected");
+    status.dataset.connected = String(connected);
+    const connect = document.getElementById("setupConnect");
+    connect.hidden = connected;
+    connect.disabled = firmwareBusy || connectInProgress || appState === "unsupported";
+    ui.chooseDeviceButton.disabled = firmwareBusy || connectInProgress || recordingConfirmed || finalizing || !!currentRecordingId;
+    if (!connected && !firmwareBusy) {
+      const updateStatus = document.getElementById("otaStatus");
+      if (/^(Up to date|Update \d+ available|Checking|Connect to check)/.test(updateStatus.textContent)) {
+        updateStatus.textContent = "Connect to check";
+        document.getElementById("firmwareNotice").hidden = true;
       }
-      if (!saved.devices.length) {
-        const item = document.createElement("li"); item.textContent = "No devices saved yet."; list.appendChild(item);
-      }
-    } catch (_) {
-      document.getElementById("setupInstallationId").textContent = "Saved associations unavailable";
+      document.getElementById("otaLatest").hidden = true;
     }
   }
 
@@ -2427,13 +2423,9 @@ const APP_REVISION = "1.0.0-otaack2";
   }
 
   function bindFirmwareUpdate() {
-    const check = document.getElementById("otaCheck");
-    const file = document.getElementById("otaFile");
-    const start = document.getElementById("otaStart");
     const cancel = document.getElementById("otaCancel");
     const status = document.getElementById("otaStatus");
     const progress = document.getElementById("otaProgress");
-    const confirmation = document.getElementById("otaConfirm");
     const targetId = () => deviceAssociation?.deviceId || null;
     const requireTarget = info => {
       if(info.protocol!==3) throw Error(globalThis.SynapOTA.MIGRATION_MESSAGE);
@@ -2445,7 +2437,7 @@ const APP_REVISION = "1.0.0-otaack2";
       connected:isGattConnected, queue:queueGattOperation,
       getService:()=>queueGattOperation(()=>gattServer.getPrimaryService(SERVICE_UUID),"Find pendant service"),
       progress:(message,value,committing)=>{
-        status.textContent=message;progress.value=value;cancel.disabled=committing;
+        status.textContent=message;progress.value=value;progress.hidden=false;cancel.disabled=committing;
       }
     });
     const eligible = ()=>isGattConnected() && !connectInProgress && !recordingConfirmed &&
@@ -2453,49 +2445,14 @@ const APP_REVISION = "1.0.0-otaack2";
       !["starting","stopping","saving"].includes(appState);
     const lock = value=>{
       if (value) clearReconnectTimer(true);
-      firmwareBusy=value;check.disabled=value;file.disabled=value;confirmation.disabled=value;
-      start.disabled=value;cancel.disabled=true;ui.chooseDeviceButton.disabled=value;
+      firmwareBusy=value;cancel.disabled=true;cancel.hidden=!value;progress.hidden=!value;
+      ui.chooseDeviceButton.disabled=value;
       for (const id of ["otaLatest","otaReleaseCheck","firmwareUpdateButton"]) {
         const control=document.getElementById(id);if(control)control.disabled=value;
       }
       ui.runQueueButton.disabled=value;
       setAppState(isGattConnected() ? (deviceStatus.error ? "error" : "idle") : "disconnected");
     };
-    check.addEventListener("click",async()=>{
-      if (firmwareBusy || discoveryBusy) return;
-      if (!eligible()) { status.textContent="Connect the pendant, then stop and save any recording first.";return; }
-      lock(true);
-      try {
-        const info=await firmwareUpdater.check();
-        const id=requireTarget(info);
-        status.textContent=id+" · Firmware build "+info.build+" · OTA slot "+(info.capacity/1048576).toFixed(2)+" MB. "+
-          (info.state===0 ? "OTA unavailable: check the partition layout and BLE MTU." :
-            info.state===3 || info.state===4 ? `Update paused after ${Math.round(info.offset/1024)} KB. Choose Continue update within two minutes.` :
-            info.state===5 ? "Update committed. Wait for the pendant to reboot." :
-              "Device-ID updates enabled. No key or physical button press is needed.");
-      } catch(error) { status.textContent=friendlyError(error); }
-      finally { lock(false); }
-    });
-    start.addEventListener("click",async()=>{
-      if (firmwareBusy || discoveryBusy) return;
-      if (!eligible()) { status.textContent="Connect the pendant, then stop and save any recording first.";return; }
-      if (!file.files[0] || !confirmation.checked) { status.textContent="Select a trusted application .bin and confirm the safety checklist.";return; }
-      lock(true);processor?.pause();progress.value=0;
-      try {
-        const id=requireTarget(await firmwareUpdater.check());
-        await acquireWakeLock();
-        const result=await firmwareUpdater.update(file.files[0],id);
-        log("Firmware verified and boot partition committed",{sha256:result.sha256});
-        status.textContent="Firmware verified. Pendant is rebooting; reconnect, then Check pendant to read the running build. Processing remains paused.";
-        // Keep recording disabled until the expected reboot or a bounded fallback.
-        const deadline=Date.now()+8000;
-        while(isGattConnected() && Date.now()<deadline) await delay(100);
-      } catch(error) { status.textContent=friendlyError(error)+" Processing remains paused.";log("Firmware update",status.textContent); }
-      finally {
-        firmwareUpdater.reset();confirmation.checked=false;await releaseWakeLock();lock(false);
-        if (!isGattConnected()) recoverRememberedConnection("firmware-update",true);
-      }
-    });
     cancel.addEventListener("click",()=>{
       firmwareUpdater.cancel();cancel.disabled=true;status.textContent="Cancelling transfer…";
     });
@@ -2521,9 +2478,10 @@ const APP_REVISION = "1.0.0-otaack2";
       } catch(error){if(error.name==='NotFoundError')return null;throw error;}
     }
     async function inspect(force=false) {
+      if(force && !eligible()) {status.textContent=isGattConnected()?"Stop and save before updating.":"Connect to check";return;}
       if(discoveryBusy||firmwareBusy||!eligible()||document.visibilityState==='hidden'||(!force&&Date.now()-lastCheck<60000))return;
-      discoveryBusy=true;lastCheck=Date.now();const epoch=connectionEpoch;
-      const discoveryControls=[check,start,latestButton,bannerButton,document.getElementById('otaReleaseCheck')];
+      discoveryBusy=true;lastCheck=Date.now();const epoch=connectionEpoch;status.textContent="Checking…";
+      const discoveryControls=[latestButton,bannerButton,document.getElementById('otaReleaseCheck')];
       discoveryControls.forEach(control=>control.disabled=true);
       // Discovery only reads through the GATT queue. It must not take the
       // firmware transfer lock or interrupt normal recording/FIFO processing.
@@ -2534,12 +2492,12 @@ const APP_REVISION = "1.0.0-otaack2";
         let verified=false;
         if(pending) {
           verified=info.build===pending.build&&board===pending.identity;
-          if(verified){savePending(id,null);announce(`Update complete: firmware ${pending.version}, build ${info.build}, is running. Processing remains paused.`);}
+          if(verified){savePending(id,null);bannerButton.hidden=true;latestButton.hidden=true;announce(`Update complete · ${info.build}`);}
           else if([3,4].includes(info.state)&&info.session) {
             offered=pending;offeredDevice=id;bannerButton.hidden=false;latestButton.hidden=false;offerLabel(true);
-            announce(`Firmware transfer paused at ${Math.floor(info.offset*100/pending.size)}%. Continue within two minutes; it will resume from this position.`);
+            announce(`Paused at ${Math.floor(info.offset*100/pending.size)}% · Continue within 2 minutes`);
             return;
-          } else announce(`Update not confirmed. Pendant reports build ${info.build}; expected ${pending.build}.`);
+          } else announce(`Update not confirmed · Retry update`);
         }
         // A slow/offline public feed must not keep recording controls locked.
         const m=await releases.latest();
@@ -2548,10 +2506,10 @@ const APP_REVISION = "1.0.0-otaack2";
         if(releases.compatible(m,info,board)) {
           offered=m;offeredDevice=id;bannerButton.hidden=false;latestButton.hidden=false;
           offerLabel(false);
-          announce(`Firmware ${m.version} (build ${m.build}) available for ${id}. Update now? Stop and save recording first.`);
+          announce(`Update ${m.build} available`);
         } else {
           offered=null;bannerButton.hidden=true;latestButton.hidden=true;
-          if(!pending&&!verified)status.textContent=`Firmware build ${info.build} is up to date.`;
+          if(!pending&&!verified)status.textContent=`Up to date · ${info.build}`;
           if(!pending)notice.hidden=true;
         }
       }catch(error){if(firmwareBusy)return;offered=null;bannerButton.hidden=true;latestButton.hidden=true;
@@ -2565,11 +2523,11 @@ const APP_REVISION = "1.0.0-otaack2";
     cancel.addEventListener('click',()=>downloadController?.abort());
     async function updateLatest() {
       if(firmwareBusy||discoveryBusy)return;
-      if(!eligible()){openSettings();status.textContent='Connect the pendant, then stop and save any recording first.';return;}
+      if(!eligible()){openSettings();status.textContent='Connect, then stop and save before updating.';return;}
       if(!offered||offeredDevice!==targetId()){await inspect(true);return;}
       const m=offered,id=targetId();
-      if(!window.confirm(`Update pendant ${id} to Synap ${m.version}, build ${m.build}?\n\nKeep the pendant powered and this app open until it reconnects. Recording and processing will pause.`))return;
-      openSettings();lock(true);processor?.pause();progress.value=0;
+      if(!window.confirm(`Update synap to ${m.build}?\n${id}\n\nKeep your pendant nearby and this app open.`))return;
+      openSettings();lock(true);processor?.pause();ui.queueStatus.textContent="Paused · Tap Process recordings to resume";progress.value=0;
       let commitSent=false,resumeInterrupted=false;
       try {
         const info=await firmwareUpdater.check();
@@ -2578,7 +2536,7 @@ const APP_REVISION = "1.0.0-otaack2";
         if(!releases.compatible(m,info,board))throw Error('This release is already installed or older than the running firmware.');
         if(![1,3,4,6].includes(info.state))throw Error('An update is already pending. Wait for reboot or transfer timeout.');
         const epoch=connectionEpoch;
-        await acquireWakeLock();status.textContent='Downloading verified GitHub firmware…';cancel.disabled=false;
+        await acquireWakeLock();status.textContent='Downloading update…';cancel.disabled=false;
         downloadController=new AbortController();
         const binary=await releases.download(m,info.capacity,undefined,downloadController.signal);
         if(downloadController.signal.aborted)throw Error('Download cancelled. Nothing was flashed.');
@@ -2586,7 +2544,7 @@ const APP_REVISION = "1.0.0-otaack2";
         savePending(id,m);
         try{await firmwareUpdater.update(binary,id);commitSent=true;}
         catch(error){if(!firmwareUpdater.committing){if(error.resumable)resumeInterrupted=true;else savePending(id,null);throw error;}commitSent=true;}
-        status.textContent='Firmware committed. Waiting for reboot and checking the running build…';cancel.disabled=true;
+        status.textContent='Restarting pendant…';cancel.disabled=true;
         const deadline=Date.now()+8000;
         while(isGattConnected()&&Date.now()<deadline)await delay(100);
         if(isGattConnected())bluetoothDevice.gatt.disconnect();
@@ -2602,12 +2560,12 @@ const APP_REVISION = "1.0.0-otaack2";
           }
           await delay(2000);
         }
-        if(!verified)throw Error(`Update not confirmed: reconnect this pendant to verify build ${m.build}. Do not assume it installed successfully.`);
+        if(!verified)throw Error(`Update not confirmed. Reconnect to check.`);
         savePending(id,null);offered=null;bannerButton.hidden=true;latestButton.hidden=true;
-        announce(`Update complete: firmware ${m.version}, build ${m.build}, is running. Processing remains paused.`);
-      }catch(error){announce((error.resumable?'Update paused. Reconnect this pendant and choose Continue update. ':friendlyError(error)+' ')+'Processing remains paused.');}
+        announce(`Update complete · ${m.build}`);
+      }catch(error){announce(error.resumable?'Update paused · Reconnect to continue':friendlyError(error));}
       finally{
-        downloadController=null;firmwareUpdater.reset();confirmation.checked=false;
+        downloadController=null;firmwareUpdater.reset();
         await releaseWakeLock();lock(false);
         if((commitSent||resumeInterrupted)&&!isGattConnected())recoverRememberedConnection('firmware-update',true);
       }
@@ -2623,7 +2581,7 @@ const APP_REVISION = "1.0.0-otaack2";
         if (event.data && event.data.type === "APP_VERSION" && (event.data.revision || event.data.version) !== APP_REVISION) {
           const notice = document.getElementById("updateNotice");
           notice.hidden = false;
-          notice.textContent = "Update " + event.data.version + " is ready. Finish recording and processing, then reload. Saved recordings stay on this device.";
+          notice.textContent = "App update ready. Finish recording, then reload.";
         }
       };
       const checkVersion = function () {
@@ -2787,12 +2745,6 @@ const APP_REVISION = "1.0.0-otaack2";
       if (ui.connectButton.disabled) { toast("Bluetooth is not available in this browser.", "error"); return; }
       ui.settingsDialog.close();
       ui.connectButton.click();
-    });
-    document.getElementById("setupRecord").addEventListener("click", function () {
-      ui.settingsDialog.close();
-      const recorder = document.getElementById("capture");
-      recorder.scrollIntoView({ block: "start" });
-      recorder.focus({ preventScroll: true });
     });
     ui.chooseDeviceButton.addEventListener("click", function () {
       if (firmwareBusy) return;
@@ -2988,7 +2940,7 @@ const APP_REVISION = "1.0.0-otaack2";
     });
     await journal.open();
     const recovered = await journal.recover();
-    ui.appVersion.textContent = "PWA " + APP_VERSION;
+    ui.appVersion.textContent = APP_VERSION;
     loadSettings();
     processor = new globalThis.DKFIFOProcessor(journal, {settings:()=>settings,canRun:()=>!firmwareBusy,onChange:function (message) {
       ui.queueStatus.textContent=message;log("FIFO",message);

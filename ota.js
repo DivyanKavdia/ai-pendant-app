@@ -138,7 +138,7 @@
         if(![1,3,4,6].includes(info.state)) throw new Error("Another update is pending. Wait for reboot or the transfer timeout.");
         if (info.maxData<64 || info.maxData>503) throw new Error("Unsupported BLE firmware packet size.");
         if (!file || file.size<36 || file.size>info.capacity || file.size>16*1024*1024) throw new Error("Choose an application .bin that fits the available slot.");
-        this.io.progress("Checking firmware…",0,false);
+        this.io.progress("Preparing update…",0,false);
         const bytes=new Uint8Array(await file.arrayBuffer());validateImage(bytes,info.capacity,info.protocol);
         const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",bytes));
         this.ensure(epoch);
@@ -153,7 +153,7 @@
           this.status=null;begun=true;await this.send(resume,epoch,true,true);
           const resumed=await this.ack(s=>[3,4].includes(s.state)&&s.offset===offset,epoch,session,15000);
           ready=resumed.state===4;
-          this.io.progress("Continuing firmware · "+Math.floor(offset*100/bytes.length)+"%",offset/bytes.length,false);
+          this.io.progress("Resuming · "+Math.floor(offset*100/bytes.length)+"%",offset/bytes.length,false);
         } else {
           session=crypto.getRandomValues(new Uint32Array(1))[0] || 1;
           const begin=packet(1,session,59);new DataView(begin.buffer).setUint32(5,bytes.length,true);begin.set(digest,9);
@@ -173,14 +173,14 @@
           await this.send(chunk,epoch,true,true);
           await this.ack(s=>s.state===3 && s.offset===target,epoch,session);
           offset=target;
-          this.io.progress("Sending firmware · "+Math.floor(offset*100/bytes.length)+"%",offset/bytes.length,false);
+          this.io.progress("Updating · "+Math.floor(offset*100/bytes.length)+"%",offset/bytes.length,false);
         }
         if(!ready) {
-          this.io.progress("Verifying firmware on pendant…",1,false);
+          this.io.progress("Verifying update…",1,false);
           await this.send(packet(3,session),epoch,true,true);await this.ack(s=>s.state===4,epoch,session,30000);
         }
         this.ensure(epoch);this.committing=true;
-        this.io.progress("Verified · selecting firmware and rebooting…",1,true);
+        this.io.progress("Restarting pendant…",1,true);
         await this.send(packet(4,session),epoch);await this.ack(s=>s.state===5,epoch,session,10000);
         return {committed:true,sha256:Array.from(digest,b=>b.toString(16).padStart(2,"0")).join("")};
       } catch(error) {
