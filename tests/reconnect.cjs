@@ -1,0 +1,103 @@
+// Dependency-free regression checks: node tests/reconnect.cjs
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const root = path.join(__dirname, '..');
+const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const recoverySource = app.slice(app.indexOf('  async function restoreKnownPendant()'), app.indexOf('  async function connectPendant('));
+const connectSource = app.slice(app.indexOf('  async function connectPendant('), app.indexOf('  async function disconnectPendant('));
+function context(devices = []) {
+  const saved = new Map(), calls = [], listeners = {}, control = {checked: true, addEventListener(t, f) {listeners.preference = f;}};
+  const c = {console, Boolean, Number, String, Date, Error, Promise,
+    navigator: {bluetooth: {getDevices: async () => devices, addEventListener(t, f) {listeners[t] = f;}}},
+    document: {visibilityState: 'visible', getElementById: id => id === 'autoReconnectInput' ? control : {set textContent(v) {calls.push(['status', v]);}},
+      addEventListener(t, f) {listeners[t] = f;}},
+    window: {isSecureContext: true, addEventListener(t, f) {listeners[t] = f;},setTimeout(f, ms) {calls.push(['timer', ms]);return 1;}},
+    localStorage: {getItem: k => saved.get(k) ?? null, setItem: (k,v) => saved.set(k,v)},
+    connectionEpoch: 0, bluetoothDevice: null, connectInProgress: false, manualDisconnect: false,
+    finalizing: false, currentRecordingId: null, reloadRecoveryRunning: false, lastReloadRecoveryAt: 0,
+    reconnectTimer: null, reconnectAttempts: 0, MAX_AUTO_RECONNECT_ATTEMPTS: 3,
+    clearTimeout() {}, log() {}, toast() {}, friendlyError: e => e.message,
+    isGattConnected: () => false, attachBluetoothDevice(d) {c.bluetoothDevice = d;},
+    connectPendant: async opts => calls.push(['connect', opts])};
+  vm.createContext(c);vm.runInContext(recoverySource, c);
+  return {c, calls, saved, listeners, control};
+}
+async function recoveryTests() {
+  const pendant = {id: 'known', name: 'dk-pendant'};
+  let t = context([pendant]);t.saved.set('dk-pendant-device-id', 'known');
+  assert.equal(await t.c.restoreKnownPendant(), true);assert.equal(t.c.bluetoothDevice, pendant);
+  t = context([pendant]);assert.equal(await t.c.restoreKnownPendant(), true, 'one named legacy pendant');
+  t = context([pendant, {id: 'other', name: 'dk-pendant'}]);assert.equal(await t.c.restoreKnownPendant(), false, 'ambiguous names must not select');
+  t = context([pendant]);t.saved.set('dk-pendant-device-id', 'revoked');assert.equal(await t.c.restoreKnownPendant(), false, 'never substitute another device for revoked ID');
+  t = context();delete t.c.navigator.bluetooth.getDevices;assert.equal(await t.c.restoreKnownPendant(), false);
+  assert(t.calls.some(x=>x[0]==='status'&&x[1].includes('cannot restore')));
+  t = context();t.c.navigator.bluetooth.getDevices=async()=>{throw new Error('permission denied');};assert.equal(await t.c.restoreKnownPendant(), false);
+  t = context([pendant]);await t.c.recoverRememberedConnection('page-load',true);
+  assert.equal(t.calls.filter(x=>x[0]==='connect').length,1);assert.equal(t.c.reloadRecoveryRunning,false);
+  await t.c.recoverRememberedConnection('foreground',false);assert.equal(t.calls.filter(x=>x[0]==='connect').length,1,'foreground cooldown');
+  for(const flag of ['manualDisconnect','connectInProgress','finalizing','reloadRecoveryRunning']){
+    t=context([pendant]);t.c[flag]=true;await t.c.recoverRememberedConnection('page-load',true);assert(!t.calls.some(x=>x[0]==='connect'),flag);
+  }
+  t=context([pendant]);t.c.currentRecordingId='active';await t.c.recoverRememberedConnection('foreground',true);assert(!t.calls.some(x=>x[0]==='connect'));
+  t=context([pendant]);t.c.document.visibilityState='hidden';await t.c.recoverRememberedConnection('foreground',true);assert(!t.calls.some(x=>x[0]==='connect'));
+  t=context([pendant]);t.saved.set('dk-pendant-auto-reconnect','off');await t.c.recoverRememberedConnection('page-load',true);assert(!t.calls.some(x=>x[0]==='connect'));
+  t=context([pendant]);t.c.isGattConnected=()=>true;await t.c.recoverRememberedConnection('foreground',true);assert(!t.calls.some(x=>x[0]==='connect'));
+  // Enumeration racing manual selection must never overwrite the new handle.
+  t=context();let resolve;t.c.navigator.bluetooth.getDevices=()=>new Promise(r=>resolve=r);
+  const pending=t.c.restoreKnownPendant();const chosen={id:'new-choice'};t.c.bluetoothDevice=chosen;resolve([pendant]);
+  assert.equal(await pending,false);assert.equal(t.c.bluetoothDevice,chosen);
+  // Lifecycle wiring and disabling retry preference.
+  t=context([pendant]);t.c.bindReconnectRecovery();assert(t.listeners.visibilitychange&&t.listeners.pageshow&&t.listeners.availabilitychanged);
+  t.control.checked=false;t.listeners.preference();assert.equal(t.saved.get('dk-pendant-auto-reconnect'),'off');
+  t.c.bluetoothDevice=pendant;t.c.scheduleAutoReconnect();assert(!t.calls.some(x=>x[0]==='timer'));
+  t.control.checked=true;t.listeners.preference();await new Promise(r=>setImmediate(r));assert(t.calls.some(x=>x[0]==='connect'));
+}
+async function connectionTest({fail=false,reselect=false,auto=false,orphan=false,cancel=false,missing=false}={}) {
+  const calls=[];
+  const characteristic=name=>({addEventListener(){},async startNotifications(){calls.push(name+' notify');}});
+  const audio=characteristic('audio'),control=characteristic('control');
+  const device={id:'known',gatt:{connected:false,async connect(){calls.push('connect');if(fail)throw new Error('timeout');this.connected=true;return this;},
+    disconnect(){calls.push('disconnect');this.connected=false;},async getPrimaryService(){return {async getCharacteristic(id){return id==='audio'?audio:control;}};}}};
+  const c={console,Boolean,Error,connectInProgress:false,finalizing:false,needsDeviceSelection:reselect,bluetoothDevice:missing?null:device,manualDisconnect:false,connectionEpoch:0,gattServer:null,
+    navigator:{bluetooth:{requestDevice(){calls.push('chooser');return cancel?Promise.reject(Object.assign(new Error('cancel'),{name:'NotFoundError'})):Promise.resolve(device);}}},
+    SERVICE_UUID:'service',AUDIO_CHAR_UUID:'audio',CONTROL_CHAR_UUID:'control',CMD_STOP:0,CMD_GET_STATUS:2,
+    DEVICE_STATE:{CONNECTED_IDLE:1,STREAMING:2,ERROR:3},deviceStatus:{state:orphan?2:1,error:0},
+    clearReconnectTimer(){},setReconnectCapability(){},setAppState(s){c.state=s;},log(){},toast(){},
+    cleanupCharacteristics(){c.connectionEpoch++;},attachBluetoothDevice(d){c.bluetoothDevice=d;},
+    withTimeout:p=>p,isGattConnected:()=>Boolean(c.bluetoothDevice?.gatt.connected),queueGattOperation:f=>f(),
+    handleAudioNotification(){},handleStatusNotification(){},delay:async()=>{},
+    writeCommand:async cmd=>{calls.push('command '+cmd);if(cmd===0)c.deviceStatus.state=1;},readControlStatus:async()=>{},
+    reconnectAttempts:0,localStorage:{setItem(){}},friendlyError:e=>e.message,scheduleAutoReconnect(){calls.push('retry');}};
+  vm.createContext(c);vm.runInContext(connectSource,c);
+  const pending=c.connectPendant({autoReconnect:auto,silent:auto});
+  if(reselect&&!auto)assert(calls.includes('chooser'),'chooser stays in click gesture');
+  await pending;assert(!calls.includes('command 1'),'never auto-start recording');assert.equal(c.connectInProgress,false);
+  if(missing&&auto){assert.equal(c.state,'disconnected');assert.equal(calls.length,0);return;}
+  if(fail){assert.equal(c.state,'disconnected');assert(c.needsDeviceSelection);if(auto)assert(calls.includes('retry'));}
+  else if(cancel){assert.equal(c.state,'disconnected');assert(!calls.includes('connect'));}
+  else {assert.equal(c.state,'idle');assert.equal(c.needsDeviceSelection,false);assert(calls.indexOf('audio notify')<calls.indexOf('command 2'));if(orphan)assert(calls.includes('command 0'));}
+  if(auto)assert(!calls.includes('chooser'));
+}
+async function workerTests(){
+  const handlers={},entries=new Map(),scope='https://example.test/ai-pendant-app/';let installed=[],job;
+  const cache={async addAll(paths){installed=Array.from(paths);for(const p of paths)entries.set(new URL(p,scope).href,p);},async match(key){return entries.get(typeof key==='string'?key:key.url);}};
+  const ctx={URL,Set,Promise,self:{registration:{scope},addEventListener(t,f){handlers[t]=f;},skipWaiting:async()=>{},clients:{claim:async()=>{}}},
+    caches:{open:async()=>cache,keys:async()=>[],delete:async()=>{}},fetch:async()=>{throw new Error('unexpected fetch');}};
+  vm.runInNewContext(fs.readFileSync(path.join(root,'sw.js'),'utf8'),ctx);handlers.install({waitUntil:p=>job=p});await job;
+  installed.forEach(p=>assert(fs.existsSync(path.join(root,p.split('?')[0]))));
+  async function fetch(url,mode='navigate',method='GET'){let result;handlers.fetch({request:{url,mode,method},respondWith:p=>result=p});return result;}
+  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=5.5.1');
+  assert.equal(await fetch(scope+'app.js?v=5.5.1','cors'),'./app.js?v=5.5.1');
+  assert.equal(await fetch(scope+'api','cors','POST'),undefined);
+  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'5.5.1');
+}
+(async()=>{
+  const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);
+  for(const m of app.matchAll(/getElementById\("([^"]+)"\)/g))assert(ids.includes(m[1]),'missing DOM '+m[1]);
+  await recoveryTests();
+  for(const options of [{},{reselect:true},{auto:true},{orphan:true},{fail:true,auto:true},{reselect:true,cancel:true},{fail:true},{auto:true,missing:true}])await connectionTest(options);
+  await workerTests();console.log('PASS: permission restoration, ambiguous/revoked devices, selection race, lifecycle recovery, cooldown, opt-out, active-session guards, 8 mocked GATT flows, DOM and service-worker cache.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

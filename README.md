@@ -2,7 +2,7 @@
 
 Stay present. Keep the memory
 
-Release 5.5.0. This repository contains only the browser application.
+Release 5.5.1. This repository contains only the browser application.
 ESP32-S3 firmware is maintained separately and must not be committed here.
 
 ## Deploy
@@ -11,7 +11,7 @@ Serve the repository root over HTTPS (for example, GitHub Pages). No npm
 installation, build step, or runtime framework is required. Upload all ten
 application assets together: `index.html`, `styles.css`, `app.js`,
 `audio-store.js`, `sw.js`, `manifest.webmanifest`, `logo.webp`, and the three icon files.
-Verify the footer shows 5.5.0. Do not clear site data to update the app:
+Verify the footer shows 5.5.1. Do not clear site data to update the app:
 recordings and pending processing jobs are stored there.
 
 Use a browser with Web Bluetooth, IndexedDB, and Web Locks support. Keep the
@@ -50,6 +50,23 @@ Insights appear only after the FIFO has produced a transcript or consolidated
 summary; all content remains in the same local IndexedDB as its source recording.
 
 ## Reconnect after reload
+
+Settings now includes **Reconnect remembered pendant** (on by default) and a
+browser capability explanation. Recovery runs on page load, return to the
+foreground, back/forward-cache restoration, and Bluetooth availability events
+where supported. Foreground recovery is rate-limited to once per 30 seconds;
+each cycle retains the existing bounded retries. It never opens a device chooser
+without a tap, replaces a manual selection while permissions are loading, or
+restarts recording. Turning the preference off prevents future automatic
+attempts; it does not disconnect an existing connection. Manual disconnect
+suppresses automatic recovery for the current page session.
+
+Reload **ends the original GATT session**. Automatic reconnection creates a new
+session; it is not uninterrupted audio capture. Browsers without
+`navigator.bluetooth.getDevices()` cannot restore a device from its saved ID
+alone and need device selection after reload. Retained permission, the same
+browser profile/site origin, Bluetooth enabled, and advertising firmware are
+required. Installing the PWA does not add missing Web Bluetooth APIs.
 
 The last successfully connected device ID is remembered locally. On reload,
 the app uses `navigator.bluetooth.getDevices()` when available to recover that
@@ -109,3 +126,7 @@ Future test/build tooling belongs in source control only when deliberately
 introduced; exclude it from deployed assets. JavaScript syntax and asset
 references can be checked locally, but real BLE operation still requires
 testing with the phone and pendant.
+
+Run dependency-free regression checks with `node tests/reconnect.cjs`.
+They cover mocked GATT and lifecycle/permission recovery plus release cache
+contracts; they do not substitute for physical Android/pendant testing.
