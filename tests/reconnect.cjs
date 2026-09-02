@@ -89,12 +89,12 @@ async function workerTests(){
   vm.runInNewContext(fs.readFileSync(path.join(root,'sw.js'),'utf8'),ctx);handlers.install({waitUntil:p=>job=p});await job;
   installed.forEach(p=>assert(fs.existsSync(path.join(root,p.split('?')[0]))));
   async function fetch(url,mode='navigate',method='GET'){let result;handlers.fetch({request:{url,mode,method},respondWith:p=>result=p});return result;}
-  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=1.0.0-ota2');
-  assert.equal(await fetch(scope+'app.js?v=1.0.0-ota2','cors'),'./app.js?v=1.0.0-ota2');
+  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=1.0.0-setup1');
+  assert.equal(await fetch(scope+'app.js?v=1.0.0-setup1','cors'),'./app.js?v=1.0.0-setup1');
   assert.equal(await fetch(scope+'ota.js?v=1.0.0-ota2','cors'),'./ota.js?v=1.0.0-ota2');
   assert.equal(await fetch(scope+'releases.js?v=1.0.0-ota2','cors'),'./releases.js?v=1.0.0-ota2');
   assert.equal(await fetch(scope+'api','cors','POST'),undefined);
-  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'1.0.0-ota2');assert.equal(reply.release,'1.0.0');
+  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'1.0.0-setup1');assert.equal(reply.release,'1.0.0');
 }
 (async()=>{
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);
@@ -103,3 +103,4 @@ async function workerTests(){
   for(const options of [{},{reselect:true},{auto:true},{orphan:true},{fail:true,auto:true},{reselect:true,cancel:true},{fail:true},{auto:true,missing:true}])await connectionTest(options);
   await workerTests();console.log('PASS: permission restoration, ambiguous/revoked devices, selection race, lifecycle recovery, cooldown, opt-out, active-session guards, 8 mocked GATT flows, DOM and service-worker cache.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
+

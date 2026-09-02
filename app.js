@@ -6,7 +6,7 @@
   // -------------------------------------------------------------------------
 
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-ota2";
+const APP_REVISION = "1.0.0-setup1";
   const PROTOCOL_VERSION = 0x02;
 
   const SERVICE_UUID =
@@ -2721,6 +2721,27 @@ const APP_REVISION = "1.0.0-ota2";
     ui.startButton.addEventListener("click", startRecording);
     ui.stopButton.addEventListener("click", stopRecording);
     ui.settingsButton.addEventListener("click", openSettings);
+    document.getElementById("setupConnect").addEventListener("click", function () {
+      // Reuse the recorder's connection guards; never turn this action into Disconnect.
+      if (firmwareBusy || connectInProgress || isGattConnected()) {
+        toast(isGattConnected() ? "Your pendant is already connected." : "Wait for the current operation to finish.");
+        return;
+      }
+      if (ui.connectButton.disabled) { toast("Bluetooth is not available in this browser.", "error"); return; }
+      ui.settingsDialog.close();
+      ui.connectButton.click();
+    });
+    document.getElementById("setupFirmware").addEventListener("click", function () {
+      const section = document.getElementById("firmwareSettings");
+      section.scrollIntoView({ block: "start" });
+      section.focus({ preventScroll: true });
+    });
+    document.getElementById("setupRecord").addEventListener("click", function () {
+      ui.settingsDialog.close();
+      const recorder = document.getElementById("capture");
+      recorder.scrollIntoView({ block: "start" });
+      recorder.focus({ preventScroll: true });
+    });
     ui.chooseDeviceButton.addEventListener("click", function () {
       if (firmwareBusy) return;
       if (recordingConfirmed || finalizing || appState === "starting" || appState === "stopping") {
@@ -2965,3 +2986,4 @@ const APP_REVISION = "1.0.0-ota2";
     setAppState("error", message);
   });
 })();
+

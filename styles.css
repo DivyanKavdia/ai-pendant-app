@@ -47,3 +47,13 @@ body[data-state="recording"] .stage-orbit{background:radial-gradient(ellipse,#df
 .ota-section input[type="file"] { max-width:100%; min-width:0; font-size:14px; }
 .ota-section .field { margin-top:16px; }
 .ota-section #otaStatus { overflow-wrap:anywhere; }
+
+
+/* Settings onboarding follows the existing app surfaces and typography. */
+.setup-steps { padding-left: 1.5rem; margin: 1rem 0; }
+.setup-steps li { padding: 0 0 1.25rem .35rem; }
+.setup-steps li::marker { font-weight: 700; }
+.setup-steps h4 { font-size: 1rem; margin: 0 0 .5rem; }
+.setup-steps p { font-size: 1rem; line-height: 1.6; margin: .5rem 0 .75rem; }
+.setup-section summary { cursor: pointer; font-size: 1rem; }
+#firmwareSettings { scroll-margin-top: 1rem; }

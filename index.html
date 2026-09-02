@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=1.0.0">
+  <link rel="stylesheet" href="styles.css?v=1.0.0-setup1">
 </head>
 <body data-state="disconnected">
   <a class="skip-link" href="#capture">Skip to recorder</a>
@@ -137,6 +137,22 @@
   <dialog id="settingsDialog" class="modal" aria-labelledby="settingsTitle">
     <form id="settingsForm">
       <div class="modal-header"><div><p class="eyebrow">MAKE IT YOURS</p><h2 id="settingsTitle">Settings</h2></div><button id="closeSettingsButton" class="icon-button" type="button" aria-label="Close settings"><svg><use href="#i-close"/></svg></button></div>
+      <section class="settings-section setup-section" aria-labelledby="setupTitle">
+        <p class="eyebrow">GETTING STARTED</p><h3 id="setupTitle">Set up your device</h3>
+        <p class="settings-note">Start here with a new pendant, or return whenever you need help.</p>
+        <ol class="setup-steps">
+          <li><h4>Connect your pendant</h4><p>Power on your pendant and turn on Bluetooth. Open Synap in a browser that supports Bluetooth, such as Chrome on Android, using the secure app address. Choose <strong>dk-pendant</strong> in the device picker. The light changes from red to blue when connected.</p>
+            <button id="setupConnect" class="button button-secondary button-small" type="button">Connect pendant</button>
+          </li>
+          <li><h4>Prepare wireless updates</h4><p>Open firmware settings below and select <strong>Check pendant</strong>, then <strong>Check updates</strong>. For a new device, install compatible Synap firmware over USB once. Send <code>OTAKEY</code> with a newline in Serial Monitor at 115200 baud and paste the returned owner key into the owner-key field.</p><p>On your trusted browser, select <strong>Remember authorization</strong>. Authorization is saved after an authorized GitHub transfer. Future updates can then be approved here without USB or a physical button press. If no update is available, keep your key private until your first update.</p>
+            <button id="setupFirmware" class="button button-secondary button-small" type="button">Open firmware settings</button>
+          </li>
+          <li><h4>Make your first recording</h4><p>Return to the recorder, select <strong>Record</strong>, then <strong>Stop &amp; save</strong>. The light turns green while recording. Play the saved audio in Library. Keep Synap open and in the foreground.</p><p>The current default firmware sends sample audio. To record your voice, attach a microphone and install a build with microphone input enabled.</p>
+            <button id="setupRecord" class="button button-secondary button-small" type="button">Go to recorder</button>
+          </li>
+        </ol>
+        <details><summary>Need help getting connected?</summary><p class="settings-note">If Bluetooth is unavailable, open the app in a compatible browser instead of an embedded browser. If the pendant is missing, check its power and disconnect it from other phones or tabs. Use “Choose another pendant” below to select it again.</p><p class="settings-note">Recordings stay in this browser. Download audio you want to keep before clearing site data. Transcription is optional: configure your trusted endpoints below when you are ready.</p></details>
+      </section>
       <div class="settings-section"><h3>Device &amp; recording</h3>
         <label class="toggle-row"><span><strong>Reconnect remembered pendant</strong><small>After reload and when returning to the app, where browser permissions allow.</small></span><input id="autoReconnectInput" type="checkbox" checked></label>
         <p id="reconnectCapability" class="settings-note" role="status">Checking remembered-device support…</p>
@@ -144,7 +160,7 @@
         <p class="settings-note">Previously authorised devices reconnect automatically when your browser supports it. Bluetooth cannot stay connected through a closed browser or an Android suspension.</p>
         <div class="settings-actions"><button id="chooseDeviceButton" class="button button-secondary button-small" type="button">Choose another pendant</button><button id="recoveryButton" class="button button-secondary button-small" type="button">Download unsaved audio</button><button id="retrySaveButton" class="button button-secondary button-small" type="button">Retry local save</button></div>
       </div>
-      <div class="settings-section ota-section"><h3>Pendant firmware</h3>
+      <div id="firmwareSettings" class="settings-section ota-section" tabindex="-1"><h3>Pendant firmware</h3>
         <p class="settings-note">Update over Bluetooth from this app—no Wi-Fi or button press on firmware 5.2+. One-time setup: install compatible firmware, then retrieve your owner key over USB Serial. Keep the pendant powered and this app in the foreground.</p>
         <button id="otaCheck" class="button button-secondary button-small" type="button">Check pendant</button>
         <button id="otaReleaseCheck" class="button button-secondary button-small" type="button">Check updates</button>
@@ -172,6 +188,7 @@
   <script src="audio-store.js?v=1.0.0" defer></script>
   <script src="ota.js?v=1.0.0-ota2" defer></script>
   <script src="releases.js?v=1.0.0-ota2" defer></script>
-  <script src="app.js?v=1.0.0-ota2" defer></script>
+  <script src="app.js?v=1.0.0-setup1" defer></script>
 </body>
 </html>
+
