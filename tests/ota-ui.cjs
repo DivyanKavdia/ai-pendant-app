@@ -62,5 +62,12 @@ function setup({legacy=false,fail=false}={}) {
   let resolveHead;store.head=()=>new Promise(resolve=>resolveHead=resolve);allowed=true;
   const running=fifo.resume();await Promise.resolve();allowed=false;fifo.pause();resolveHead({id:1});
   fifo.process=async()=>processed++;await running;assert.equal(processed,0);
+  let resolveSegment,uploads=0;allowed=true;
+  fifo=new globalThis.DKFIFOProcessor({get:()=>new Promise(resolve=>resolveSegment=resolve)},
+    {canRun:()=>allowed,fetch:async()=>uploads++,settings:()=>({})});
+  fifo.paused=false;
+  const pending=fifo.process({kind:'summarize',recordingId:'r',segmentIndex:0},{},'https://example.test/summary');
+  allowed=false;fifo.pause();resolveSegment({transcript:'test'});
+  await assert.rejects(pending,{name:'AbortError'});assert.equal(uploads,0,'no upload after an awaited storage read');
   console.log('PASS: OTA UI eligibility/locks, legacy recovery, errors, commit, reconnect, wake lock and FIFO ownership race.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

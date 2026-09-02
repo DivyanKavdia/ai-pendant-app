@@ -2,7 +2,7 @@
 
 Stay present. Keep the memory
 
-Release 5.6.0. This repository contains only the browser application.
+Release 5.6.1. This repository contains only the browser application.
 ESP32-S3 firmware is maintained separately and must not be committed here.
 
 ## Deploy
@@ -11,7 +11,7 @@ Serve the repository root over HTTPS (for example, GitHub Pages). No npm
 installation, build step, or runtime framework is required. Upload all eleven
 application assets together: `index.html`, `styles.css`, `app.js`,
 `audio-store.js`, `ota.js`, `sw.js`, `manifest.webmanifest`, `logo.webp`, and the three icon files.
-Verify the footer shows 5.6.0. Do not clear site data to update the app:
+Verify the footer shows 5.6.1. Do not clear site data to update the app:
 recordings and pending processing jobs are stored there.
 
 Use a browser with Web Bluetooth, IndexedDB, and Web Locks support. Keep the

@@ -336,6 +336,10 @@
         body=JSON.stringify({task:job.kind==='summarize'?'summarize_segment':'consolidate',
           recording_id:job.recordingId,segment_index:job.segmentIndex,input});
       }
+      // OTA may take ownership while segment/transcript storage reads are pending.
+      if(this.paused || !this.canRun()){
+        const error=new Error('Processing paused before upload');error.name='AbortError';throw error;
+      }
       this.controller=new AbortController();
       const timeout=setTimeout(()=>this.controller?.abort(),120000);
       try {
