@@ -10,8 +10,8 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <script src="theme.js?v=1.0.0-library1"></script>
-  <link rel="stylesheet" href="styles.css?v=1.0.0-library1">
+  <script src="theme.js?v=1.0.0-install1"></script>
+  <link rel="stylesheet" href="styles.css?v=1.0.0-install1">
 </head>
 <body data-state="disconnected">
   <a class="skip-link" href="#capture">Skip to recorder</a>
@@ -52,7 +52,6 @@
           <span id="connectionBadge" class="status-badge status-offline"><span class="status-dot" aria-hidden="true"></span><span id="connectionText" role="status" aria-live="polite">Not connected</span></span>
           <span id="connectButtonLabel" class="connection-action">Connect pendant</span>
         </button>
-        <button id="installButton" class="icon-button" type="button" title="Download / install synap" aria-label="Download or install synap"><svg aria-hidden="true"><use href="#i-download"/></svg></button>
         <button id="settingsButton" class="icon-button" type="button" title="Settings" aria-label="Open settings"><svg><use href="#i-settings"/></svg></button>
       </div>
     </header>
@@ -177,13 +176,14 @@
         <div class="setting-actions"><button id="recoveryButton" class="button button-secondary button-small" type="button"><svg aria-hidden="true"><use href="#i-download"/></svg>Export unsaved audio</button><button id="retrySaveButton" class="text-button" type="button">Retry save</button></div>
       </details>
 
+      <button id="installButton" class="button button-secondary" type="button"><svg aria-hidden="true"><use href="#i-download"/></svg>Install app</button>
       <div class="modal-actions"><button class="button button-primary" type="submit">Done <svg aria-hidden="true"><use href="#i-check"/></svg></button></div>
     </form>
   </dialog>
   <script src="audio-store.js?v=1.0.0-device1" defer></script>
-  <script src="ota.js?v=1.0.0-library1" defer></script>
+  <script src="ota.js?v=1.0.0-install1" defer></script>
   <script src="releases.js?v=1.0.0-idota1" defer></script>
   <script src="device-identity.js?v=1.0.0-device1" defer></script>
-  <script src="app.js?v=1.0.0-library1" defer></script>
+  <script src="app.js?v=1.0.0-install1" defer></script>
 </body>
 </html>

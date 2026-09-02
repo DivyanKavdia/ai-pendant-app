@@ -6,6 +6,9 @@ const assert = require('node:assert/strict');
 const root = path.join(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+assert(!html.slice(html.indexOf('<header'), html.indexOf('</header>')).includes('id="installButton"'));
+assert(html.slice(html.indexOf('<dialog id="settingsDialog"'), html.indexOf('</dialog>')).includes('id="installButton"'));
+assert.match(html, /id="installButton"[^>]*type="button"[^>]*>[\s\S]*?Install app<\/button>/);
 const recoverySource = app.slice(app.indexOf('  async function restoreKnownPendant()'), app.indexOf('  async function connectPendant('));
 const connectSource = app.slice(app.indexOf('  async function connectPendant('), app.indexOf('  async function disconnectPendant('));
 function context(devices = []) {
@@ -95,12 +98,12 @@ async function workerTests(){
   vm.runInNewContext(fs.readFileSync(path.join(root,'sw.js'),'utf8'),ctx);handlers.install({waitUntil:p=>job=p});await job;
   installed.forEach(p=>assert(fs.existsSync(path.join(root,p.split('?')[0]))));
   async function fetch(url,mode='navigate',method='GET'){let result;handlers.fetch({request:{url,mode,method},respondWith:p=>result=p});return result;}
-  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=1.0.0-library1');
-  assert.equal(await fetch(scope+'app.js?v=1.0.0-library1','cors'),'./app.js?v=1.0.0-library1');
-  assert.equal(await fetch(scope+'ota.js?v=1.0.0-library1','cors'),'./ota.js?v=1.0.0-library1');
+  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=1.0.0-install1');
+  assert.equal(await fetch(scope+'app.js?v=1.0.0-install1','cors'),'./app.js?v=1.0.0-install1');
+  assert.equal(await fetch(scope+'ota.js?v=1.0.0-install1','cors'),'./ota.js?v=1.0.0-install1');
   assert.equal(await fetch(scope+'releases.js?v=1.0.0-idota1','cors'),'./releases.js?v=1.0.0-idota1');
   assert.equal(await fetch(scope+'api','cors','POST'),undefined);
-  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'1.0.0-library1');assert.equal(reply.release,'1.0.0');
+  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'1.0.0-install1');assert.equal(reply.release,'1.0.0');
 }
 (async()=>{
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);
