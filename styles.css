@@ -149,4 +149,20 @@ body[data-state="recording"] .stage-orbit{background:radial-gradient(ellipse,var
 .theme-picker{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;padding:4px;border:1px solid var(--border);border-radius:15px;background:var(--surface-2)}
 .theme-picker button{display:flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:8px 4px;border:1px solid transparent;border-radius:11px;background:transparent;color:var(--muted);font-size:14px;font-weight:600}
 .theme-picker svg{width:18px;height:18px}.theme-picker button[aria-pressed="true"]{background:var(--action);color:var(--on-action)}
+.account-button.signed-in{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);font-weight:700}
+.account-modal{max-width:440px}.account-modal [hidden]{display:none!important}
+.account-modal .modal-header h2{font-size:23px;letter-spacing:-.6px}
+.account-providers{display:grid;gap:12px;margin-top:24px}
+.provider-button{display:flex;align-items:center;justify-content:center;gap:12px;min-height:48px;width:100%;padding:12px 16px;border:1px solid #747775;border-radius:14px;font-size:14px;font-weight:600}
+.provider-button svg{width:20px;height:20px;stroke:none}
+.google-sign-in{background:#fff;color:#1f1f1f}.apple-sign-in{background:#000;color:#fff;border-color:#000}
+:root[data-theme="dark"] .google-sign-in{background:#131314;color:#e3e3e3;border-color:#8e918f}
+:root[data-theme="dark"] .apple-sign-in{background:#fff;color:#000;border-color:#fff}
+.account-status{font-size:14px;color:var(--muted);margin:18px 0 12px}
+.account-local-note{display:flex;align-items:center;justify-content:center;gap:7px;color:var(--muted);font-size:12px;margin:20px 0 12px}
+.account-local-note svg{width:16px;height:16px}.account-later{display:block;width:100%;font-size:14px}
+.account-identity{display:flex;gap:14px;align-items:center;margin:22px 0}.account-identity>div{min-width:0}
+.account-avatar{display:grid;place-items:center;width:48px;height:48px;flex-shrink:0;border-radius:16px;background:var(--accent-soft);color:var(--accent)}
+.account-identity h3{font-size:18px;overflow-wrap:anywhere;margin:0}.account-identity p{font-size:14px;color:var(--muted);overflow-wrap:anywhere;margin:3px 0 0}
+#accountSignOut,#accountRetry{width:100%}
 @media(hover:hover){.button-primary:hover:not(:disabled),.compact-recorder .record-button:hover:not(:disabled){background:var(--action-hover);color:var(--on-action)}.stop-button:hover:not(:disabled){background:var(--rose);color:var(--on-rose)}.rail-link:hover{background:var(--accent-soft);color:var(--accent)}}

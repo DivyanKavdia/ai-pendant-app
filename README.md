@@ -22,9 +22,9 @@ Release feed: https://raw.githubusercontent.com/DivyanKavdia/synap-firmware/ota-
 ## Deploy
 
 Serve the repository root over HTTPS (for example, GitHub Pages). No npm
-installation, build step, or runtime framework is required. Upload all fourteen
+installation, build step, or runtime framework is required. Upload all seventeen
 application assets together: `index.html`, `styles.css`, `app.js`, `theme.js`,
-`audio-store.js`, `ota.js`, `releases.js`, `device-identity.js`, `sw.js`, `manifest.webmanifest`, `logo.webp`, and the three icon files.
+`auth-config.js`, `auth.js`, `account.js`, `audio-store.js`, `ota.js`, `releases.js`, `device-identity.js`, `sw.js`, `manifest.webmanifest`, `logo.webp`, and the three icon files.
 Verify the footer shows 1.0.0. Do not clear site data to update the app:
 recordings and pending processing jobs are stored there.
 
@@ -54,12 +54,22 @@ screens. Inputs use readable 16 px text, controls have large touch targets,
 safe-area insets are respected, and reduced-motion preferences are supported.
 This release preserves audio BLE commands and the audio storage schema. It adds
 an optional BLE firmware updater and prevents FIFO work from starting during OTA.
-Branding adds one optimized logo asset and no runtime dependencies. Existing
+Branding adds one optimized logo asset. Optional accounts load the official Firebase
+Authentication SDK when configured; recording does not depend on it. Existing
 Bluetooth device names and storage identifiers are preserved for compatibility.
 The service worker serves a complete precached release; an update notice asks
 you to finish your work and reload when a newer worker takes control. It never
 reloads automatically or clears IndexedDB. Compare the footer version on both
 devices. Recordings are device-local; this release does not add cloud sync.
+
+## Optional accounts
+
+The profile icon opens Google/Apple sign-in, an account summary and sign-out.
+**Not now** keeps guest access. Install app is now in Settings. Authentication is
+disabled until the public Firebase web configuration and provider flags are set;
+follow [AUTH_SETUP.md](AUTH_SETUP.md). Provider windows cannot open during active
+recording, recovery or firmware updates. Accounts do not upload or sync audio,
+and signing out does not remove recordings from this browser.
 
 ## Firmware updates over BLE
 

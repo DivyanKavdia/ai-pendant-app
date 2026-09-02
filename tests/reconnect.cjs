@@ -95,12 +95,17 @@ async function workerTests(){
   vm.runInNewContext(fs.readFileSync(path.join(root,'sw.js'),'utf8'),ctx);handlers.install({waitUntil:p=>job=p});await job;
   installed.forEach(p=>assert(fs.existsSync(path.join(root,p.split('?')[0]))));
   async function fetch(url,mode='navigate',method='GET'){let result;handlers.fetch({request:{url,mode,method},respondWith:p=>result=p});return result;}
-  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=1.0.0-color1');
-  assert.equal(await fetch(scope+'app.js?v=1.0.0-color1','cors'),'./app.js?v=1.0.0-color1');
-  assert.equal(await fetch(scope+'ota.js?v=1.0.0-color1','cors'),'./ota.js?v=1.0.0-color1');
+  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=1.0.0-auth1');
+  assert.equal(await fetch(scope+'app.js?v=1.0.0-auth1','cors'),'./app.js?v=1.0.0-auth1');
+  assert.equal(await fetch(scope+'ota.js?v=1.0.0-auth1','cors'),'./ota.js?v=1.0.0-auth1');
   assert.equal(await fetch(scope+'releases.js?v=1.0.0-idota1','cors'),'./releases.js?v=1.0.0-idota1');
   assert.equal(await fetch(scope+'api','cors','POST'),undefined);
-  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'1.0.0-color1');assert.equal(reply.release,'1.0.0');
+  assert.equal(await fetch(scope+'auth.js?v=1.0.0-auth1','cors'),'./auth.js?v=1.0.0-auth1');
+  assert.equal(await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp','cors','POST'),undefined);
+  assert.equal(await fetch('https://securetoken.googleapis.com/v1/token','cors','POST'),undefined);
+  assert.equal(await fetch('https://accounts.google.com/o/oauth2/auth'),undefined);
+  assert.equal(await fetch('https://test.firebaseapp.com/__/auth/handler'),undefined);
+  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'1.0.0-auth1');assert.equal(reply.release,'1.0.0');
 }
 (async()=>{
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);

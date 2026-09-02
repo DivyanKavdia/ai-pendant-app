@@ -6,7 +6,7 @@
   // -------------------------------------------------------------------------
 
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-color1";
+const APP_REVISION = "1.0.0-auth1";
   let deviceAssociation = null;
   let deviceIdentityMessage = "Not connected";
   const PROTOCOL_VERSION = 0x02;
@@ -2693,7 +2693,16 @@ const APP_REVISION = "1.0.0-color1";
   // Event wiring
   // -------------------------------------------------------------------------
 
+  function blockAccountSignIn(event) {
+    // A provider window may background this page on a phone.
+    if (firmwareBusy || recordingConfirmed || finalizing || unsavedAudio ||
+        ["connecting", "starting", "recording", "stopping", "saving", "updating"].includes(appState)) {
+      event.preventDefault();
+    }
+  }
+
   function bindEvents() {
+    document.addEventListener("synap:account-request", blockAccountSignIn);
     ui.showMoreRecordingsButton.addEventListener("click", function () {
       libraryVisibleCount += LIBRARY_PAGE_SIZE;
       renderLibraryPage();
