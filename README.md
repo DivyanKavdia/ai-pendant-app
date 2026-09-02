@@ -234,3 +234,18 @@ testing with the phone and pendant.
 Run dependency-free regression checks with `node tests/reconnect.cjs`.
 They cover mocked GATT and lifecycle/permission recovery plus release cache
 contracts; they do not substitute for physical Android/pendant testing.
+
+
+## Device setup and persistent associations
+
+Settings → Set up your device now consists of connecting, automatically remembering the identified pendant, and recording. Firmware updates and owner-key authorization are separate optional settings.
+
+On every connection, `device-identity.js` reads `4fa1234c-0000-1000-8000-00805f9b34fb`. A valid value is `SYNAP-` plus 12 uppercase hexadecimal digits. Only after a valid idle acknowledgement on that same connection does the app persist the association. Reconnect never automatically starts recording.
+
+The localStorage record `synap-device-associations-v1` contains schema version 1, a random `installationId` for this PWA origin, and device records with `deviceId`, a stable random `associationId`, observed browser Bluetooth IDs, display name, first connection time and last connection time. A new browser handle for the same permanent ID reuses its association; multiple pendants have separate associations. A previously mapped Bluetooth handle reporting another permanent ID is rejected without overwriting the mapping. `dk-pendant-device-id` remains the browser permission handle used for reconnect, not the permanent ID.
+
+Settings displays the connected ID and saved devices. New recording records snapshot `deviceId`, `deviceAssociationId`, and `pwaInstallationId`; old recordings are not retrospectively assigned. Clearing site data removes local associations; a later connection creates a new installation and association. Another browser or app origin has its own mapping. This is not cloud sync, BLE bonding, exclusive ownership, or cryptographic authentication. No owner keys enter this registry or recording metadata; the OTA authorization vault is unchanged.
+
+Old firmware without the new characteristic can still record but setup reports that permanent identification is unavailable. Read failures and malformed IDs do not create associations. Storage failures are shown as identified but not saved, rather than successful setup. Install an identity-enabled firmware build once to enable automatic association on subsequent connections.
+
+Run `node --test tests/*.cjs` for association, actual connection-handler, recording metadata, reconnect, service-worker, release and OTA regressions.

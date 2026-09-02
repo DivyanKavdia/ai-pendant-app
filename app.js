@@ -6,7 +6,9 @@
   // -------------------------------------------------------------------------
 
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-setup1";
+const APP_REVISION = "1.0.0-device1";
+  let deviceAssociation = null;
+  let deviceIdentityMessage = "Connect a pendant to set it up. No update key is needed.";
   const PROTOCOL_VERSION = 0x02;
 
   const SERVICE_UUID =
@@ -287,6 +289,7 @@ const APP_REVISION = "1.0.0-setup1";
     if (firmwareBusy) nextState = "updating";
     appState = nextState;
     document.body.dataset.state = nextState;
+    if (typeof renderDeviceSetup === "function") renderDeviceSetup();
 
     ui.connectionBadge.className = "status-badge";
     ui.connectButton.disabled = false;
@@ -698,6 +701,16 @@ const APP_REVISION = "1.0.0-setup1";
         await queueGattOperation(function () { return gattServer.getPrimaryService(SERVICE_UUID); });
       assertConnection();
       log("Pendant service resolved");
+      let connectedDeviceId = null;
+      let identityMessage = "This firmware has no permanent device ID. Recording is available; install identity-enabled firmware to remember this device.";
+      try {
+        connectedDeviceId = await globalThis.SynapDevices.read(service, queueGattOperation, assertConnection);
+      } catch (error) {
+        assertConnection();
+        identityMessage = "Device ID could not be read. Reconnect to retry setup. Recording is still available.";
+        log("Device identity unavailable", friendlyError(error));
+      }
+      assertConnection();
 
       audioCharacteristic =
         await queueGattOperation(function () { return service.getCharacteristic(AUDIO_CHAR_UUID); });
@@ -755,6 +768,9 @@ const APP_REVISION = "1.0.0-setup1";
         deviceStatus.state === DEVICE_STATE.CONNECTED_IDLE &&
         deviceStatus.error === 0
       ) {
+        // Persist only after identity read and idle acknowledgement belong to the same connection.
+        assertConnection();
+        rememberDeviceAssociation(connectedDeviceId, connectingDevice, identityMessage);
         reconnectAttempts = 0;
         needsDeviceSelection = false;
         try { localStorage.setItem("dk-pendant-device-id", bluetoothDevice.id); }
@@ -851,6 +867,8 @@ const APP_REVISION = "1.0.0-setup1";
   }
 
   function cleanupCharacteristics() {
+    deviceAssociation = null;
+    deviceIdentityMessage = "Connect a pendant to identify it. Saved associations remain in this browser.";
     const ownerKeyInput=document.getElementById("otaOwnerKey");
     if(ownerKeyInput) ownerKeyInput.value="";
     firmwareUpdater?.reset();
@@ -1123,7 +1141,7 @@ const APP_REVISION = "1.0.0-setup1";
           navigator.storage.persist().then(granted=>log("Persistent storage request",{granted}))
             .catch(error=>log("Persistent storage request failed",friendlyError(error,"Storage")));
         }
-        openingCapture = journal.begin(defaultRecordingName(new Date()));
+        openingCapture = journal.begin(defaultRecordingName(new Date()), deviceAssociation);
         currentRecordingId = await openingCapture;
         openingCapture = null;
         if (!isCurrentSession(sessionId) || appState !== "starting") return;
@@ -2361,12 +2379,52 @@ const APP_REVISION = "1.0.0-setup1";
     return true;
   }
 
+  function rememberDeviceAssociation(id, device, unavailableMessage) {
+    deviceAssociation = null;
+    deviceIdentityMessage = unavailableMessage;
+    if (!id) return;
+    try {
+      deviceAssociation = new globalThis.SynapDevices.Registry(localStorage).associate(id, device);
+      deviceIdentityMessage = "Setup complete. This pendant is remembered in this browser.";
+    } catch (error) {
+      if (error.code === "DEVICE_ID_CHANGED") throw error;
+      deviceAssociation = { deviceId: id };
+      deviceIdentityMessage = "Device identified, but its association could not be saved. Check browser storage and reconnect.";
+      log("Device association not saved", friendlyError(error));
+    }
+  }
+
+  function renderDeviceSetup() {
+    const status = document.getElementById("setupDeviceStatus");
+    if (!status) return;
+    status.textContent = deviceIdentityMessage;
+    document.getElementById("setupDeviceId").textContent = deviceAssociation?.deviceId || "Not identified";
+    const list = document.getElementById("setupSavedDevices");
+    list.replaceChildren();
+    try {
+      const saved = new globalThis.SynapDevices.Registry(localStorage).load();
+      document.getElementById("setupInstallationId").textContent = saved.installationId || "Created when you connect a supported pendant";
+      for (const device of saved.devices) {
+        const item = document.createElement("li");
+        item.textContent = device.name + " · " + device.deviceId +
+          (isGattConnected() && deviceAssociation?.deviceId === device.deviceId ? " · Connected" : " · Saved");
+        list.appendChild(item);
+      }
+      if (!saved.devices.length) {
+        const item = document.createElement("li"); item.textContent = "No devices saved yet."; list.appendChild(item);
+      }
+    } catch (_) {
+      document.getElementById("setupInstallationId").textContent = "Saved associations unavailable";
+    }
+  }
+
   function openSettings() {
     ui.endpointInput.value = settings.endpoint;
     ui.llmEndpointInput.value = settings.llmEndpoint;
     ui.autoProcessInput.checked = settings.autoProcess;
     ui.tokenInput.value = settings.token;
     ui.wakeLockInput.checked = settings.wakeLock;
+    renderDeviceSetup();
     ui.settingsDialog.showModal();
   }
 
@@ -2730,11 +2788,6 @@ const APP_REVISION = "1.0.0-setup1";
       if (ui.connectButton.disabled) { toast("Bluetooth is not available in this browser.", "error"); return; }
       ui.settingsDialog.close();
       ui.connectButton.click();
-    });
-    document.getElementById("setupFirmware").addEventListener("click", function () {
-      const section = document.getElementById("firmwareSettings");
-      section.scrollIntoView({ block: "start" });
-      section.focus({ preventScroll: true });
     });
     document.getElementById("setupRecord").addEventListener("click", function () {
       ui.settingsDialog.close();

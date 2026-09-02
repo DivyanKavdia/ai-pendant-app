@@ -103,11 +103,13 @@
       if(index)source=source.index(index);
       return requestValue(source.getAll(key));
     }
-    async begin(name) {
+    async begin(name, association = null) {
       if(this.failed) throw this.failed;
       const id=root.crypto.randomUUID();
       await this.atomic(['recordings'],s=>s.recordings.add({id,name,createdAt:new Date().toISOString(),
-        journal:true,status:'recording',sampleRate:16000,notes:'',transcript:'',summary:'',durationMs:0,sizeBytes:0}));
+        journal:true,status:'recording',sampleRate:16000,
+        deviceId:association?.deviceId || null, deviceAssociationId:association?.associationId || null,
+        pwaInstallationId:association?.installationId || null, notes:'',transcript:'',summary:'',durationMs:0,sizeBytes:0}));
       return id;
     }
     append(recordingId,packet) {
@@ -365,3 +367,4 @@
   root.DKAudioStore=AudioStore;root.DKFIFOProcessor=FIFOProcessor;
   root.DKAudioCodec={assemble,wav,SEGMENT_FRAMES};
 })(globalThis);
+
