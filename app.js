@@ -6,7 +6,7 @@
   // -------------------------------------------------------------------------
 
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-settings2";
+const APP_REVISION = "1.0.0-timeline1";
   let deviceAssociation = null;
   let deviceIdentityMessage = "Not connected";
   const PROTOCOL_VERSION = 0x02;
@@ -1926,13 +1926,13 @@ const APP_REVISION = "1.0.0-settings2";
     ui.datePicker.max = todayKey;
     ui.datePicker.value = selectedDayKey;
     ui.dateStrip.replaceChildren();
-    for (let offset = 6; offset >= 0; offset -= 1) {
+    for (let offset = 4; offset >= 0; offset -= 1) {
       const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offset);
       const key = localDateKey(date);
       const button = document.createElement("button");
       button.type = "button";
       button.className = "date-chip";
-      button.setAttribute("role", "listitem");
+      button.setAttribute("aria-label", date.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long", year: "numeric" }));
       button.classList.toggle("selected", key === selectedDayKey);
       button.setAttribute("aria-pressed", String(key === selectedDayKey));
       const weekday = document.createElement("span");
@@ -1952,13 +1952,14 @@ const APP_REVISION = "1.0.0-settings2";
     yesterday.setDate(yesterday.getDate() - 1);
     const relative = selectedDayKey === todayKey ? "Today" :
       selectedDayKey === localDateKey(yesterday) ? "Yesterday" :
-        date.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+        "Timeline";
     const totalDuration = recordings.reduce(function (sum, recording) {
       return sum + (Number(recording.durationMs) || 0);
     }, 0);
-    ui.dayLensTitle.textContent = relative + " at a glance";
+    ui.dayLensTitle.textContent = relative;
     ui.selectedDateLabel.textContent = date.toLocaleDateString([], {
-      weekday: "long", day: "numeric", month: "long", year: "numeric"
+      day: "numeric", month: "short",
+      ...(date.getFullYear() !== new Date().getFullYear() ? {year: "numeric"} : {})
     });
     ui.glanceRecordings.textContent = String(recordings.length);
     ui.glanceDuration.textContent = totalDuration >= 3600000

@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=1.0.0-settings2">
+  <link rel="stylesheet" href="styles.css?v=1.0.0-timeline1">
 </head>
 <body data-state="disconnected">
   <a class="skip-link" href="#capture">Skip to recorder</a>
@@ -91,9 +91,9 @@
       </section>
 
       <section class="day-lens" aria-labelledby="dayLensTitle">
-        <div class="day-lens-heading"><div><p class="eyebrow">YOUR TIMELINE</p><h2 id="dayLensTitle">Today at a glance</h2><p id="selectedDateLabel">Your recordings and insights for today.</p></div><label class="calendar-picker"><svg aria-hidden="true"><use href="#i-calendar"/></svg><span>Choose date</span><input id="datePicker" type="date" aria-label="Choose a date"></label></div>
-        <div id="dateStrip" class="date-strip" role="list" aria-label="Recent days"></div>
-        <div class="glance-grid" aria-live="polite"><div><strong id="glanceRecordings">0</strong><span>recordings</span></div><div><strong id="glanceDuration">0m</strong><span>captured</span></div><div><strong id="glanceSummaries">0</strong><span>summaries</span></div><div><strong id="glanceTranscripts">0</strong><span>transcripts</span></div></div>
+        <div class="day-lens-heading"><h2 id="dayLensTitle">Today</h2><label class="calendar-picker"><svg aria-hidden="true"><use href="#i-calendar"/></svg><span id="selectedDateLabel">Choose date</span><input id="datePicker" type="date" aria-label="Choose a date"></label></div>
+        <div id="dateStrip" class="date-strip" role="group" aria-label="Recent days"></div>
+        <div class="glance-grid" aria-live="polite"><div><strong id="glanceRecordings">0</strong><span>Recordings</span></div><div><strong id="glanceDuration">0m</strong><span>Recorded</span></div><div><strong id="glanceSummaries">0</strong><span>Summaries</span></div><div><strong id="glanceTranscripts">0</strong><span>Transcripts</span></div></div>
       </section>
 
       <section id="insights" class="section-card insights-section" aria-labelledby="insightsTitle">
@@ -169,9 +169,9 @@
     </form>
   </dialog>
   <script src="audio-store.js?v=1.0.0-device1" defer></script>
-  <script src="ota.js?v=1.0.0-settings2" defer></script>
+  <script src="ota.js?v=1.0.0-timeline1" defer></script>
   <script src="releases.js?v=1.0.0-idota1" defer></script>
   <script src="device-identity.js?v=1.0.0-device1" defer></script>
-  <script src="app.js?v=1.0.0-settings2" defer></script>
+  <script src="app.js?v=1.0.0-timeline1" defer></script>
 </body>
 </html>
