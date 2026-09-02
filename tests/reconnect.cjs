@@ -30,6 +30,12 @@ async function recoveryTests() {
   let t = context([pendant]);t.saved.set('dk-pendant-device-id', 'known');
   assert.equal(await t.c.restoreKnownPendant(), true);assert.equal(t.c.bluetoothDevice, pendant);
   t = context([pendant]);assert.equal(await t.c.restoreKnownPendant(), true, 'one named legacy pendant');
+  const renamed = {id:'renamed',name:'synap'};
+  t = context([renamed]);assert.equal(await t.c.restoreKnownPendant(), true, 'one synap pendant');
+  t = context([renamed,pendant]);assert.equal(await t.c.restoreKnownPendant(), false, 'mixed names remain ambiguous');
+  t = context([renamed,pendant]);t.saved.set('dk-pendant-device-id','renamed');
+  assert.equal(await t.c.restoreKnownPendant(), true);assert.equal(t.c.bluetoothDevice,renamed);
+
   t = context([pendant, {id: 'other', name: 'dk-pendant'}]);assert.equal(await t.c.restoreKnownPendant(), false, 'ambiguous names must not select');
   t = context([pendant]);t.saved.set('dk-pendant-device-id', 'revoked');assert.equal(await t.c.restoreKnownPendant(), false, 'never substitute another device for revoked ID');
   t = context();delete t.c.navigator.bluetooth.getDevices;assert.equal(await t.c.restoreKnownPendant(), false);
@@ -89,12 +95,12 @@ async function workerTests(){
   vm.runInNewContext(fs.readFileSync(path.join(root,'sw.js'),'utf8'),ctx);handlers.install({waitUntil:p=>job=p});await job;
   installed.forEach(p=>assert(fs.existsSync(path.join(root,p.split('?')[0]))));
   async function fetch(url,mode='navigate',method='GET'){let result;handlers.fetch({request:{url,mode,method},respondWith:p=>result=p});return result;}
-  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=1.0.0-otaack2');
-  assert.equal(await fetch(scope+'app.js?v=1.0.0-otaack2','cors'),'./app.js?v=1.0.0-otaack2');
-  assert.equal(await fetch(scope+'ota.js?v=1.0.0-otaack2','cors'),'./ota.js?v=1.0.0-otaack2');
+  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=1.0.0-synapname1');
+  assert.equal(await fetch(scope+'app.js?v=1.0.0-synapname1','cors'),'./app.js?v=1.0.0-synapname1');
+  assert.equal(await fetch(scope+'ota.js?v=1.0.0-synapname1','cors'),'./ota.js?v=1.0.0-synapname1');
   assert.equal(await fetch(scope+'releases.js?v=1.0.0-idota1','cors'),'./releases.js?v=1.0.0-idota1');
   assert.equal(await fetch(scope+'api','cors','POST'),undefined);
-  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'1.0.0-otaack2');assert.equal(reply.release,'1.0.0');
+  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'1.0.0-synapname1');assert.equal(reply.release,'1.0.0');
 }
 (async()=>{
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);

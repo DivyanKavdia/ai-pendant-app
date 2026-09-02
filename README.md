@@ -150,7 +150,7 @@ The last successfully connected device ID is remembered locally. On reload,
 the app uses `navigator.bluetooth.getDevices()` when available to recover that
 permitted device, reconnect GATT, and subscribe again to audio and status.
 For older installations without a saved ID, exactly one permitted device named
-`dk-pendant` is accepted. Ambiguous or revoked devices require manual selection.
+`synap` or `dk-pendant` is accepted. Ambiguous or revoked devices require manual selection.
 After a failed automatic connection, up to three retries are scheduled. A manual
 retry then offers Reselect pendant, opening the chooser directly in the user's
 click so the same pendant can be selected again without visiting Settings.

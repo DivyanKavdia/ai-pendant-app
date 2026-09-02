@@ -6,7 +6,7 @@
   // -------------------------------------------------------------------------
 
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-otaack2";
+const APP_REVISION = "1.0.0-synapname1";
   let deviceAssociation = null;
   let deviceIdentityMessage = "Connect a pendant to set it up. No update key is needed.";
   const PROTOCOL_VERSION = 0x02;
@@ -515,7 +515,7 @@ const APP_REVISION = "1.0.0-otaack2";
       try { rememberedId = localStorage.getItem("dk-pendant-device-id"); }
       catch (_) { /* Storage restrictions must not block manual Bluetooth use. */ }
       const namedPendants = devices.filter(function (device) {
-        return device.name === "dk-pendant";
+        return device.name === "synap" || device.name === "dk-pendant";
       });
       const pendant = rememberedId
         ? devices.find(function (device) { return device.id === rememberedId; })
