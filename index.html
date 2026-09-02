@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=1.0.0-device1">
+  <link rel="stylesheet" href="styles.css?v=1.0.0-resume1">
 </head>
 <body data-state="disconnected">
   <a class="skip-link" href="#capture">Skip to recorder</a>
@@ -135,64 +135,43 @@
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
 
   <dialog id="settingsDialog" class="modal" aria-labelledby="settingsTitle">
-    <form id="settingsForm">
-      <div class="modal-header"><div><p class="eyebrow">MAKE IT YOURS</p><h2 id="settingsTitle">Settings</h2></div><button id="closeSettingsButton" class="icon-button" type="button" aria-label="Close settings"><svg><use href="#i-close"/></svg></button></div>
-      <section class="settings-section setup-section" aria-labelledby="setupTitle">
-        <p class="eyebrow">GETTING STARTED</p><h3 id="setupTitle">Set up your device</h3>
-        <p class="settings-note">Start here with a new pendant, or return whenever you need help.</p>
-        <div class="setup-device-card">
-          <p id="setupDeviceStatus" role="status" aria-live="polite">Connect a pendant to set it up. No update key is needed.</p>
-          <dl><dt>Connected device ID</dt><dd id="setupDeviceId">Not identified</dd></dl>
-          <details><summary>Saved device associations</summary>
-            <p class="settings-note">This app installation: <span id="setupInstallationId">Created when you connect a supported pendant</span></p>
-            <ul id="setupSavedDevices"><li>No devices saved yet.</li></ul>
-            <p class="settings-note">Saved in this browser only. A different browser has its own association. Clearing site data removes these associations; connecting again creates them. Device IDs identify your pendant and do not authorize firmware updates.</p>
-          </details>
-        </div>
-        <ol class="setup-steps">
-          <li><h4>Connect your pendant</h4><p>Power on your pendant and turn on Bluetooth. Open Synap in a browser that supports Bluetooth, such as Chrome on Android, using the secure app address. Choose <strong>dk-pendant</strong> in the device picker. The light changes from red to blue when connected.</p>
-            <button id="setupConnect" class="button button-secondary button-small" type="button">Connect pendant</button>
-          </li>
-          <li><h4>Your device is remembered automatically</h4><p>Synap reads your pendant’s permanent device ID and saves its association with this app in your browser. Connecting again recognizes the same pendant, even after a firmware update. You do not need an update key to set up or record.</p></li>
-          <li><h4>Make your first recording</h4><p>Return to the recorder, select <strong>Record</strong>, then <strong>Stop &amp; save</strong>. The light turns green while recording. Play the saved audio in Library. Keep Synap open and in the foreground.</p><p>The current default firmware sends sample audio. To record your voice, attach a microphone and install a build with microphone input enabled.</p>
-            <button id="setupRecord" class="button button-secondary button-small" type="button">Go to recorder</button>
-          </li>
-        </ol>
-        <details><summary>Need help getting connected?</summary><p class="settings-note">If Bluetooth is unavailable, open the app in a compatible browser instead of an embedded browser. If the pendant is missing, check its power and disconnect it from other phones or tabs. Use “Choose another pendant” below to select it again.</p><p class="settings-note">Recordings stay in this browser. Download audio you want to keep before clearing site data. Transcription is optional: configure your trusted endpoints below when you are ready.</p></details>
+    <form id="settingsForm" class="settings-form">
+      <div class="modal-header"><div><p class="eyebrow">PENDANT &amp; APP</p><h2 id="settingsTitle">Settings</h2><p>Everything you need, in one place.</p></div><button id="closeSettingsButton" class="icon-button" type="button" aria-label="Close settings"><svg><use href="#i-close"/></svg></button></div>
+
+      <section class="settings-card device-settings" aria-labelledby="setupTitle">
+        <div class="settings-card-head"><span class="settings-icon"><svg><use href="#i-bt"/></svg></span><div><h3 id="setupTitle">Your pendant</h3><p id="setupDeviceStatus" role="status" aria-live="polite">Connect a pendant to get started.</p></div></div>
+        <div class="device-identity"><span>Device ID</span><strong id="setupDeviceId">Not connected</strong></div>
+        <div class="setting-actions"><button id="setupConnect" class="button button-primary button-small" type="button">Connect pendant</button><button id="setupRecord" class="button button-secondary button-small" type="button">Open recorder</button></div>
+        <details class="settings-disclosure"><summary>Remembered devices <span>+</span></summary><div class="disclosure-body"><p>App installation <strong id="setupInstallationId">Created after first connection</strong></p><ul id="setupSavedDevices"><li>No devices saved yet.</li></ul><button id="chooseDeviceButton" class="text-button" type="button">Choose a different pendant</button></div></details>
       </section>
-      <div class="settings-section"><h3>Device &amp; recording</h3>
-        <label class="toggle-row"><span><strong>Reconnect remembered pendant</strong><small>After reload and when returning to the app, where browser permissions allow.</small></span><input id="autoReconnectInput" type="checkbox" checked></label>
-        <p id="reconnectCapability" class="settings-note" role="status">Checking remembered-device support…</p>
-        <label class="toggle-row"><span><strong>Keep screen awake</strong><small>While recording, keep this app in the foreground.</small></span><input id="wakeLockInput" type="checkbox" checked></label>
-        <p class="settings-note">Previously authorised devices reconnect automatically when your browser supports it. Bluetooth cannot stay connected through a closed browser or an Android suspension.</p>
-        <div class="settings-actions"><button id="chooseDeviceButton" class="button button-secondary button-small" type="button">Choose another pendant</button><button id="recoveryButton" class="button button-secondary button-small" type="button">Download unsaved audio</button><button id="retrySaveButton" class="button button-secondary button-small" type="button">Retry local save</button></div>
-      </div>
-      <div id="firmwareSettings" class="settings-section ota-section" tabindex="-1"><h3>Pendant firmware · optional</h3>
-        <p class="settings-note">Your saved device ID identifies the pendant to update. Tap Check updates, then approve the update. No update key, signing setup or physical button is needed on device-ID firmware. Keep the pendant powered and this app open.</p>
-        <button id="otaCheck" class="button button-secondary button-small" type="button">Check pendant</button>
-        <button id="otaReleaseCheck" class="button button-secondary button-small" type="button">Check updates</button>
-        <button id="otaLatest" class="button button-primary button-small" type="button" hidden>Install GitHub update</button>
-        <label class="field"><span>Manual fallback: trusted application .bin</span><input id="otaFile" type="file" accept=".bin"><small>Not needed for GitHub updates. Application image only; never select a merged/full-flash image, bootloader or partition table.</small></label>
-        <label class="toggle-row"><span><strong>Approve this firmware update</strong><small>I trust this Synap firmware, have stopped recording, and have stable power. Keep the app open until the pendant reboots.</small></span><input id="otaConfirm" type="checkbox"></label>
-        <div class="settings-actions"><button id="otaStart" class="button button-primary button-small" type="button">Update firmware</button><button id="otaCancel" class="button button-secondary button-small" type="button" disabled>Cancel transfer</button></div>
-        <progress id="otaProgress" value="0" max="1" aria-label="Firmware transfer progress"></progress>
-        <p id="otaStatus" class="settings-note" role="status" aria-live="polite">Connect your pendant, then check its firmware and available update space.</p>
-        <p class="settings-note">Device IDs and integrity checks are not access control or publisher authentication. A nearby BLE client can initiate an update. Install only trusted builds. Interrupted transfers restart from zero. Processing stays paused after an update; resume it from Queue.</p>
-      </div>
-      <div class="settings-section"><h3>Optional transcription</h3>
-        <p class="settings-note">Run FIFO uploads audio to your transcription endpoint, then sends text to your LLM endpoint. Use trusted servers you control. Provider API keys belong on those servers.</p>
-        <label class="field"><span>HTTPS endpoint</span><input id="endpointInput" type="url" inputmode="url" placeholder="https://your-server.example/transcribe"><small>Multipart field <code>audio</code>; response: <code>text</code> or <code>transcript</code>.</small></label>
-        <label class="field"><span>Server access token <span class="optional">OPTIONAL</span></span><input id="tokenInput" type="password" autocomplete="off" placeholder="Not a provider API key"><small>Kept only for this page session; never saved to browser storage.</small></label>
-        <label class="field"><span>HTTPS LLM endpoint</span><input id="llmEndpointInput" type="url" inputmode="url" placeholder="https://your-server.example/summarize"><small>Accepts task + input JSON; returns a summary. See the repository README for the API contract.</small></label>
-        <label class="toggle-row"><span><strong>Automatically process saved recordings</strong><small>Upload queued audio/text while this app is open. Off by default.</small></span><input id="autoProcessInput" type="checkbox"></label>
-      </div>
-      <div class="modal-actions"><button class="button button-primary" type="submit">Save preferences <svg><use href="#i-check"/></svg></button></div>
+
+      <section class="settings-card" aria-labelledby="recordingSettingsTitle">
+        <div class="settings-card-head"><span class="settings-icon"><svg><use href="#i-mic"/></svg></span><div><h3 id="recordingSettingsTitle">Recording</h3><p>Connection and capture preferences.</p></div></div>
+        <label class="toggle-row"><span><strong>Reconnect automatically</strong><small>Recognise this pendant when you return.</small></span><input id="autoReconnectInput" type="checkbox" checked></label>
+        <p id="reconnectCapability" class="inline-status" role="status">Checking reconnect support…</p>
+        <label class="toggle-row"><span><strong>Keep screen awake</strong><small>Prevent sleep while recording.</small></span><input id="wakeLockInput" type="checkbox" checked></label>
+        <details class="settings-disclosure"><summary>Recording recovery <span>+</span></summary><div class="disclosure-body setting-actions"><button id="recoveryButton" class="button button-secondary button-small" type="button">Download unsaved audio</button><button id="retrySaveButton" class="button button-secondary button-small" type="button">Retry local save</button></div></details>
+      </section>
+
+      <section id="firmwareSettings" class="settings-card ota-section" tabindex="-1" aria-labelledby="firmwareTitle">
+        <div class="settings-card-head"><span class="settings-icon update-icon"><svg><use href="#i-download"/></svg></span><div><h3 id="firmwareTitle">Firmware update</h3><p>Fast, resumable updates for this pendant.</p></div></div>
+        <div class="ota-status-panel"><p id="otaStatus" role="status" aria-live="polite">Connect your pendant to check for updates.</p><progress id="otaProgress" value="0" max="1" aria-label="Firmware transfer progress"></progress></div>
+        <div class="setting-actions"><button id="otaReleaseCheck" class="button button-secondary button-small" type="button">Check for updates</button><button id="otaLatest" class="button button-primary button-small" type="button" hidden>Update now</button><button id="otaCancel" class="text-button" type="button" disabled>Cancel</button></div>
+        <details class="settings-disclosure"><summary>Advanced update options <span>+</span></summary><div class="disclosure-body"><button id="otaCheck" class="text-button" type="button">View pendant firmware details</button><label class="field"><span>Install application file</span><input id="otaFile" type="file" accept=".bin"><small>For development builds only.</small></label><label class="toggle-row compact-toggle"><span><strong>I trust this firmware file</strong></span><input id="otaConfirm" type="checkbox"></label><button id="otaStart" class="button button-secondary button-small" type="button">Install selected file</button></div></details>
+      </section>
+
+      <details class="settings-card processing-settings">
+        <summary class="settings-card-head"><span class="settings-icon"><svg><use href="#i-spark"/></svg></span><span><strong>AI processing</strong><small>Transcription and summaries</small></span><span class="summary-plus">+</span></summary>
+        <div class="processing-fields"><label class="field"><span>Transcription endpoint</span><input id="endpointInput" type="url" inputmode="url" placeholder="https://your-server.example/transcribe"></label><label class="field"><span>Session token <span class="optional">OPTIONAL</span></span><input id="tokenInput" type="password" autocomplete="off" placeholder="Server access token"><small>Held only until this page closes.</small></label><label class="field"><span>Summary endpoint</span><input id="llmEndpointInput" type="url" inputmode="url" placeholder="https://your-server.example/summarize"></label><label class="toggle-row"><span><strong>Process recordings automatically</strong><small>Runs while Synap is open.</small></span><input id="autoProcessInput" type="checkbox"></label></div>
+      </details>
+
+      <div class="modal-actions"><button class="button button-primary" type="submit">Save settings <svg><use href="#i-check"/></svg></button></div>
     </form>
   </dialog>
   <script src="audio-store.js?v=1.0.0-device1" defer></script>
-  <script src="ota.js?v=1.0.0-idota1" defer></script>
+  <script src="ota.js?v=1.0.0-resume1" defer></script>
   <script src="releases.js?v=1.0.0-idota1" defer></script>
   <script src="device-identity.js?v=1.0.0-device1" defer></script>
-  <script src="app.js?v=1.0.0-idota1" defer></script>
+  <script src="app.js?v=1.0.0-resume1" defer></script>
 </body>
 </html>

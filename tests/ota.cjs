@@ -12,6 +12,11 @@ function mock(options={}) {
   let connected=true,listener=null,deviceId=ID;
   const state={state:options.state??1,error:0,session:0,offset:0,capacity:2048,maxData:options.maxData??173};
   const chunks=[],commands=[],progress=[];let hash=null,length=0;
+  if(options.resume) {
+    const saved=image();state.state=3;state.session=55;state.offset=173;
+    length=saved.size;hash=new Uint8Array(cryptoNode.createHash('sha256').update(saved.bytes).digest());
+    chunks.push(saved.bytes.slice(0,173));
+  }
   function status() {
     const b=new Uint8Array(20),v=new DataView(b.buffer);b[0]=0xD7;b[1]=options.protocol??3;b[2]=state.state;b[3]=state.error;
     v.setUint32(4,state.session,true);v.setUint32(8,state.offset,true);v.setUint32(12,state.capacity,true);
@@ -19,7 +24,7 @@ function mock(options={}) {
   }
   const characteristic={addEventListener:(t,f)=>listener=f,removeEventListener:()=>listener=null,
     startNotifications:async()=>{},readValue:async()=>status()};
-  const write={writeValueWithResponse:async bytes=>{
+  const writePacket=async bytes=>{
     const v=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),cmd=bytes[0];commands.push(cmd);
     if(cmd===1) {
       assert.equal(bytes.length,59);assert.equal(new TextDecoder().decode(bytes.subarray(41)),ID);
@@ -34,6 +39,10 @@ function mock(options={}) {
       if(options.chunkFailure){state.error=5;state.state=6;}
       if(options.cancel)client.cancel();
     }
+    if(cmd===6) {
+      assert.equal(v.getUint32(1,true),state.session);assert.equal(v.getUint32(5,true),length);
+      assert.equal(new TextDecoder().decode(bytes.subarray(41)),ID);state.error=0;
+    }
     if(cmd===3) {
       assert.equal(state.offset,length);
       assert.equal(Buffer.from(hash).toString('hex'),cryptoNode.createHash('sha256').update(Buffer.concat(chunks)).digest('hex'));
@@ -43,7 +52,9 @@ function mock(options={}) {
       if(options.commitDrop){connected=false;client.reset();throw Error('reboot');}}
     if(cmd===5&&[3,4].includes(state.state)){state.state=6;state.error=10;}
     if(listener&&!options.noNotifications)listener({target:{value:status()}});
-  }};
+  };
+  const write={properties:{writeWithoutResponse:!!options.fast},writeValueWithResponse:writePacket,
+    writeValueWithoutResponse:writePacket};
   const client=new Client({connected:()=>connected,queue:async f=>f(),progress:(...p)=>progress.push(p),
     getService:async()=>({getCharacteristic:async uuid=>{
       if(options.missing)throw Object.assign(Error('missing'),{name:'NotFoundError'});
@@ -66,6 +77,8 @@ function mock(options={}) {
   const result=await t.client.update(image(),ID);assert.equal(result.committed,true);assert.equal(t.client.busy,false);
   assert.deepEqual(t.commands,[1,2,2,2,3,4]);assert.equal(Buffer.concat(t.chunks).length,512);
   assert.equal(t.progress.at(-1)[2],true,'cancel disabled at commit');
+  t=mock({resume:true,fast:true});await t.client.check();assert((await t.client.update(image(),ID)).committed);
+  assert.equal(t.commands[0],6,'reconnect resumes rather than sends BEGIN');assert.equal(Buffer.concat(t.chunks).length,512);
   for(const protocol of [1,2]){t=mock({protocol});await t.client.check();await assert.rejects(t.client.update(image(),ID),/USB once/);assert.equal(t.commands.length,0);}
   t=mock({missing:true});await assert.rejects(t.client.check(),/USB once/);
   for(const options of [{drop:true},{chunkFailure:true},{hashFailure:true},{cancel:true},{deviceMismatch:true}]){
@@ -82,7 +95,7 @@ function mock(options={}) {
   }
   t=mock();await t.client.check();t.setId(OTHER);await assert.rejects(t.client.update(image(),ID),/mismatch/);assert.equal(t.commands.length,0);
   for(const options of [{badIdentity:true},{disconnectIdentity:true}]){t=mock(options);await assert.rejects(t.client.check());assert.equal(t.commands.length,0);}
-  for(const options of [{state:0},{state:3},{maxData:63},{maxData:174}]){t=mock(options);await t.client.check();await assert.rejects(t.client.update(image(),ID));assert.equal(t.commands.length,0);}
+  for(const options of [{state:0},{state:5},{maxData:63},{maxData:504}]){t=mock(options);await t.client.check();await assert.rejects(t.client.update(image(),ID));assert.equal(t.commands.length,0);}
   t=mock();await t.client.check();t.disconnect();await assert.rejects(t.client.update(image(),ID),/interrupted/);
-  console.log('PASS: device-ID protocol, no keys, legacy migration, wrong target, ordered transfer, SHA-256, failure/cancel/reboot and read fallback.');
+  console.log('PASS: device-ID protocol, windowed transfer, reconnect resume, SHA-256, failure/cancel/reboot and read fallback.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

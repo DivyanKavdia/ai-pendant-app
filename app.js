@@ -6,7 +6,7 @@
   // -------------------------------------------------------------------------
 
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-idota1";
+const APP_REVISION = "1.0.0-resume1";
   let deviceAssociation = null;
   let deviceIdentityMessage = "Connect a pendant to set it up. No update key is needed.";
   const PROTOCOL_VERSION = 0x02;
@@ -2470,7 +2470,8 @@ const APP_REVISION = "1.0.0-idota1";
         const id=requireTarget(info);
         status.textContent=id+" · Firmware build "+info.build+" · OTA slot "+(info.capacity/1048576).toFixed(2)+" MB. "+
           (info.state===0 ? "OTA unavailable: check the partition layout and BLE MTU." :
-            info.state===3 || info.state===4 || info.state===5 ? "An update is pending. Wait for reboot or the 45-second transfer timeout." :
+            info.state===3 || info.state===4 ? `Update paused after ${Math.round(info.offset/1024)} KB. Choose Continue update within two minutes.` :
+            info.state===5 ? "Update committed. Wait for the pendant to reboot." :
               "Device-ID updates enabled. No key or physical button press is needed.");
       } catch(error) { status.textContent=friendlyError(error); }
       finally { lock(false); }
@@ -2508,6 +2509,7 @@ const APP_REVISION = "1.0.0-idota1";
     const savePending=(id,m)=>{try{if(m)localStorage.setItem(pendingKey(id),JSON.stringify(m));else localStorage.removeItem(pendingKey(id));}catch(_){} };
     const getPending=id=>{try{const m=JSON.parse(localStorage.getItem(pendingKey(id)));return m?releases.validateManifest(m):null;}catch(_){return null;}};
     const announce=message=>{notice.hidden=false;noticeText.textContent=message;status.textContent=message;};
+    const offerLabel=continuing=>{latestButton.textContent=continuing?'Continue update':'Update now';bannerButton.textContent=continuing?'Continue update':'Update pendant';};
     async function identity() {
       const epoch=connectionEpoch;
       try {
@@ -2533,7 +2535,11 @@ const APP_REVISION = "1.0.0-idota1";
         if(pending) {
           verified=info.build===pending.build&&board===pending.identity;
           if(verified){savePending(id,null);announce(`Update complete: firmware ${pending.version}, build ${info.build}, is running. Processing remains paused.`);}
-          else announce(`Update not confirmed. Pendant reports build ${info.build}; expected ${pending.build}. No automatic retry was started.`);
+          else if([3,4].includes(info.state)&&info.session) {
+            offered=pending;offeredDevice=id;bannerButton.hidden=false;latestButton.hidden=false;offerLabel(true);
+            announce(`Firmware transfer paused at ${Math.floor(info.offset*100/pending.size)}%. Continue within two minutes; it will resume from this position.`);
+            return;
+          } else announce(`Update not confirmed. Pendant reports build ${info.build}; expected ${pending.build}.`);
         }
         // A slow/offline public feed must not keep recording controls locked.
         const m=await releases.latest();
@@ -2541,6 +2547,7 @@ const APP_REVISION = "1.0.0-idota1";
         if(epoch!==connectionEpoch||id!==targetId()||!isGattConnected())throw Error('Pendant connection changed.');
         if(releases.compatible(m,info,board)) {
           offered=m;offeredDevice=id;bannerButton.hidden=false;latestButton.hidden=false;
+          offerLabel(false);
           announce(`Firmware ${m.version} (build ${m.build}) available for ${id}. Update now? Stop and save recording first.`);
         } else {
           offered=null;bannerButton.hidden=true;latestButton.hidden=true;
@@ -2563,13 +2570,13 @@ const APP_REVISION = "1.0.0-idota1";
       const m=offered,id=targetId();
       if(!window.confirm(`Update pendant ${id} to Synap ${m.version}, build ${m.build}?\n\nKeep the pendant powered and this app open until it reconnects. Recording and processing will pause.`))return;
       openSettings();lock(true);processor?.pause();progress.value=0;
-      let commitSent=false;
+      let commitSent=false,resumeInterrupted=false;
       try {
         const info=await firmwareUpdater.check();
         if(requireTarget(info)!==id)throw Error('The connected pendant is not the selected update target.');
         const board=await identity();
         if(!releases.compatible(m,info,board))throw Error('This release is already installed or older than the running firmware.');
-        if(![1,6].includes(info.state))throw Error('An update is already pending. Wait for reboot or transfer timeout.');
+        if(![1,3,4,6].includes(info.state))throw Error('An update is already pending. Wait for reboot or transfer timeout.');
         const epoch=connectionEpoch;
         await acquireWakeLock();status.textContent='Downloading verified GitHub firmware…';cancel.disabled=false;
         downloadController=new AbortController();
@@ -2578,7 +2585,7 @@ const APP_REVISION = "1.0.0-idota1";
         if(epoch!==connectionEpoch||id!==targetId()||!isGattConnected())throw Error('Pendant connection changed during download. Nothing was flashed.');
         savePending(id,m);
         try{await firmwareUpdater.update(binary,id);commitSent=true;}
-        catch(error){if(!firmwareUpdater.committing){savePending(id,null);throw error;}commitSent=true;}
+        catch(error){if(!firmwareUpdater.committing){if(error.resumable)resumeInterrupted=true;else savePending(id,null);throw error;}commitSent=true;}
         status.textContent='Firmware committed. Waiting for reboot and checking the running build…';cancel.disabled=true;
         const deadline=Date.now()+8000;
         while(isGattConnected()&&Date.now()<deadline)await delay(100);
@@ -2598,11 +2605,11 @@ const APP_REVISION = "1.0.0-idota1";
         if(!verified)throw Error(`Update not confirmed: reconnect this pendant to verify build ${m.build}. Do not assume it installed successfully.`);
         savePending(id,null);offered=null;bannerButton.hidden=true;latestButton.hidden=true;
         announce(`Update complete: firmware ${m.version}, build ${m.build}, is running. Processing remains paused.`);
-      }catch(error){announce(friendlyError(error)+' Processing remains paused.');}
+      }catch(error){announce((error.resumable?'Update paused. Reconnect this pendant and choose Continue update. ':friendlyError(error)+' ')+'Processing remains paused.');}
       finally{
         downloadController=null;firmwareUpdater.reset();confirmation.checked=false;
         await releaseWakeLock();lock(false);
-        if(commitSent&&!isGattConnected())recoverRememberedConnection('firmware-update',true);
+        if((commitSent||resumeInterrupted)&&!isGattConnected())recoverRememberedConnection('firmware-update',true);
       }
     }
     latestButton.addEventListener('click',updateLatest);bannerButton.addEventListener('click',updateLatest);

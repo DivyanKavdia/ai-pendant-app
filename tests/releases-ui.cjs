@@ -7,10 +7,12 @@ function setup(options={}){
     addEventListener(t,f){(this.events[t]??=[]).push(f);}});return nodes.get(id);};
   const m={version:'1.0.0',build:1001,identity:'SYNAP-FW:esp32s3-fh4r2-qspi-4m:1.0.0:1001'};
   const ID='SYNAP-AABBCCDDEEFF',OTHER='SYNAP-112233445566';
+  if(options.pending)storage.set('synap-ota-pending-device:'+ID,JSON.stringify({...m,size:1000}));
   class Client {
     constructor(io){this.io=io;this.committing=false;}reset(){}cancel(){calls.push('cancel');}
-    async check(){calls.push('check');return{protocol:options.legacy?2:3,deviceId:options.wrongIdentity?OTHER:c.deviceAssociation?.deviceId,state:1,build,capacity:2048,maxData:173};}
+    async check(){calls.push('check');return{protocol:options.legacy?2:3,deviceId:options.wrongIdentity?OTHER:c.deviceAssociation?.deviceId,state:options.resumeState?3:1,session:options.resumeState?55:0,offset:options.resumeState?500:0,build,capacity:2048,maxData:503};}
     async update(blob,id){assert.equal(id,ID);assert(c.firmwareBusy);calls.push('flash');
+      if(options.pause){connected=false;const e=Error('paused');e.resumable=true;throw e;}
       if(options.flashFail)throw Error('Flash failed');
       this.committing=true;connected=false;
       if(options.commitDrop)throw Error('Lost acknowledgement');return{committed:true};}
@@ -57,5 +59,8 @@ function setup(options={}){
   t=setup({switchedPendant:true});await t.click('otaReleaseCheck');await t.click('otaLatest');assert.match(t.node('otaStatus').textContent,/original pendant device ID/);assert.equal(t.storage.size,1);
   t=setup({reconnectFail:true});await t.click('otaReleaseCheck');await t.click('otaLatest');assert.match(t.node('otaStatus').textContent,/not confirmed/);assert(t.calls.includes('recover'));
   t=setup({offline:true});await t.click('otaReleaseCheck');assert(!t.calls.includes('flash'));assert.match(t.node('otaStatus').textContent,/Offline/);
+  t=setup({pending:true,resumeState:true,pause:true});await t.click('otaReleaseCheck');
+  assert.match(t.node('otaLatest').textContent,/Continue/);assert(!t.calls.includes('manifest'),'resume does not switch release images');
+  await t.click('otaLatest');assert.equal(t.storage.size,1,'resumable interruption keeps checkpoint');assert(t.calls.includes('recover'));
   console.log('PASS: device-ID discovery/targeting, approval, eligibility, hash failure, connection race, commit loss, persistent target, reboot verification and failure retention.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

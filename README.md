@@ -71,9 +71,10 @@ click Update firmware. Never select merged, bootloader or partition images. Manu
 are checked for chip/header/slot/protocol compatibility but do not enforce increasing builds.
 The GitHub path additionally enforces exact target/build identity and a newer build.
 
-Transfer is FIFO with written-byte ACKs, a SHA-256 check, bounded packets and read fallback
+Transfer uses bounded eight-packet windows with written-byte ACKs, a SHA-256 check and read fallback
 for lost notifications. Keep the app open and the pendant powered. Cancel works before commit;
-link loss or a 45-second stall requires restarting from zero. A lost commit acknowledgement is
+a link loss can resume from the pendant's saved offset for two minutes. A connected 45-second stall,
+device reboot or power loss requires a new transfer. A lost commit acknowledgement is
 uncertain until reconnect confirms the exact expected permanent device ID and build.
 Processing remains paused until resumed from Queue.
 
@@ -98,12 +99,14 @@ All integers are little-endian, and packets start with command u8 + nonzero tran
 | 3 Verify | none; after exactly the declared size |
 | 4 Commit | none; after successful Verify |
 | 5 Abort | none; not accepted after Commit |
+| 6 Resume | image length u32, SHA-256 (32 bytes), device ID (18 UTF-8 bytes, no NUL) |
 
 BEGIN is 59 bytes. Status remains 20 bytes: D7, protocol 03, state u8, error u8,
 transfer ID u32, next offset u32, capacity u32, maxData u16, build u16.
 States are 0 unavailable, 1 available, 2 reserved, 3 receiving, 4 verified,
 5 committed, 6 failed. Error 12 is a device-ID mismatch.
-maxData remains 64–173 bytes (minimum MTU 76). Packet writes are at most 182 bytes.
+maxData is 64–503 bytes. Packet writes are at most 512 bytes. Data prefers
+write-without-response in eight-packet windows; control packets use write-with-response.
 Only an identical repeat of the immediately previous data packet is idempotent.
 The protocol marker is SYNAP-ESP32S3-OTA-ID-V3, not a cryptographic signature.
 

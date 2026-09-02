@@ -11,6 +11,9 @@
     "Bluetooth connection changed.", "Update timed out.", "Update cancelled.", "Stop recording first.",
     "The update targets a different pendant device ID."];
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  function interrupted(message="BLE interrupted. Reconnect to continue this update.") {
+    const error=new Error(message);error.resumable=true;return error;
+  }
   function decode(value) {
     if (!value || value.byteLength !== 20 || value.getUint8(0) !== 0xD7 || ![1,2,3].includes(value.getUint8(1))) {
       throw new Error("Unsupported OTA status/protocol.");
@@ -95,12 +98,20 @@
     }
     cancel() { if (!this.committing) this.cancelled=true; }
     ensure(epoch) {
-      if (epoch!==this.epoch || !this.io.connected()) throw new Error("BLE interrupted. Reconnect and restart the transfer from zero.");
+      if (epoch!==this.epoch || !this.io.connected()) throw interrupted();
       if (this.cancelled) throw new Error("Update cancelled.");
     }
-    async send(data, epoch) {
+    async send(data, epoch, response=true, preserveOnFailure=false) {
       this.ensure(epoch);const characteristic=this.writeChar;
-      await this.io.queue(()=>characteristic.writeValueWithResponse(data),"Write firmware packet");
+      try {
+        const withoutResponse=!response && characteristic.properties?.writeWithoutResponse &&
+          typeof characteristic.writeValueWithoutResponse==="function";
+        await this.io.queue(()=>withoutResponse ? characteristic.writeValueWithoutResponse(data) :
+          characteristic.writeValueWithResponse(data),"Write firmware packet");
+      } catch(error) {
+        if(preserveOnFailure) throw interrupted("Firmware transfer paused. Reconnect to continue from the saved position.");
+        throw error;
+      }
     }
     async ack(predicate, epoch, session, timeout=15000) {
       const end=Date.now()+timeout;let nextRead=Date.now()+500;
@@ -112,7 +123,7 @@
         if(Date.now()>=nextRead) { await this.read();nextRead=Date.now()+500; }
         else await sleep(15);
       }
-      throw new Error("Firmware acknowledgement timed out. Reconnect and restart from zero.");
+      throw new Error("Firmware acknowledgement timed out. Reconnect and try Continue update.");
     }
     async update(file, expectedDeviceId) {
       if (this.busy) throw new Error("An update is already running.");
@@ -124,39 +135,57 @@
         if(info.protocol!==3) throw new Error(MIGRATION_MESSAGE);
         if(!validDeviceId(expectedDeviceId)) throw new Error("Connect and identify the intended pendant before updating.");
         if(info.state===0) throw new Error("OTA needs two application slots and a sufficient BLE MTU.");
-        if(![1,6].includes(info.state)) throw new Error("Another update is pending. Wait for reboot or the transfer timeout.");
-        if (info.maxData<64 || info.maxData>173) throw new Error("Unsupported BLE firmware packet size.");
+        if(![1,3,4,6].includes(info.state)) throw new Error("Another update is pending. Wait for reboot or the transfer timeout.");
+        if (info.maxData<64 || info.maxData>503) throw new Error("Unsupported BLE firmware packet size.");
         if (!file || file.size<36 || file.size>info.capacity || file.size>16*1024*1024) throw new Error("Choose an application .bin that fits the available slot.");
         this.io.progress("Checking firmware…",0,false);
         const bytes=new Uint8Array(await file.arrayBuffer());validateImage(bytes,info.capacity,info.protocol);
         const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",bytes));
         this.ensure(epoch);
-        session=crypto.getRandomValues(new Uint32Array(1))[0] || 1;
         if(await this.readDeviceId()!==expectedDeviceId) throw new Error("Device ID mismatch. Nothing was flashed.");
         this.ensure(epoch);
-        const begin=packet(1,session,59);new DataView(begin.buffer).setUint32(5,bytes.length,true);begin.set(digest,9);
-        begin.set(new TextEncoder().encode(expectedDeviceId),41);
-        this.status=null; // Never reject a retry using the previous attempt's cached error.
-        begun=true;await this.send(begin,epoch);
-        await this.ack(s=>s.state===3 && s.offset===0,epoch,session,30000);
-        for(let offset=0;offset<bytes.length;) {
-          const count=Math.min(info.maxData,bytes.length-offset);
-          const chunk=packet(2,session,9+count);new DataView(chunk.buffer).setUint32(5,offset,true);
-          chunk.set(bytes.subarray(offset,offset+count),9);
-          await this.send(chunk,epoch);
-          await this.ack(s=>s.state===3 && s.offset===offset+count,epoch,session);
-          offset+=count;
+        let offset=0,ready=info.state===4;
+        if([3,4].includes(info.state) && info.session) {
+          session=info.session;offset=info.offset;
+          if(offset>bytes.length) throw new Error("Saved update position exceeds this firmware image.");
+          const resume=packet(6,session,59);new DataView(resume.buffer).setUint32(5,bytes.length,true);
+          resume.set(digest,9);resume.set(new TextEncoder().encode(expectedDeviceId),41);
+          this.status=null;begun=true;await this.send(resume,epoch,true,true);
+          const resumed=await this.ack(s=>[3,4].includes(s.state)&&s.offset===offset,epoch,session,15000);
+          ready=resumed.state===4;
+          this.io.progress("Continuing firmware · "+Math.floor(offset*100/bytes.length)+"%",offset/bytes.length,false);
+        } else {
+          session=crypto.getRandomValues(new Uint32Array(1))[0] || 1;
+          const begin=packet(1,session,59);new DataView(begin.buffer).setUint32(5,bytes.length,true);begin.set(digest,9);
+          begin.set(new TextEncoder().encode(expectedDeviceId),41);
+          this.status=null; // Never reject a retry using the previous attempt's cached error.
+          begun=true;await this.send(begin,epoch,true,true);
+          await this.ack(s=>s.state===3 && s.offset===0,epoch,session,30000);
+        }
+        const windowPackets=8;
+        while(!ready && offset<bytes.length) {
+          let target=offset;
+          for(let sent=0;sent<windowPackets && target<bytes.length;sent++) {
+            const count=Math.min(info.maxData,bytes.length-target);
+            const chunk=packet(2,session,9+count);new DataView(chunk.buffer).setUint32(5,target,true);
+            chunk.set(bytes.subarray(target,target+count),9);
+            await this.send(chunk,epoch,false,true);target+=count;
+          }
+          await this.ack(s=>s.state===3 && s.offset===target,epoch,session);
+          offset=target;
           this.io.progress("Sending firmware · "+Math.floor(offset*100/bytes.length)+"%",offset/bytes.length,false);
         }
-        this.io.progress("Verifying firmware on pendant…",1,false);
-        await this.send(packet(3,session),epoch);await this.ack(s=>s.state===4,epoch,session,30000);
+        if(!ready) {
+          this.io.progress("Verifying firmware on pendant…",1,false);
+          await this.send(packet(3,session),epoch,true,true);await this.ack(s=>s.state===4,epoch,session,30000);
+        }
         this.ensure(epoch);this.committing=true;
         this.io.progress("Verified · selecting firmware and rebooting…",1,true);
         await this.send(packet(4,session),epoch);await this.ack(s=>s.state===5,epoch,session,10000);
         return {committed:true,sha256:Array.from(digest,b=>b.toString(16).padStart(2,"0")).join("")};
       } catch(error) {
         if (this.committing) throw new Error("Commit was sent, but reboot confirmation is incomplete. Reconnect and Check pendant before attempting another update. "+error.message);
-        if (begun && epoch===this.epoch && this.io.connected() && this.writeChar) {
+        if (begun && !error.resumable && epoch===this.epoch && this.io.connected() && this.writeChar) {
           const characteristic=this.writeChar;
           try { await this.io.queue(()=>characteristic.writeValueWithResponse(packet(5,session)),"Cancel firmware transfer"); } catch (_) {}
         }
