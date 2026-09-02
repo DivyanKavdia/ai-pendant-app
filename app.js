@@ -6,7 +6,7 @@
   // -------------------------------------------------------------------------
 
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-device1";
+const APP_REVISION = "1.0.0-idota1";
   let deviceAssociation = null;
   let deviceIdentityMessage = "Connect a pendant to set it up. No update key is needed.";
   const PROTOCOL_VERSION = 0x02;
@@ -869,8 +869,6 @@ const APP_REVISION = "1.0.0-device1";
   function cleanupCharacteristics() {
     deviceAssociation = null;
     deviceIdentityMessage = "Connect a pendant to identify it. Saved associations remain in this browser.";
-    const ownerKeyInput=document.getElementById("otaOwnerKey");
-    if(ownerKeyInput) ownerKeyInput.value="";
     firmwareUpdater?.reset();
     connectionEpoch += 1;
     gattQueue = Promise.resolve();
@@ -2436,7 +2434,12 @@ const APP_REVISION = "1.0.0-device1";
     const status = document.getElementById("otaStatus");
     const progress = document.getElementById("otaProgress");
     const confirmation = document.getElementById("otaConfirm");
-    const ownerKey = document.getElementById("otaOwnerKey");
+    const targetId = () => deviceAssociation?.deviceId || null;
+    const requireTarget = info => {
+      if(info.protocol!==3) throw Error(globalThis.SynapOTA.MIGRATION_MESSAGE);
+      if(!targetId() || info.deviceId!==targetId()) throw Error("Connect and identify the intended pendant before updating. Device ID mismatch or unavailable.");
+      return info.deviceId;
+    };
     let discoveryBusy=false;
     firmwareUpdater = new globalThis.SynapOTA.Client({
       connected:isGattConnected, queue:queueGattOperation,
@@ -2450,9 +2453,9 @@ const APP_REVISION = "1.0.0-device1";
       !["starting","stopping","saving"].includes(appState);
     const lock = value=>{
       if (value) clearReconnectTimer(true);
-      firmwareBusy=value;check.disabled=value;file.disabled=value;confirmation.disabled=value;ownerKey.disabled=value;
+      firmwareBusy=value;check.disabled=value;file.disabled=value;confirmation.disabled=value;
       start.disabled=value;cancel.disabled=true;ui.chooseDeviceButton.disabled=value;
-      for (const id of ["otaLatest","otaReleaseCheck","firmwareUpdateButton","otaForget","otaRemember"]) {
+      for (const id of ["otaLatest","otaReleaseCheck","firmwareUpdateButton"]) {
         const control=document.getElementById(id);if(control)control.disabled=value;
       }
       ui.runQueueButton.disabled=value;
@@ -2464,12 +2467,11 @@ const APP_REVISION = "1.0.0-device1";
       lock(true);
       try {
         const info=await firmwareUpdater.check();
-        status.textContent="Firmware build "+info.build+" · OTA slot "+(info.capacity/1048576).toFixed(2)+" MB. "+
+        const id=requireTarget(info);
+        status.textContent=id+" · Firmware build "+info.build+" · OTA slot "+(info.capacity/1048576).toFixed(2)+" MB. "+
           (info.state===0 ? "OTA unavailable: check the partition layout and BLE MTU." :
             info.state===3 || info.state===4 || info.state===5 ? "An update is pending. Wait for reboot or the 45-second transfer timeout." :
-              info.protocol===2 ? "PWA-only updates enabled. Enter your owner key and select a trusted .bin; no button press needed." :
-                info.state===2 ? "Legacy firmware unlocked. Select a trusted .bin and start within 90 seconds." :
-                  "Legacy firmware: hold BOOT for 2 seconds and release for this migration. Firmware 5.2+ uses PWA-only approval.");
+              "Device-ID updates enabled. No key or physical button press is needed.");
       } catch(error) { status.textContent=friendlyError(error); }
       finally { lock(false); }
     });
@@ -2479,11 +2481,9 @@ const APP_REVISION = "1.0.0-device1";
       if (!file.files[0] || !confirmation.checked) { status.textContent="Select a trusted application .bin and confirm the safety checklist.";return; }
       lock(true);processor?.pause();progress.value=0;
       try {
-        // Refresh handles/status here too: supports unlocking after the initial check.
-        await firmwareUpdater.check();
+        const id=requireTarget(await firmwareUpdater.check());
         await acquireWakeLock();
-        const key=ownerKey.value;ownerKey.value="";
-        const result=await firmwareUpdater.update(file.files[0],key);
+        const result=await firmwareUpdater.update(file.files[0],id);
         log("Firmware verified and boot partition committed",{sha256:result.sha256});
         status.textContent="Firmware verified. Pendant is rebooting; reconnect, then Check pendant to read the running build. Processing remains paused.";
         // Keep recording disabled until the expected reboot or a bounded fallback.
@@ -2491,7 +2491,7 @@ const APP_REVISION = "1.0.0-device1";
         while(isGattConnected() && Date.now()<deadline) await delay(100);
       } catch(error) { status.textContent=friendlyError(error)+" Processing remains paused.";log("Firmware update",status.textContent); }
       finally {
-        ownerKey.value="";firmwareUpdater.reset();confirmation.checked=false;await releaseWakeLock();lock(false);
+        firmwareUpdater.reset();confirmation.checked=false;await releaseWakeLock();lock(false);
         if (!isGattConnected()) recoverRememberedConnection("firmware-update",true);
       }
     });
@@ -2500,12 +2500,11 @@ const APP_REVISION = "1.0.0-device1";
     });
 
     if (!globalThis.SynapReleases) return;
-    const releases=globalThis.SynapReleases,vault=new releases.OwnerVault();
+    const releases=globalThis.SynapReleases;
     const notice=document.getElementById("firmwareNotice"),noticeText=document.getElementById("firmwareNoticeText");
     const latestButton=document.getElementById("otaLatest"),bannerButton=document.getElementById("firmwareUpdateButton");
-    const remember=document.getElementById("otaRemember");
     let offered=null,offeredDevice=null,lastCheck=0,downloadController=null;
-    const pendingKey=id=>"synap-ota-pending:"+id;
+    const pendingKey=id=>"synap-ota-pending-device:"+id;
     const savePending=(id,m)=>{try{if(m)localStorage.setItem(pendingKey(id),JSON.stringify(m));else localStorage.removeItem(pendingKey(id));}catch(_){} };
     const getPending=id=>{try{const m=JSON.parse(localStorage.getItem(pendingKey(id)));return m?releases.validateManifest(m):null;}catch(_){return null;}};
     const announce=message=>{notice.hidden=false;noticeText.textContent=message;status.textContent=message;};
@@ -2521,13 +2520,15 @@ const APP_REVISION = "1.0.0-device1";
     }
     async function inspect(force=false) {
       if(discoveryBusy||firmwareBusy||!eligible()||document.visibilityState==='hidden'||(!force&&Date.now()-lastCheck<60000))return;
-      discoveryBusy=true;lastCheck=Date.now();const id=bluetoothDevice.id;
+      discoveryBusy=true;lastCheck=Date.now();const epoch=connectionEpoch;
       const discoveryControls=[check,start,latestButton,bannerButton,document.getElementById('otaReleaseCheck')];
       discoveryControls.forEach(control=>control.disabled=true);
       // Discovery only reads through the GATT queue. It must not take the
       // firmware transfer lock or interrupt normal recording/FIFO processing.
       try {
-        const info=await firmwareUpdater.check(),board=await identity(),pending=getPending(id);
+        const info=await firmwareUpdater.check();
+        const id=requireTarget(info),board=await identity(),pending=getPending(id);
+        if(epoch!==connectionEpoch || !isGattConnected())throw Error('Pendant connection changed.');
         let verified=false;
         if(pending) {
           verified=info.build===pending.build&&board===pending.identity;
@@ -2537,43 +2538,36 @@ const APP_REVISION = "1.0.0-device1";
         // A slow/offline public feed must not keep recording controls locked.
         const m=await releases.latest();
         if(firmwareBusy||!eligible())return;
-        if(id!==bluetoothDevice?.id||!isGattConnected())throw Error('Pendant connection changed.');
+        if(epoch!==connectionEpoch||id!==targetId()||!isGattConnected())throw Error('Pendant connection changed.');
         if(releases.compatible(m,info,board)) {
           offered=m;offeredDevice=id;bannerButton.hidden=false;latestButton.hidden=false;
-          announce(`Firmware ${m.version} (build ${m.build}) available. Update now? Stop and save recording first.`);
+          announce(`Firmware ${m.version} (build ${m.build}) available for ${id}. Update now? Stop and save recording first.`);
         } else {
           offered=null;bannerButton.hidden=true;latestButton.hidden=true;
           if(!pending&&!verified)status.textContent=`Firmware build ${info.build} is up to date.`;
           if(!pending)notice.hidden=true;
         }
       }catch(error){if(firmwareBusy)return;offered=null;bannerButton.hidden=true;latestButton.hidden=true;
-        status.textContent="Automatic update check: "+friendlyError(error)+" You can retry Check updates; manual update remains available.";
+        announce("Update check: "+friendlyError(error));
       }finally{discoveryBusy=false;if(!firmwareBusy)discoveryControls.forEach(control=>control.disabled=false);}
     }
     checkFirmwareRelease=()=>inspect().catch(error=>log('Firmware check',friendlyError(error)));
     document.getElementById("otaReleaseCheck").addEventListener("click",()=>inspect(true));
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkFirmwareRelease();});
     setInterval(()=>checkFirmwareRelease(),60000);
-    document.getElementById("otaForget").addEventListener("click",async()=>{
-      if(firmwareBusy||!bluetoothDevice)return;
-      try{await vault.forget(bluetoothDevice.id);ownerKey.value='';remember.checked=false;status.textContent='Saved update authorization forgotten for this pendant.';}
-      catch(error){status.textContent=friendlyError(error);}
-    });
     cancel.addEventListener('click',()=>downloadController?.abort());
     async function updateLatest() {
       if(firmwareBusy||discoveryBusy)return;
       if(!eligible()){openSettings();status.textContent='Connect the pendant, then stop and save any recording first.';return;}
-      if(!offered||offeredDevice!==bluetoothDevice.id){await inspect(true);return;}
-      const m=offered,id=bluetoothDevice.id;
-      if(!window.confirm(`Install Synap ${m.version}, build ${m.build}, from DivyanKavdia/synap-firmware?\n\nThis release is only for ESP32-S3FH4R2 (4 MB flash, 2 MB QSPI PSRAM). Confirm this is your board. Keep stable power, Bluetooth and this app in the foreground. Recording and processing will pause.`))return;
+      if(!offered||offeredDevice!==targetId()){await inspect(true);return;}
+      const m=offered,id=targetId();
+      if(!window.confirm(`Update pendant ${id} to Synap ${m.version}, build ${m.build}?\n\nKeep the pendant powered and this app open until it reconnects. Recording and processing will pause.`))return;
       openSettings();lock(true);processor?.pause();progress.value=0;
-      let key=null,commitSent=false,saveAuthorization=false;
+      let commitSent=false;
       try {
-        key=ownerKey.value.trim()?await globalThis.SynapOTA.importOwnerKey(ownerKey.value):await vault.get(id).catch(()=>null);
-        ownerKey.value='';
-        if(!key)throw Error('One-time setup: paste this pendant’s OTAKEY below and choose Remember authorization on this trusted browser, then tap Install GitHub update.');
-        saveAuthorization=remember.checked;
-        const info=await firmwareUpdater.check(),board=await identity();
+        const info=await firmwareUpdater.check();
+        if(requireTarget(info)!==id)throw Error('The connected pendant is not the selected update target.');
+        const board=await identity();
         if(!releases.compatible(m,info,board))throw Error('This release is already installed or older than the running firmware.');
         if(![1,6].includes(info.state))throw Error('An update is already pending. Wait for reboot or transfer timeout.');
         const epoch=connectionEpoch;
@@ -2581,13 +2575,10 @@ const APP_REVISION = "1.0.0-device1";
         downloadController=new AbortController();
         const binary=await releases.download(m,info.capacity,undefined,downloadController.signal);
         if(downloadController.signal.aborted)throw Error('Download cancelled. Nothing was flashed.');
-        if(epoch!==connectionEpoch||id!==bluetoothDevice?.id||!isGattConnected())throw Error('Pendant connection changed during download. Nothing was flashed.');
+        if(epoch!==connectionEpoch||id!==targetId()||!isGattConnected())throw Error('Pendant connection changed during download. Nothing was flashed.');
         savePending(id,m);
-        try{await firmwareUpdater.update(binary,key);commitSent=true;}
+        try{await firmwareUpdater.update(binary,id);commitSent=true;}
         catch(error){if(!firmwareUpdater.committing){savePending(id,null);throw error;}commitSent=true;}
-        if(saveAuthorization) {
-          try{await vault.put(id,key);}catch(_){announce('Firmware sent, but authorization could not be saved. Keep your owner key for next time.');}
-        }
         status.textContent='Firmware committed. Waiting for reboot and checking the running build…';cancel.disabled=true;
         const deadline=Date.now()+8000;
         while(isGattConnected()&&Date.now()<deadline)await delay(100);
@@ -2595,10 +2586,11 @@ const APP_REVISION = "1.0.0-device1";
         await delay(1500);
         let verified=false;
         for(let attempt=0;attempt<4;attempt++) {
-          if(id!==bluetoothDevice?.id)throw Error('Reconnect the original pendant to verify its update.');
           if(!isGattConnected())await connectPendant({silent:true,autoReconnect:true});
           if(isGattConnected()) {
-            const running=await firmwareUpdater.check(),runningIdentity=await identity();
+            const running=await firmwareUpdater.check();
+            if(requireTarget(running)!==id)throw Error('Reconnect the original pendant device ID to verify its update.');
+            const runningIdentity=await identity();
             if(running.build===m.build&&runningIdentity===m.identity){verified=true;break;}
           }
           await delay(2000);
@@ -2608,7 +2600,7 @@ const APP_REVISION = "1.0.0-device1";
         announce(`Update complete: firmware ${m.version}, build ${m.build}, is running. Processing remains paused.`);
       }catch(error){announce(friendlyError(error)+' Processing remains paused.');}
       finally{
-        key=null;ownerKey.value='';downloadController=null;firmwareUpdater.reset();confirmation.checked=false;
+        downloadController=null;firmwareUpdater.reset();confirmation.checked=false;
         await releaseWakeLock();lock(false);
         if(commitSent&&!isGattConnected())recoverRememberedConnection('firmware-update',true);
       }
@@ -3039,4 +3031,3 @@ const APP_REVISION = "1.0.0-device1";
     setAppState("error", message);
   });
 })();
-

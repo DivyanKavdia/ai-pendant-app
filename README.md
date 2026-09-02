@@ -9,11 +9,11 @@ ESP32-S3 firmware is maintained separately and must not be committed here.
 
 The synchronized public version remains **1.0.0**; increasing firmware build numbers identify newer binaries. After a pendant connects, the PWA checks the verified `synap-firmware` feed, displays **Update pendant** for a newer build, and installs only after explicit user confirmation. Checks also run when the app returns to the foreground, every minute while eligible, or when **Check updates** is tapped. Updating is blocked while connecting, recording, saving, opening a capture, or holding unsaved audio.
 
-Official target: **ESP32-S3FH4R2 / SuperMini, 4 MB QIO flash, 2 MB QSPI PSRAM, default two-slot OTA partition scheme**. Only protocol-2 application images with the exact target/build identity, size, SHA-256, chip ID and immutable raw GitHub URL from the manifest are accepted. Bootloaders, partition tables, merged images, incompatible hardware and downgrades are rejected before flashing.
+Official target: **ESP32-S3FH4R2 / SuperMini, 4 MB QIO flash, 2 MB QSPI PSRAM, default two-slot OTA partition scheme**. Only protocol-3 application images with the exact target/build identity, size, SHA-256, chip ID and immutable raw GitHub URL from the manifest are accepted. Bootloaders, partition tables, merged images, incompatible hardware and downgrades are rejected before flashing.
 
-One-time enrollment still needs the owner key: with OTA-enabled firmware installed, send `OTAKEY` plus newline over USB Serial at 115200. Paste it once and enable **Remember authorization on this trusted browser**. The key is imported as a non-extractable HMAC-SHA-256 `CryptoKey`, saved per Bluetooth device ID in IndexedDB only after an authenticated GitHub transfer, and never stored as plaintext or localStorage. **Forget saved authorization** removes it. Anyone controlling that browser/origin can still authorize an update, so do not remember it on shared devices. Clearing site data or replacing/resetting the pendant requires enrollment again.
+No OTAKEY or signing configuration is required. The PWA reads the permanent device ID and keeps the device association automatically. Confirmation names that ID; discovery, transfer and post-reboot verification must all match it. Pending update results are persisted under the permanent ID. Switching browsers still requires normal Bluetooth permission; clearing site data creates a new association.
 
-After enrollment, normal updates need no USB or BOOT-button press: connect, approve, and keep the powered pendant and PWA foregrounded. The browser verifies the download before BLE transfer; the pendant independently verifies authorization and flashed SHA-256. Success appears only after reconnecting and reading the exact expected build and hardware identity. A lost commit acknowledgement is verified after reboot, never automatically retransmitted.
+Connect, approve and keep the powered pendant and PWA foregrounded. The pendant compares the public target ID before flash and verifies received SHA-256 plus image compatibility. This is identification, not authorization: another nearby BLE client can also update the device. Existing firmware with the old updater requires one developer/factory USB migration; no owner-key input is exposed.
 
 Publisher trust is currently the GitHub repository/account plus HTTPS and reviewed workflow; the manifest hash is not an independent publisher signature. Stock Arduino bootloaders may not provide rollback, so protect firmware `main`, review workflow changes, and hardware-test releases before broad rollout.
 
@@ -22,9 +22,9 @@ Release feed: https://raw.githubusercontent.com/DivyanKavdia/synap-firmware/ota-
 ## Deploy
 
 Serve the repository root over HTTPS (for example, GitHub Pages). No npm
-installation, build step, or runtime framework is required. Upload all eleven
+installation, build step, or runtime framework is required. Upload all thirteen
 application assets together: `index.html`, `styles.css`, `app.js`,
-`audio-store.js`, `ota.js`, `sw.js`, `manifest.webmanifest`, `logo.webp`, and the three icon files.
+`audio-store.js`, `ota.js`, `releases.js`, `device-identity.js`, `sw.js`, `manifest.webmanifest`, `logo.webp`, and the three icon files.
 Verify the footer shows 1.0.0. Do not clear site data to update the app:
 recordings and pending processing jobs are stored there.
 
@@ -56,93 +56,63 @@ devices. Recordings are device-local; this release does not add cloud sync.
 
 ## Firmware updates over BLE
 
-Settings → Pendant firmware → Check pendant. Firmware without the OTA
-characteristics shows an initial-USB-install message and still records normally.
-Use [Synap ESP32-S3 firmware releases](https://github.com/DivyanKavdia/synap-firmware/releases). Build 503 was the initial 1.0.0 baseline; official CI builds start at 1001.
-Firmware 5.2+ supports PWA-only approval with no BOOT press. An existing 5.1
-pendant needs its old BOOT unlock one final time to migrate, or a USB install.
-No firmware files belong in this PWA repository.
+Settings → Pendant firmware → Check pendant shows the device ID and updater build.
+Protocol 3 is required for updates. Old protocol-1/2 firmware remains usable for audio but
+must be upgraded once by a developer/factory USB flash. This app does not ask for keys or
+attempt to bypass an older firmware's authorization.
 
-1. Install the OTA-enabled firmware once by USB, using a partition scheme with
-   `ota_0`, `ota_1`, and `otadata`. A later BLE update cannot change the partition
-   table or bootloader. The application image must fit the displayed inactive slot.
-2. After installing 5.2+, send `OTAKEY` with a newline in USB Serial Monitor at
-   115200 baud. Save the device-generated 64-character owner key privately. This
-   is a one-time setup step; subsequent updates need neither USB nor BOOT.
-The following steps describe the optional **manual file fallback**. For ordinary
-updates use **Update pendant / Install GitHub update** instead; no file selection
-is needed and remembered authorization is used automatically.
+For normal updates, use Update pendant / Install GitHub update. No file selection or
+authorization enrollment is required. The connected device ID must match the ID retained
+during setup, and the firmware receives that ID in BEGIN before any image data.
 
-3. Compile/export a trusted Synap **application .bin** for the same physical board,
-   microphone configuration, flash and PSRAM settings. Do not use a merged image.
-4. Connect in the PWA and stop/save recording. Check pendant, select the .bin,
-   paste your owner key and approve the update. This manual fallback does not save
-   the key or send it over BLE. The input clears after an attempt or disconnect.
-5. Click Update firmware. The app hashes the local file and sends it directly over
-   BLE, sequentially, waiting for the device's written-byte ACK for each chunk.
-   The file is not sent to a web server or saved to IndexedDB.
-6. The ESP checks SHA-256, the full ESP image, and the Synap compatibility marker,
-   then selects the new application slot and reboots. Reconnect and Check pendant
-   to read its running build. Resume processing from Queue when ready.
+For the developer manual fallback, select a trusted protocol-3 application .bin for the same
+board, flash/PSRAM/partition and microphone configuration, stop/save recording, approve and
+click Update firmware. Never select merged, bootloader or partition images. Manual uploads
+are checked for chip/header/slot/protocol compatibility but do not enforce increasing builds.
+The GitHub path additionally enforces exact target/build identity and a newer build.
 
-Keep the app visible and the pendant close and powered throughout (transfers may
-take several minutes). Cancel is available before final commit. A dropped link,
-reload or 45-second stalled transfer aborts an uncommitted session; reconnect,
-authorize and restart from byte zero. An ACK lost during commit is reported as
-uncertain, not as a successful or cancelled installation: reconnect and verify.
-Normal remembered-device reconnect remains subject to browser support.
+Transfer is FIFO with written-byte ACKs, a SHA-256 check, bounded packets and read fallback
+for lost notifications. Keep the app open and the pendant powered. Cancel works before commit;
+link loss or a 45-second stall requires restarting from zero. A lost commit acknowledgement is
+uncertain until reconnect confirms the exact expected permanent device ID and build.
+Processing remains paused until resumed from Queue.
 
-Security: a per-device 256-bit key authorizes the exact image using a one-use
-challenge and HMAC-SHA256. The ESP checks authorization before opening flash.
-Wrong keys and replayed approval fail; rate limiting survives BLE reconnect.
-Normal OTA retains the owner key in device NVS; erasing NVS/all flash replaces it.
-Anyone with Serial access can retrieve the key; device NVS encryption is not set up.
-The owner key, SHA-256 and product marker do not prove publisher identity.
-This build does not provision signing keys, enforce
-BLE bonding, burn eFuses, or enable secure boot. Install only trusted local files.
-Cryptographically signed releases should precede unattended/distributed updates.
-Keeping the old slot does not guarantee recovery from a valid but broken new app:
-automatic boot rollback requires a rollback-enabled bootloader; otherwise use USB.
+**Security tradeoff:** IDs, hashes and markers are not authentication or firmware signatures.
+Any nearby client able to establish BLE can initiate an update; PWA confirmation does not
+enforce exclusive ownership on the device. No signing keys, BLE bonding, eFuse changes, Secure
+Boot or boot rollback are provisioned. Keeping an old slot does not guarantee automatic
+recovery from a valid but broken new app. This is not a production security qualification.
+Old authorization-vault data is no longer used and is not automatically erased.
 
-### OTA protocol 2 (protocol 1 migration supported)
+### OTA protocol 3
 
-The existing pendant service UUID is reused, so no new permission scope is needed.
-Write-with-response: `4fa12348-0000-1000-8000-00805f9b34fb`.
-Read/notify status: `4fa12349-0000-1000-8000-00805f9b34fb`.
-Read-only 16-byte challenge: `4fa1234a-0000-1000-8000-00805f9b34fb`.
-All integer fields are little-endian. Every command includes a nonzero random
-32-bit transfer ID immediately after its command byte.
+Existing service: 4fa12345-0000-1000-8000-00805f9b34fb.
+Write-with-response: ...348; read/notify status: ...349; read-only permanent device ID: ...34c.
+The ...34b firmware build identity remains separate. No challenge characteristic is used.
+All integers are little-endian, and packets start with command u8 + nonzero transfer ID u32.
 
-| Command | Byte layout after command + transfer ID |
+| Command | Remaining bytes |
 | --- | --- |
-| 1 Begin | image size u32, SHA-256 32 bytes, HMAC-SHA256 32 bytes (HMAC omitted in legacy v1) |
-| 2 Data | byte offset u32, data (up to advertised maxData) |
-| 3 Verify | none; allowed only after exactly image size bytes |
-| 4 Commit | none; allowed only after successful Verify |
+| 1 Begin | image length u32, SHA-256 (32 bytes), device ID (18 UTF-8 bytes, no NUL) |
+| 2 Data | offset u32, data up to advertised maxData |
+| 3 Verify | none; after exactly the declared size |
+| 4 Commit | none; after successful Verify |
 | 5 Abort | none; not accepted after Commit |
 
-MAC input: UTF-8 `SYNAP-OTA-V2` (no NUL), challenge 16 bytes, BEGIN's first 41
-bytes. MAC key: the raw 32 bytes decoded from the owner's 64 hex characters.
-Every consumed attempt changes the challenge; reconnect changes it too. The
-PWA uses native WebCrypto; there is no new runtime dependency. Firmware 5.2+
-requires the `SYNAP-ESP32S3-OTA-AUTH-V2` marker to avoid accidental legacy downgrade.
-The public marker is a compatibility check, not a signature.
-
-Status is 20 bytes: magic `D7`, protocol `02` (`01` for legacy), state u8, error u8, transfer ID u32,
-next offset u32, inactive slot size u32, maxData u16, firmware build u16. States:
-0 unavailable, 1 awaiting owner approval, 2 legacy armed, 3 receiving, 4 verified, 5 committed, 6 failed.
-Errors 12/13 are failed/throttled authorization. Wait 30 seconds after throttling.
-The ESP caps writes at 182 bytes and requires data capacity of at least 64 bytes
-(MTU 76) for v2, so the 73-byte BEGIN fits; legacy v1 requires 36 data bytes.
-the app uses the advertised size. Notifications have a read-back fallback.
-Only an identical repeat of the immediately preceding data packet is idempotent.
-Old sessions and out-of-order/corrupt duplicate data cannot advance the transfer.
+BEGIN is 59 bytes. Status remains 20 bytes: D7, protocol 03, state u8, error u8,
+transfer ID u32, next offset u32, capacity u32, maxData u16, build u16.
+States are 0 unavailable, 1 available, 2 reserved, 3 receiving, 4 verified,
+5 committed, 6 failed. Error 12 is a device-ID mismatch.
+maxData remains 64–173 bytes (minimum MTU 76). Packet writes are at most 182 bytes.
+Only an identical repeat of the immediately previous data packet is idempotent.
+The protocol marker is SYNAP-ESP32S3-OTA-ID-V3, not a cryptographic signature.
 
 ### Verification
 
-Run `node tests/reconnect.cjs`, `node tests/ota.cjs`, and `node tests/ota-ui.cjs`.
-These are mock transport/integration tests, not a physical BLE or firmware compile
-claim. Firmware protocol tests and the board-test checklist ship separately.
+Run node --test tests/*.cjs. Tests exercise device targeting, explicit confirmation,
+legacy migration, same-ID/new-browser-handle reboot recovery, mismatched IDs,
+corrupt downloads, cancellation, disconnects, uncertain commits, local associations,
+audio metadata, reconnect and the offline shell. These are host tests, not physical BLE tests.
 
 ## Daily timeline and insights
 
@@ -238,13 +208,13 @@ contracts; they do not substitute for physical Android/pendant testing.
 
 ## Device setup and persistent associations
 
-Settings → Set up your device now consists of connecting, automatically remembering the identified pendant, and recording. Firmware updates and owner-key authorization are separate optional settings.
+Settings → Set up your device now consists of connecting, automatically remembering the identified pendant, and recording. Firmware updates use the same permanent device ID; no owner-key enrollment is required.
 
 On every connection, `device-identity.js` reads `4fa1234c-0000-1000-8000-00805f9b34fb`. A valid value is `SYNAP-` plus 12 uppercase hexadecimal digits. Only after a valid idle acknowledgement on that same connection does the app persist the association. Reconnect never automatically starts recording.
 
 The localStorage record `synap-device-associations-v1` contains schema version 1, a random `installationId` for this PWA origin, and device records with `deviceId`, a stable random `associationId`, observed browser Bluetooth IDs, display name, first connection time and last connection time. A new browser handle for the same permanent ID reuses its association; multiple pendants have separate associations. A previously mapped Bluetooth handle reporting another permanent ID is rejected without overwriting the mapping. `dk-pendant-device-id` remains the browser permission handle used for reconnect, not the permanent ID.
 
-Settings displays the connected ID and saved devices. New recording records snapshot `deviceId`, `deviceAssociationId`, and `pwaInstallationId`; old recordings are not retrospectively assigned. Clearing site data removes local associations; a later connection creates a new installation and association. Another browser or app origin has its own mapping. This is not cloud sync, BLE bonding, exclusive ownership, or cryptographic authentication. No owner keys enter this registry or recording metadata; the OTA authorization vault is unchanged.
+Settings displays the connected ID and saved devices. New recording records snapshot `deviceId`, `deviceAssociationId`, and `pwaInstallationId`; old recordings are not retrospectively assigned. Clearing site data removes local associations; a later connection creates a new installation and association. Another browser or app origin has its own mapping. This is not cloud sync, BLE bonding, exclusive ownership, or cryptographic authentication. No owner keys enter this registry or recording metadata; updates no longer use the old authorization vault.
 
 Old firmware without the new characteristic can still record but setup reports that permanent identification is unavailable. Read failures and malformed IDs do not create associations. Storage failures are shown as identified but not saved, rather than successful setup. Install an identity-enabled firmware build once to enable automatic association on subsequent connections.
 

@@ -168,19 +168,16 @@
         <div class="settings-actions"><button id="chooseDeviceButton" class="button button-secondary button-small" type="button">Choose another pendant</button><button id="recoveryButton" class="button button-secondary button-small" type="button">Download unsaved audio</button><button id="retrySaveButton" class="button button-secondary button-small" type="button">Retry local save</button></div>
       </div>
       <div id="firmwareSettings" class="settings-section ota-section" tabindex="-1"><h3>Pendant firmware · optional</h3>
-        <p class="settings-note">Update over Bluetooth from this app—no Wi-Fi or button press on firmware 5.2+. Update authorization is separate from device setup. For your first authorized update, retrieve your owner key over USB Serial. Keep the pendant powered and this app in the foreground.</p>
+        <p class="settings-note">Your saved device ID identifies the pendant to update. Tap Check updates, then approve the update. No update key, signing setup or physical button is needed on device-ID firmware. Keep the pendant powered and this app open.</p>
         <button id="otaCheck" class="button button-secondary button-small" type="button">Check pendant</button>
         <button id="otaReleaseCheck" class="button button-secondary button-small" type="button">Check updates</button>
         <button id="otaLatest" class="button button-primary button-small" type="button" hidden>Install GitHub update</button>
         <label class="field"><span>Manual fallback: trusted application .bin</span><input id="otaFile" type="file" accept=".bin"><small>Not needed for GitHub updates. Application image only; never select a merged/full-flash image, bootloader or partition table.</small></label>
-        <label class="field"><span>Pendant owner key (one-time enrollment)</span><input id="otaOwnerKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="64-character key for this pendant"><small>Send <code>OTAKEY</code> with a newline in USB Serial Monitor at 115200 baud once. For future GitHub updates, remembered authorization removes the need for USB or pasting the key again. Keep your original key private.</small></label>
-        <label class="toggle-row"><span><strong>Remember authorization on this trusted browser</strong><small>Saved only after an authorized GitHub transfer. This browser can then approve future updates. Clearing site data removes authorization.</small></span><input id="otaRemember" type="checkbox"></label>
-        <button id="otaForget" class="button button-secondary button-small" type="button">Forget saved authorization</button>
         <label class="toggle-row"><span><strong>Approve this firmware update</strong><small>I trust this Synap firmware, have stopped recording, and have stable power. Keep the app open until the pendant reboots.</small></span><input id="otaConfirm" type="checkbox"></label>
         <div class="settings-actions"><button id="otaStart" class="button button-primary button-small" type="button">Update firmware</button><button id="otaCancel" class="button button-secondary button-small" type="button" disabled>Cancel transfer</button></div>
         <progress id="otaProgress" value="0" max="1" aria-label="Firmware transfer progress"></progress>
         <p id="otaStatus" class="settings-note" role="status" aria-live="polite">Connect your pendant, then check its firmware and available update space.</p>
-        <p class="settings-note">Your owner key authorizes this exact image. It does not verify the publisher's identity; install only trusted builds. Interrupted transfers restart from zero. Processing stays paused after an update; resume it from Queue.</p>
+        <p class="settings-note">Device IDs and integrity checks are not access control or publisher authentication. A nearby BLE client can initiate an update. Install only trusted builds. Interrupted transfers restart from zero. Processing stays paused after an update; resume it from Queue.</p>
       </div>
       <div class="settings-section"><h3>Optional transcription</h3>
         <p class="settings-note">Run FIFO uploads audio to your transcription endpoint, then sends text to your LLM endpoint. Use trusted servers you control. Provider API keys belong on those servers.</p>
@@ -193,10 +190,9 @@
     </form>
   </dialog>
   <script src="audio-store.js?v=1.0.0-device1" defer></script>
-  <script src="ota.js?v=1.0.0-ota2" defer></script>
-  <script src="releases.js?v=1.0.0-ota2" defer></script>
+  <script src="ota.js?v=1.0.0-idota1" defer></script>
+  <script src="releases.js?v=1.0.0-idota1" defer></script>
   <script src="device-identity.js?v=1.0.0-device1" defer></script>
-  <script src="app.js?v=1.0.0-device1" defer></script>
+  <script src="app.js?v=1.0.0-idota1" defer></script>
 </body>
 </html>
-

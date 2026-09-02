@@ -11,13 +11,13 @@ function setup({legacy=false,fail=false}={}) {
     constructor(io){this.io=io;}
     reset(){calls.push('reset');}
     cancel(){calls.push('cancel');}
-    async check(){calls.push('check');if(legacy)throw new Error('Install by USB');return{protocol:2,build:502,capacity:2048,state:1};}
-    async update(file,key){assert.equal(key,'test owner key');assert.equal(node('otaOwnerKey').value,'');calls.push('update');assert(c.firmwareBusy);assert(c.ui.startButton.disabled);assert(c.ui.connectButton.disabled);
+    async check(){calls.push('check');if(legacy)throw new Error('Install by USB');return{protocol:3,deviceId:'SYNAP-AABBCCDDEEFF',build:1004,capacity:2048,state:1};}
+    async update(file,id){assert.equal(id,'SYNAP-AABBCCDDEEFF');calls.push('update');assert(c.firmwareBusy);assert(c.ui.startButton.disabled);assert(c.ui.connectButton.disabled);
       this.io.progress('Sending',0.5,false);assert.equal(node('otaCancel').disabled,false);
       if(fail)throw new Error('Flash failed');this.io.progress('Committing',1,true);assert(node('otaCancel').disabled);
       connected=false;return{sha256:'test'};}
   }
-  const c={console,Date,Promise,Error,globalThis:{SynapOTA:{Client}},document:{getElementById:node,body:{dataset:{}}},
+  const c={deviceAssociation:{deviceId:'SYNAP-AABBCCDDEEFF'},console,Date,Promise,Error,globalThis:{SynapOTA:{Client}},document:{getElementById:node,body:{dataset:{}}},
     ui:new Proxy({},{get:(_,key)=>node(key)}),firmwareBusy:false,firmwareUpdater:null,
     appState:'idle',deviceStatus:{error:0},connectInProgress:false,recordingConfirmed:false,finalizing:false,
     currentRecordingId:null,openingCapture:null,unsavedAudio:false,isGattConnected:()=>connected,
@@ -32,7 +32,7 @@ function setup({legacy=false,fail=false}={}) {
   return{c,calls,node,click:id=>node(id).events.click(),disconnect:()=>connected=false};
 }
 (async()=>{
-  let t=setup();await t.click('otaCheck');assert.match(t.node('otaStatus').textContent,/502/);assert.match(t.node('otaStatus').textContent,/no button press/);assert(!t.c.firmwareBusy);
+  let t=setup();await t.click('otaCheck');assert.match(t.node('otaStatus').textContent,/1004/);assert.match(t.node('otaStatus').textContent,/No key/);assert(!t.c.firmwareBusy);
   assert.equal(t.c.ui.startButton.disabled,false);assert.equal(t.c.ui.connectButton.disabled,false);
   for(const flag of ['recordingConfirmed','finalizing','currentRecordingId','openingCapture','unsavedAudio','connectInProgress']) {
     t=setup();t.c[flag]=true;await t.click('otaCheck');assert(!t.calls.includes('check'),flag);
@@ -41,10 +41,8 @@ function setup({legacy=false,fail=false}={}) {
   t=setup();await t.click('otaStart');assert(!t.calls.includes('update'));assert.equal(t.c.firmwareBusy,false);
   for(const fail of [false,true]) {
     t=setup({fail});t.node('otaFile').files=[{name:'app.bin'}];t.node('otaConfirm').checked=true;
-    t.node('otaOwnerKey').value='test owner key';
     await t.click('otaStart');assert(t.calls.includes('pause'));assert(t.calls.includes('update'));assert(t.calls.includes('release'));
     assert.equal(t.c.firmwareBusy,false);assert.equal(t.node('otaConfirm').checked,false);assert(t.node('otaCancel').disabled);
-    assert.equal(t.node('otaOwnerKey').value,'');assert.equal(t.node('otaOwnerKey').disabled,false);
     if(fail)assert.match(t.node('otaStatus').textContent,/Flash failed/);else assert(t.calls.includes('reconnect'));
   }
   t=setup();t.c.firmwareBusy=true;t.c.setAppState('idle');assert(t.c.ui.startButton.disabled);assert(t.c.ui.stopButton.disabled);
