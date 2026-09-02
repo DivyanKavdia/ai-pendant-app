@@ -33,6 +33,9 @@ function mock(options={}) {
       length=v.getUint32(5,true);hash=bytes.slice(9,41);state.state=3;
     }
     if(cmd===2) {
+      if(options.queuedFlash && v.getUint32(5,true)!==state.offset) {
+        state.error=4;state.state=6;listener?.({target:{value:status()}});return;
+      }
       assert.equal(v.getUint32(5,true),state.offset,'strict FIFO offset');
       chunks.push(bytes.slice(9));state.offset+=bytes.length-9;
       if(options.drop){connected=false;client.reset();throw Error('link lost');}
@@ -53,8 +56,23 @@ function mock(options={}) {
     if(cmd===5&&[3,4].includes(state.state)){state.state=6;state.error=10;}
     if(listener&&!options.noNotifications)listener({target:{value:status()}});
   };
-  const write={properties:{writeWithoutResponse:!!options.fast},writeValueWithResponse:writePacket,
-    writeValueWithoutResponse:writePacket};
+  // Bluetooth acceptance can precede the control task writing flash. A lost
+  // write-without-response packet must not cause later offsets to be sent.
+  const transport={pending:0,peak:0,unacknowledged:0};
+  let flashQueue=Promise.resolve();
+  async function deliver(bytes, response) {
+    if(bytes[0]!==2 || !options.queuedFlash) return writePacket(bytes);
+    if(!response && ++transport.unacknowledged===2 && options.dropUnacknowledged) return;
+    ++transport.pending;transport.peak=Math.max(transport.peak,transport.pending);
+    const copy=bytes.slice();
+    flashQueue=flashQueue.then(async()=>{
+      await new Promise(resolve=>setTimeout(resolve,20));
+      --transport.pending;await writePacket(copy);
+    });
+    // Return as soon as Bluetooth accepts the packet, before flash/notification.
+  }
+  const write={properties:{writeWithoutResponse:!!options.fast},writeValueWithResponse:bytes=>deliver(bytes,true),
+    writeValueWithoutResponse:bytes=>deliver(bytes,false)};
   const client=new Client({connected:()=>connected,queue:async f=>f(),progress:(...p)=>progress.push(p),
     getService:async()=>({getCharacteristic:async uuid=>{
       if(options.missing)throw Object.assign(Error('missing'),{name:'NotFoundError'});
@@ -65,7 +83,7 @@ function mock(options={}) {
       }};
       assert(uuid.includes('12349'),'no challenge or owner-key characteristic is read');return characteristic;
     }})});
-  return{client,state,commands,chunks,progress,setId:id=>deviceId=id,disconnect:()=>{connected=false;client.reset();}};
+  return{client,state,commands,chunks,progress,transport,setId:id=>deviceId=id,disconnect:()=>{connected=false;client.reset();}};
 }
 (async()=>{
   assert.throws(()=>decode(new DataView(new ArrayBuffer(2))),/protocol/);
@@ -79,6 +97,14 @@ function mock(options={}) {
   assert.equal(t.progress.at(-1)[2],true,'cancel disabled at commit');
   t=mock({resume:true,fast:true});await t.client.check();assert((await t.client.update(image(),ID)).committed);
   assert.equal(t.commands[0],6,'reconnect resumes rather than sends BEGIN');assert.equal(Buffer.concat(t.chunks).length,512);
+  t=mock({fast:true,queuedFlash:true,dropUnacknowledged:true,maxData:503});
+  await t.client.check();assert((await t.client.update(image(2048),ID)).committed);
+  assert.equal(t.transport.unacknowledged,0,'data uses Bluetooth write responses');
+  assert.equal(t.transport.peak,1,'wait for written-byte ACK before next chunk');
+  assert.equal(Buffer.concat(t.chunks).length,2048);
+  t=mock({resume:true,fast:true,queuedFlash:true});await t.client.check();
+  assert((await t.client.update(image(),ID)).committed);
+  assert.equal(t.commands[0],6);assert.equal(t.transport.peak,1);
   for(const protocol of [1,2]){t=mock({protocol});await t.client.check();await assert.rejects(t.client.update(image(),ID),/USB once/);assert.equal(t.commands.length,0);}
   t=mock({missing:true});await assert.rejects(t.client.check(),/USB once/);
   for(const options of [{drop:true},{chunkFailure:true},{hashFailure:true},{cancel:true},{deviceMismatch:true}]){
@@ -97,5 +123,5 @@ function mock(options={}) {
   for(const options of [{badIdentity:true},{disconnectIdentity:true}]){t=mock(options);await assert.rejects(t.client.check());assert.equal(t.commands.length,0);}
   for(const options of [{state:0},{state:5},{maxData:63},{maxData:504}]){t=mock(options);await t.client.check();await assert.rejects(t.client.update(image(),ID));assert.equal(t.commands.length,0);}
   t=mock();await t.client.check();t.disconnect();await assert.rejects(t.client.update(image(),ID),/interrupted/);
-  console.log('PASS: device-ID protocol, windowed transfer, reconnect resume, SHA-256, failure/cancel/reboot and read fallback.');
+  console.log('PASS: device-ID protocol, confirmed chunk transfer, reconnect resume, SHA-256, failure/cancel/reboot and read fallback.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

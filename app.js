@@ -6,7 +6,7 @@
   // -------------------------------------------------------------------------
 
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-resume1";
+const APP_REVISION = "1.0.0-otaack2";
   let deviceAssociation = null;
   let deviceIdentityMessage = "Connect a pendant to set it up. No update key is needed.";
   const PROTOCOL_VERSION = 0x02;

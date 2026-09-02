@@ -71,8 +71,9 @@ click Update firmware. Never select merged, bootloader or partition images. Manu
 are checked for chip/header/slot/protocol compatibility but do not enforce increasing builds.
 The GitHub path additionally enforces exact target/build identity and a newer build.
 
-Transfer uses bounded eight-packet windows with written-byte ACKs, a SHA-256 check and read fallback
-for lost notifications. Keep the app open and the pendant powered. Cancel works before commit;
+Transfer confirms each chunk with a Bluetooth write response and a written-byte ACK before sending
+the next offset, with a SHA-256 check and read fallback for lost notifications. This also works with
+installed builds 1005/1007; no USB reflash is needed for this transport fix. Keep the app open and the pendant powered. Cancel works before commit;
 a link loss can resume from the pendant's saved offset for two minutes. A connected 45-second stall,
 device reboot or power loss requires a new transfer. A lost commit acknowledgement is
 uncertain until reconnect confirms the exact expected permanent device ID and build.

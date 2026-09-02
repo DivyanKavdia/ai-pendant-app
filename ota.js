@@ -162,15 +162,15 @@
           begun=true;await this.send(begin,epoch,true,true);
           await this.ack(s=>s.state===3 && s.offset===0,epoch,session,30000);
         }
-        const windowPackets=8;
+        // Installed protocol-3 firmware only tolerates the immediately preceding
+        // duplicate. Confirm Bluetooth delivery AND flash progress per chunk so
+        // a lost write cannot leave later offsets queued ahead of recovery.
         while(!ready && offset<bytes.length) {
-          let target=offset;
-          for(let sent=0;sent<windowPackets && target<bytes.length;sent++) {
-            const count=Math.min(info.maxData,bytes.length-target);
-            const chunk=packet(2,session,9+count);new DataView(chunk.buffer).setUint32(5,target,true);
-            chunk.set(bytes.subarray(target,target+count),9);
-            await this.send(chunk,epoch,false,true);target+=count;
-          }
+          const count=Math.min(info.maxData,bytes.length-offset);
+          const target=offset+count;
+          const chunk=packet(2,session,9+count);new DataView(chunk.buffer).setUint32(5,offset,true);
+          chunk.set(bytes.subarray(offset,target),9);
+          await this.send(chunk,epoch,true,true);
           await this.ack(s=>s.state===3 && s.offset===target,epoch,session);
           offset=target;
           this.io.progress("Sending firmware · "+Math.floor(offset*100/bytes.length)+"%",offset/bytes.length,false);
