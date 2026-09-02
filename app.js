@@ -6,7 +6,7 @@
   // -------------------------------------------------------------------------
 
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-twin1";
+const APP_REVISION = "1.0.0-diag1";
   let deviceAssociation = null;
   let deviceIdentityMessage = "Not connected";
   const PROTOCOL_VERSION = 0x02;
@@ -2869,11 +2869,22 @@ const APP_REVISION = "1.0.0-twin1";
         } catch (error) {
           const area = document.createElement("textarea");
           area.value = text;
-          document.body.appendChild(area);
-          area.select();
-          document.execCommand("copy");
-          area.remove();
-          toast("Diagnostics copied");
+          area.readOnly = true;
+          area.style.cssText = "position:fixed;opacity:0;font-size:16px";
+          // Elements outside an open modal are inert and cannot be selected.
+          (ui.settingsDialog.open ? ui.settingsDialog : document.body).appendChild(area);
+          try {
+            area.focus();
+            area.select();
+            area.setSelectionRange(0, text.length);
+            if (!document.execCommand("copy")) throw new Error("Copy unavailable");
+            toast("Diagnostics copied");
+          } catch (_) {
+            toast("Could not copy. Select the log text to copy it.", "error");
+          } finally {
+            area.remove();
+            ui.copyDiagnosticsButton.focus();
+          }
         }
       }
     );

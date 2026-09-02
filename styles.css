@@ -115,7 +115,7 @@ body[data-state="recording"] .stage-orbit{background:radial-gradient(ellipse,var
 .toggle-row .switch-input{appearance:none;-webkit-appearance:none;position:relative;width:48px;height:28px;flex:0 0 48px;border:1px solid var(--control-border);border-radius:20px;background:var(--switch-off);cursor:pointer;transition:background .18s,border-color .18s}
 .switch-input::before{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--surface);box-shadow:0 1px 3px var(--shadow);transition:transform .18s}
 .toggle-row .switch-input:checked{background:var(--action);border-color:var(--action)}.switch-input:checked::before{transform:translateX(20px)}
-.processing-settings>summary,.recovery-settings>summary{cursor:pointer}.disclosure-chevron{width:18px;height:18px;color:var(--muted);transition:transform .18s}
+.processing-settings>summary,.recovery-settings>summary,.diagnostics-settings>summary{cursor:pointer}.disclosure-chevron{width:18px;height:18px;color:var(--muted);transition:transform .18s}
 .settings-card[open]>summary .disclosure-chevron{transform:rotate(90deg)}
 .processing-fields{padding-top:4px}.processing-fields .field{margin-top:16px}.field>span{font-size:14px}.field small{font-size:14px}.optional{font-size:14px;letter-spacing:0;text-transform:none;font-weight:400}
 .settings-form .modal-actions{position:sticky;bottom:calc(-18px - env(safe-area-inset-bottom));z-index:2;margin:0 -18px calc(-18px - env(safe-area-inset-bottom));padding:12px 18px calc(18px + env(safe-area-inset-bottom));background:var(--chrome);backdrop-filter:blur(14px);border-top:1px solid var(--border)}

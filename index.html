@@ -10,8 +10,8 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <script src="theme.js?v=1.0.0-twin1"></script>
-  <link rel="stylesheet" href="styles.css?v=1.0.0-twin1">
+  <script src="theme.js?v=1.0.0-diag1"></script>
+  <link rel="stylesheet" href="styles.css?v=1.0.0-diag1">
 </head>
 <body data-state="disconnected">
   <a class="skip-link" href="#capture">Skip to recorder</a>
@@ -127,11 +127,6 @@
         <p id="queueStatus" role="status" aria-live="polite">Ready to process your recordings.</p>
         <div class="settings-actions"><button id="runQueueButton" class="button button-primary" type="button">Process recordings</button><button id="pauseQueueButton" class="button button-secondary" type="button">Pause queue</button></div>
       </section>
-      <details id="diagnostics" class="section-card diagnostics-section">
-        <summary><span class="health-summary"><svg><use href="#i-info"/></svg><span><strong>Diagnostics</strong></span></span><span class="summary-chevron">+</span></summary>
-        <div class="diagnostic-actions"><button id="copyDiagnosticsButton" class="button button-secondary button-small" type="button">Copy diagnostics</button><button id="clearDiagnosticsButton" class="text-button" type="button">Clear log</button></div>
-        <pre id="diagnosticsLog" class="diagnostics-log"></pre>
-      </details>
     </main>
     <footer><span>synap</span><span id="appVersion">1.0.0</span></footer>
   </div>
@@ -176,14 +171,20 @@
         <div class="setting-actions"><button id="recoveryButton" class="button button-secondary button-small" type="button"><svg aria-hidden="true"><use href="#i-download"/></svg>Export unsaved audio</button><button id="retrySaveButton" class="text-button" type="button">Retry save</button></div>
       </details>
 
+      <details id="diagnostics" class="settings-card diagnostics-settings">
+        <summary class="settings-card-head"><span class="settings-icon"><svg aria-hidden="true"><use href="#i-info"/></svg></span><span class="settings-heading"><strong>Diagnostics</strong></span><svg class="disclosure-chevron" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+        <div class="setting-actions"><button id="copyDiagnosticsButton" class="button button-secondary button-small" type="button">Copy diagnostics</button><button id="clearDiagnosticsButton" class="text-button" type="button">Clear log</button></div>
+        <pre id="diagnosticsLog" class="diagnostics-log" tabindex="0" aria-label="Diagnostic log"></pre>
+      </details>
+
       <button id="installButton" class="button button-secondary" type="button"><svg aria-hidden="true"><use href="#i-download"/></svg>Install app</button>
       <div class="modal-actions"><button class="button button-primary" type="submit">Done <svg aria-hidden="true"><use href="#i-check"/></svg></button></div>
     </form>
   </dialog>
   <script src="audio-store.js?v=1.0.0-device1" defer></script>
-  <script src="ota.js?v=1.0.0-twin1" defer></script>
+  <script src="ota.js?v=1.0.0-diag1" defer></script>
   <script src="releases.js?v=1.0.0-idota1" defer></script>
   <script src="device-identity.js?v=1.0.0-device1" defer></script>
-  <script src="app.js?v=1.0.0-twin1" defer></script>
+  <script src="app.js?v=1.0.0-diag1" defer></script>
 </body>
 </html>
