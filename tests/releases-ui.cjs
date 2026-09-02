@@ -16,7 +16,7 @@ function setup(options={}){
       if(options.commitDrop)throw Error('Lost acknowledgement');return{committed:true};}
   }
   const releases={IDENTITY_UUID:'identity',OwnerVault:class{constructor(){return vault;}},validateManifest:m=>m,
-    latest:async()=>{calls.push('manifest');if(options.offline)throw Error('Offline');return m;},
+    latest:async()=>{assert(!c.firmwareBusy,'release discovery must not interrupt recording or FIFO processing');calls.push('manifest');if(options.offline)throw Error('Offline');return m;},
     compatible:(m,info)=>m.build>info.build,
     download:async()=>{calls.push('download');if(options.badDownload)throw Error('SHA-256 mismatch');
       if(options.disconnectDownload){connected=false;c.connectionEpoch++;}return{};}};

@@ -6,7 +6,7 @@
   // -------------------------------------------------------------------------
 
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-ota1";
+const APP_REVISION = "1.0.0-ota2";
   const PROTOCOL_VERSION = 0x02;
 
   const SERVICE_UUID =
@@ -2379,6 +2379,7 @@ const APP_REVISION = "1.0.0-ota1";
     const progress = document.getElementById("otaProgress");
     const confirmation = document.getElementById("otaConfirm");
     const ownerKey = document.getElementById("otaOwnerKey");
+    let discoveryBusy=false;
     firmwareUpdater = new globalThis.SynapOTA.Client({
       connected:isGattConnected, queue:queueGattOperation,
       getService:()=>queueGattOperation(()=>gattServer.getPrimaryService(SERVICE_UUID),"Find pendant service"),
@@ -2400,7 +2401,7 @@ const APP_REVISION = "1.0.0-ota1";
       setAppState(isGattConnected() ? (deviceStatus.error ? "error" : "idle") : "disconnected");
     };
     check.addEventListener("click",async()=>{
-      if (firmwareBusy) return;
+      if (firmwareBusy || discoveryBusy) return;
       if (!eligible()) { status.textContent="Connect the pendant, then stop and save any recording first.";return; }
       lock(true);
       try {
@@ -2415,7 +2416,7 @@ const APP_REVISION = "1.0.0-ota1";
       finally { lock(false); }
     });
     start.addEventListener("click",async()=>{
-      if (firmwareBusy) return;
+      if (firmwareBusy || discoveryBusy) return;
       if (!eligible()) { status.textContent="Connect the pendant, then stop and save any recording first.";return; }
       if (!file.files[0] || !confirmation.checked) { status.textContent="Select a trusted application .bin and confirm the safety checklist.";return; }
       lock(true);processor?.pause();progress.value=0;
@@ -2445,7 +2446,7 @@ const APP_REVISION = "1.0.0-ota1";
     const notice=document.getElementById("firmwareNotice"),noticeText=document.getElementById("firmwareNoticeText");
     const latestButton=document.getElementById("otaLatest"),bannerButton=document.getElementById("firmwareUpdateButton");
     const remember=document.getElementById("otaRemember");
-    let offered=null,offeredDevice=null,lastCheck=0,downloadController=null,checkingRelease=false;
+    let offered=null,offeredDevice=null,lastCheck=0,downloadController=null;
     const pendingKey=id=>"synap-ota-pending:"+id;
     const savePending=(id,m)=>{try{if(m)localStorage.setItem(pendingKey(id),JSON.stringify(m));else localStorage.removeItem(pendingKey(id));}catch(_){} };
     const getPending=id=>{try{const m=JSON.parse(localStorage.getItem(pendingKey(id)));return m?releases.validateManifest(m):null;}catch(_){return null;}};
@@ -2461,8 +2462,12 @@ const APP_REVISION = "1.0.0-ota1";
       } catch(error){if(error.name==='NotFoundError')return null;throw error;}
     }
     async function inspect(force=false) {
-      if(checkingRelease||firmwareBusy||!eligible()||document.visibilityState==='hidden'||(!force&&Date.now()-lastCheck<60000))return;
-      checkingRelease=true;lastCheck=Date.now();lock(true);const id=bluetoothDevice.id;let locked=true;
+      if(discoveryBusy||firmwareBusy||!eligible()||document.visibilityState==='hidden'||(!force&&Date.now()-lastCheck<60000))return;
+      discoveryBusy=true;lastCheck=Date.now();const id=bluetoothDevice.id;
+      const discoveryControls=[check,start,latestButton,bannerButton,document.getElementById('otaReleaseCheck')];
+      discoveryControls.forEach(control=>control.disabled=true);
+      // Discovery only reads through the GATT queue. It must not take the
+      // firmware transfer lock or interrupt normal recording/FIFO processing.
       try {
         const info=await firmwareUpdater.check(),board=await identity(),pending=getPending(id);
         let verified=false;
@@ -2472,7 +2477,6 @@ const APP_REVISION = "1.0.0-ota1";
           else announce(`Update not confirmed. Pendant reports build ${info.build}; expected ${pending.build}. No automatic retry was started.`);
         }
         // A slow/offline public feed must not keep recording controls locked.
-        lock(false);locked=false;
         const m=await releases.latest();
         if(firmwareBusy||!eligible())return;
         if(id!==bluetoothDevice?.id||!isGattConnected())throw Error('Pendant connection changed.');
@@ -2484,9 +2488,9 @@ const APP_REVISION = "1.0.0-ota1";
           if(!pending&&!verified)status.textContent=`Firmware build ${info.build} is up to date.`;
           if(!pending)notice.hidden=true;
         }
-      }catch(error){if(firmwareBusy&&!locked)return;offered=null;bannerButton.hidden=true;latestButton.hidden=true;
+      }catch(error){if(firmwareBusy)return;offered=null;bannerButton.hidden=true;latestButton.hidden=true;
         status.textContent="Automatic update check: "+friendlyError(error)+" You can retry Check updates; manual update remains available.";
-      }finally{checkingRelease=false;if(locked)lock(false);}
+      }finally{discoveryBusy=false;if(!firmwareBusy)discoveryControls.forEach(control=>control.disabled=false);}
     }
     checkFirmwareRelease=()=>inspect().catch(error=>log('Firmware check',friendlyError(error)));
     document.getElementById("otaReleaseCheck").addEventListener("click",()=>inspect(true));
@@ -2499,7 +2503,7 @@ const APP_REVISION = "1.0.0-ota1";
     });
     cancel.addEventListener('click',()=>downloadController?.abort());
     async function updateLatest() {
-      if(firmwareBusy)return;
+      if(firmwareBusy||discoveryBusy)return;
       if(!eligible()){openSettings();status.textContent='Connect the pendant, then stop and save any recording first.';return;}
       if(!offered||offeredDevice!==bluetoothDevice.id){await inspect(true);return;}
       const m=offered,id=bluetoothDevice.id;
