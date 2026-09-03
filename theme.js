@@ -16,6 +16,14 @@
       button.setAttribute('aria-pressed', String(button.dataset.themeChoice === preference));
     });
   }
+  function addDeferredScript(src, onerror) {
+    if (document.querySelector('script[src="' + src + '"]')) return;
+    const script = document.createElement('script');
+    script.src = src;
+    script.defer = true;
+    if (onerror) script.onerror = onerror;
+    document.head.appendChild(script);
+  }
   function installAISettings() {
     if (typeof document.getElementById !== 'function' || typeof document.createElement !== 'function') return;
     const fields = document.querySelector('.processing-fields');
@@ -48,14 +56,11 @@
 
     fields.prepend(providerField, modelFields, custom);
 
-    const script = document.createElement('script');
-    script.src = 'ai-providers.js?v=1.0.0-ai2';
-    script.defer = true;
-    script.onerror = () => {
+    addDeferredScript('ai-providers.js?v=1.0.0-ai2', () => {
       const status = document.getElementById('queueStatus');
       if (status) status.textContent = 'AI provider module could not load. Reload while online.';
-    };
-    document.head.appendChild(script);
+    });
+    addDeferredScript('recording-bridge.js?v=1.0.0-touch1');
   }
   function bind() {
     document.querySelectorAll('[data-theme-choice]').forEach(button => {
