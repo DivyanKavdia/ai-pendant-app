@@ -1,4 +1,4 @@
-/* Settings pendant identity uses the exact same Synap wordmark contract as Home. */
+/* Settings pendant identity uses the same Synap wordmark as the Home header. */
 .pendant-settings-card{
   grid-template-columns:72px minmax(0,1fr) auto auto!important;
 }
@@ -28,8 +28,8 @@
   box-shadow:none!important;
   filter:none!important;
 }
-/* One theme rule for every Synap wordmark. This prevents Home and Settings drifting apart. */
-:root[data-theme="dark"] .synap-brand-image{
+/* Home uses the same source artwork and turns it white in dark mode. Keep Settings identical. */
+:root[data-theme="dark"] .pendant-settings-top .settings-brand-logo{
   filter:brightness(0) invert(1)!important;
 }
 :root[data-theme="dark"] .pendant-settings-top .settings-device-art.settings-brand-lockup{
