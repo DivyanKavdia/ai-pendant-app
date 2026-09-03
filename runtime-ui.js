@@ -3,6 +3,24 @@
   'use strict';
   const $=id=>document.getElementById(id);
 
+  function bindSettingsBrand(){
+    function apply(){
+      const homeLogo=document.querySelector('.topbar .brand-logo');
+      const settingsLogo=document.querySelector('.pendant-settings-top .settings-brand-logo');
+      if(!settingsLogo)return;
+      const source=homeLogo?.getAttribute('src')||'logo.webp?v=1.0.0';
+      if(settingsLogo.getAttribute('src')!==source)settingsLogo.setAttribute('src',source);
+      settingsLogo.alt='synap';
+      settingsLogo.removeAttribute('width');
+      settingsLogo.removeAttribute('height');
+      settingsLogo.dataset.brandSource='home-wordmark';
+    }
+    apply();
+    const dialog=$('settingsDialog');
+    if(dialog)new MutationObserver(apply).observe(dialog,{childList:true,subtree:true,attributes:true,attributeFilter:['src']});
+    $('settingsButton')?.addEventListener('click',()=>requestAnimationFrame(apply));
+  }
+
   function bindFirmwareAffordance(){
     const check=$('otaReleaseCheck'),latest=$('otaLatest'),status=$('otaStatus'),progress=$('otaProgress');
     if(!check||!latest||!status)return;
@@ -77,6 +95,6 @@
     media?.addEventListener?.('change',apply);apply();
   }
 
-  function init(){bindFirmwareAffordance();bindBrainTabs();bindReducedMotion()}
+  function init(){bindSettingsBrand();bindFirmwareAffordance();bindBrainTabs();bindReducedMotion()}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
