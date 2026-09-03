@@ -1,5 +1,9 @@
-name: PWA regression tests
-on: [push, pull_request]
+name: Validate production PWA
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 permissions:
   contents: read
 jobs:
