@@ -1,0 +1,36 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const root=path.join(__dirname,'..');
+const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const brain=fs.readFileSync(path.join(root,'brain-ui.js'),'utf8');
+const product=fs.readFileSync(path.join(root,'product-ui.js'),'utf8');
+
+test('Sep 4 official fallback uses Digital Twin identity',()=>{
+  assert.match(html,/<p class="brain-kicker">YOUR DIGITAL TWIN<\/p>/);
+  assert.doesNotMatch(html,/<p class="brain-kicker">YOUR SECOND BRAIN<\/p>/);
+});
+
+test('Settings promotes the firmware-backed Synap serial into the device title',()=>{
+  const start=html.indexOf('<section class="settings-card pendant-settings-card">');
+  const end=html.indexOf('</section>',start);
+  const card=html.slice(start,end);
+  assert.match(card,/<h3 id="setupDeviceId">synap-—<\/h3>/);
+  assert.match(card,/<p class="pendant-meta"><span id="setupDeviceStatus">Not connected<\/span><\/p>/);
+  assert.doesNotMatch(card,/>Synap Pendant</);
+  assert.match(html,/el\.textContent=id\?id\.toLowerCase\(\):'synap-—'/);
+  assert.match(html,/el\.dataset\.deviceId=id/);
+});
+
+test('rich Synap UI feature modules remain present in the release',()=>{
+  assert.match(brain,/Ask Synap/);
+  assert.match(brain,/Follow-up inbox/);
+  assert.match(brain,/People/);
+  assert.match(brain,/Decisions/);
+  assert.match(brain,/My commitments/);
+  assert.match(product,/Advanced & recovery/);
+  assert.match(product,/Create memories automatically/);
+});
+
+console.log('PASS: Sep 4 Digital Twin release identity and rich UI fallback contract');
