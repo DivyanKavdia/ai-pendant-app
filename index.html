@@ -12,10 +12,10 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <script src="touch-event-bridge.js?v=0.0.1-touch3"></script>
   <script src="memory-ui-fix.js?v=0.0.1-memory1"></script>
-  <script src="theme.js?v=0.0.1-brain13"></script>
+  <script src="theme.js?v=0.0.1-brain14"></script>
   <link rel="stylesheet" href="styles.css?v=1.0.0-diag1">
   <link rel="stylesheet" href="brand.css?v=1.0.0-brain1" data-synap-brand="brain1">
-  <link rel="stylesheet" href="polish.css?v=0.0.1-ui1">
+  <link rel="stylesheet" href="polish.css?v=0.0.1-ui2">
 </head>
 <body data-state="disconnected">
   <a class="skip-link" href="#today">Skip to your day</a>
@@ -30,7 +30,7 @@
 <nav class="wireframe-tabs brain-tabs"><a href="#today" class="active"><svg><use href="#i-spark"/></svg><span>Today</span></a><a href="#insights"><svg><use href="#i-note"/></svg><span>Memories</span></a><a href="#library"><svg><use href="#i-library"/></svg><span>Library</span></a></nav><div id="toastRegion"></div>
 <dialog id="settingsDialog" class="modal"><form id="settingsForm" class="settings-form"><div class="modal-header"><button id="closeSettingsButton" type="button" aria-label="Back to Synap">‹</button><h2>Settings</h2></div>
 <section class="settings-card pendant-settings-card">
-  <div class="pendant-settings-top"><div class="settings-device-art"><img class="synap-brand-image" src="logo.webp?v=0.0.1" alt="synap"></div><div class="pendant-settings-copy"><h3>Synap Pendant</h3><p id="setupDeviceStatus">Not connected</p></div></div>
+  <div class="pendant-settings-top"><div class="settings-device-art settings-brand-lockup"><img class="synap-brand-image settings-brand-logo" src="logo.webp?v=0.0.1" alt="synap"></div><div class="pendant-settings-copy"><h3>Synap Pendant</h3><p id="setupDeviceStatus">Not connected</p></div></div>
   <div class="pendant-actions"><button id="setupConnect" class="button button-primary" type="button">Connect</button><button id="chooseDeviceButton" class="button button-secondary" type="button">Change pendant</button></div>
   <div id="firmwareSettings" class="firmware-inline"><div class="firmware-inline-head"><h4 id="firmwareTitle">Firmware</h4></div><p id="otaStatus">Connect to check</p><progress id="otaProgress" value="0" max="1" hidden></progress><div class="firmware-actions"><button id="otaReleaseCheck" type="button">Check for update</button><button id="otaLatest" class="button button-primary" type="button" hidden>Update now</button><button id="otaCancel" type="button" hidden>Cancel</button></div></div>
 </section>
