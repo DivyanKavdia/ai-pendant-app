@@ -3,50 +3,6 @@
   'use strict';
   const $=id=>document.getElementById(id);
 
-  function canonicalUrl(){
-    try{return location.pathname+location.search}catch(_){return''}
-  }
-  function stripFragment(){
-    try{
-      if(location.hash&&typeof history.replaceState==='function')history.replaceState(history.state,'',canonicalUrl());
-    }catch(_){}
-  }
-  function forceTop(){
-    try{
-      const scrolling=document.scrollingElement||document.documentElement;
-      if(scrolling)scrolling.scrollTop=0;
-      if(document.documentElement)document.documentElement.scrollTop=0;
-      if(document.body)document.body.scrollTop=0;
-      if(typeof window.scrollTo==='function')window.scrollTo(0,0);
-    }catch(_){}
-  }
-  function nextFrame(fn){
-    if(typeof requestAnimationFrame==='function')requestAnimationFrame(fn);else setTimeout(fn,0);
-  }
-  function enforceStartupPosition(){
-    try{if('scrollRestoration'in history)history.scrollRestoration='manual'}catch(_){}
-    stripFragment();
-    forceTop();
-    nextFrame(()=>{forceTop();nextFrame(forceTop)});
-    window.addEventListener('load',()=>{
-      forceTop();
-      nextFrame(forceTop);
-      setTimeout(forceTop,120);
-    },{once:true});
-    window.addEventListener('pageshow',event=>{
-      if(!event.persisted)return;
-      stripFragment();
-      forceTop();
-      nextFrame(forceTop);
-    });
-    /* Programmatic jumps in memory/Ask flows may still use location.hash. Let the
-       browser perform the jump, then immediately canonicalise the URL so a later
-       app launch can never inherit that section as its startup position. */
-    window.addEventListener('hashchange',()=>nextFrame(stripFragment));
-  }
-
-  enforceStartupPosition();
-
   function bindSettingsBrand(){
     function apply(){
       const homeLogo=document.querySelector('.topbar .brand-logo');
@@ -57,13 +13,12 @@
       settingsLogo.alt='synap';
       settingsLogo.removeAttribute('width');
       settingsLogo.removeAttribute('height');
-      settingsLogo.classList.add('synap-brand-image');
       settingsLogo.dataset.brandSource='home-wordmark';
     }
     apply();
     const dialog=$('settingsDialog');
-    if(dialog)new MutationObserver(apply).observe(dialog,{childList:true,subtree:true,attributes:true,attributeFilter:['src','class']});
-    $('settingsButton')?.addEventListener('click',()=>nextFrame(apply));
+    if(dialog)new MutationObserver(apply).observe(dialog,{childList:true,subtree:true,attributes:true,attributeFilter:['src']});
+    $('settingsButton')?.addEventListener('click',()=>requestAnimationFrame(apply));
   }
 
   function bindFirmwareAffordance(){
@@ -123,20 +78,10 @@
       select(chosen.link);
     }
     function schedule(){if(!raf)raf=requestAnimationFrame(update)}
-    nav.addEventListener('click',event=>{
-      const link=event.target.closest('a[href^="#"]');
-      if(!link)return;
-      const section=document.querySelector(link.getAttribute('href'));
-      if(!section){select(link);return}
-      event.preventDefault();
-      select(link);
-      const reduced=document.documentElement.hasAttribute('data-reduced-motion')||window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-      section.scrollIntoView({behavior:reduced?'auto':'smooth',block:'start'});
-      stripFragment();
-    });
-    window.addEventListener('scroll',schedule,{passive:true});
-    window.addEventListener('resize',schedule,{passive:true});
-    window.addEventListener('hashchange',schedule);
+    nav.addEventListener('click',event=>{const link=event.target.closest('a[href^="#"]');if(link)select(link)});
+    addEventListener('scroll',schedule,{passive:true});
+    addEventListener('resize',schedule,{passive:true});
+    addEventListener('hashchange',schedule);
     new MutationObserver(schedule).observe(nav,{childList:true,subtree:true});
     if(typeof ResizeObserver!=='undefined'){
       const observer=new ResizeObserver(schedule);observer.observe(document.querySelector('main')||document.body);
