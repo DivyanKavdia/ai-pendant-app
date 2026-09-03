@@ -163,6 +163,50 @@
     });
   }
 
+  async function continuousContext(processor, recording, currentBlocks) {
+    const all = await processor.store.all('recordings');
+    let parts = [recording];
+    if (recording?.continuousGroupId) {
+      parts = all.filter(item => item.continuousGroupId === recording.continuousGroupId &&
+        Number(item.continuousPart || 1) <= Number(recording.continuousPart || 1))
+        .sort((a, b) => Number(a.continuousPart || 1) - Number(b.continuousPart || 1));
+    }
+    const finalInput = [];
+    const transcriptLines = [];
+    let offsetSeconds = 0;
+    for (const part of parts) {
+      const isCurrent = part.id === recording.id;
+      const blocks = isCurrent ? currentBlocks : (Array.isArray(part.meetingBlocks) ? part.meetingBlocks : []);
+      if (blocks.length) {
+        for (const block of blocks) {
+          const startSeconds = offsetSeconds + Number(block.startSeconds || 0);
+          const endSeconds = offsetSeconds + Number(block.endSeconds || 0);
+          finalInput.push({
+            part: Number(part.continuousPart || 1),
+            block: Number(block.index || 0) + 1,
+            time: timestamp(startSeconds) + '–' + timestamp(endSeconds),
+            memory: block.memory
+          });
+        }
+      } else if (!isCurrent && part.summary) {
+        finalInput.push({
+          part: Number(part.continuousPart || 1),
+          block: 1,
+          time: timestamp(offsetSeconds) + '–' + timestamp(offsetSeconds + (Number(part.durationMs) || 0) / 1000),
+          memory: {summary:part.summary,key_points:[],decisions:[],action_items:[],questions:[],follow_ups:[],topics:[]}
+        });
+      }
+      const partSegments = (await processor.store.all('segments', 'recording', part.id))
+        .filter(segment => typeof segment.transcript === 'string' && segment.transcript.trim())
+        .sort((a, b) => a.index - b.index);
+      for (const segment of partSegments) {
+        transcriptLines.push('[' + timestamp(offsetSeconds + segment.index * 30) + '] ' + segment.transcript);
+      }
+      offsetSeconds += (Number(part.durationMs) || 0) / 1000;
+    }
+    return {parts, finalInput, transcript: transcriptLines.join('\n').trim(), durationSeconds: offsetSeconds};
+  }
+
   async function requestStructured(processor, job, config, prefs, options) {
     const response = await processor.fetch(OPENAI_RESPONSES, {
       method: 'POST',
@@ -227,9 +271,6 @@
       throw error;
     }
 
-    // For OpenAI, the 30-second dependency step is deliberately local. It marks the
-    // transcript ready without paying for an LLM call per tiny segment. The next job
-    // groups ten transcript segments into ~5-minute semantic blocks.
     if (job.kind === 'summarize') {
       const segment = await processor.store.get('segments', [job.recordingId, job.segmentIndex]);
       if (!segment || typeof segment.transcript !== 'string') throw new Error('Missing prior transcription');
@@ -280,17 +321,13 @@
       blocks.push(block);
     }
 
-    const finalInput = blocks.map(block => ({
-      block: block.index + 1,
-      time: block.start + '–' + block.end,
-      memory: block.memory
-    }));
+    const continuous = await continuousContext(processor, recording, blocks);
     const meeting = await requestStructured(processor, job, config, prefs, {
-      idempotencyKey: job.dedupe + ':final:' + blocks.map(block => block.identity).join(';'),
+      idempotencyKey: job.dedupe + ':final:' + continuous.finalInput.map(item => item.part + ':' + item.block + ':' + item.time).join(';'),
       name: 'synap_meeting_memory',
       schema: MEETING_SCHEMA,
-      instructions: 'Consolidate these chronological meeting blocks into one reliable meeting memory. Treat blocks as consecutive parts of the same conversation. Merge duplicate points and action items. If a later block explicitly changes an earlier proposal or decision, preserve the later confirmed state while making the change understandable. Distinguish tentative discussion from confirmed decisions. Never invent owners, due dates, decisions or facts. Keep the executive summary concise and action-oriented.',
-      input: JSON.stringify(finalInput)
+      instructions: 'Consolidate these chronological meeting blocks into one reliable meeting memory. Blocks may span automatically rolled capture parts, but they are one continuous conversation. Merge duplicate points and action items. If a later block explicitly changes an earlier proposal or decision, preserve the later confirmed state while making the change understandable. Distinguish tentative discussion from confirmed decisions. Never invent owners, due dates, decisions or facts. Keep the executive summary concise and action-oriented.',
+      input: JSON.stringify(continuous.finalInput)
     });
 
     return {
@@ -298,15 +335,15 @@
       summary: meetingText(meeting),
       meeting,
       meetingBlocks: blocks,
-      transcript: segments.map(segment => {
-        const start = segment.index * 30;
-        return '[' + timestamp(start) + '] ' + segment.transcript;
-      }).join('\n').trim(),
+      transcript: continuous.transcript,
       processingState: 'done',
       provider: 'openai',
       sttModel: prefs.sttModel,
       llmModel: prefs.llmModel,
-      processingStrategy: '30s-stt-5m-blocks-final',
+      processingStrategy: continuous.parts.length > 1 ? 'continuous-45m-parts-30s-stt-5m-blocks-final' : '30s-stt-5m-blocks-final',
+      continuousGroupId: recording?.continuousGroupId || null,
+      continuousParts: continuous.parts.length,
+      continuousDurationMs: Math.round(continuous.durationSeconds * 1000),
       processedAt: new Date().toISOString()
     };
   }
@@ -374,7 +411,6 @@
     provider.addEventListener('change', apply);
     apply();
 
-    // Capture runs before app.js' submit handler, so its existing settings object receives the preset endpoints and key.
     form.addEventListener('submit', function (event) {
       if (provider.value === 'openai' && !token.value.trim()) {
         event.preventDefault();
@@ -406,6 +442,7 @@
     meetingText,
     groupSegments,
     blockInput,
+    continuousContext,
     patchProcessor
   };
 
