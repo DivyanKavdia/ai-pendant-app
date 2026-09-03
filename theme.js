@@ -60,6 +60,7 @@
     document.querySelectorAll('[data-theme-choice]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();choose(b.dataset.themeChoice)}));
     document.addEventListener('click',e=>{const b=e.target.closest?.('[data-theme-choice]');if(b){e.preventDefault();choose(b.dataset.themeChoice)}});
     installAISettings();
+    css('settings-icon-fix.css?v=1.0.0-icon1','settingsicon','icon1');
     script('capture-ui.js?v=1.0.0-ui5');
     script('brain-ui.js?v=0.0.1-brain7');
     script('product-ui.js?v=1.0.0-ui4');
