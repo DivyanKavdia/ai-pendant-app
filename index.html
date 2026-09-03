@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <script src="theme.js?v=1.0.0-diag1"></script>
+  <script src="theme.js?v=1.0.0-prod2"></script>
   <link rel="stylesheet" href="styles.css?v=1.0.0-diag1">
 </head>
 <body data-state="disconnected">
@@ -63,7 +63,7 @@
 
       <section id="capture" class="capture-layout compact-recorder" aria-label="Recorder" tabindex="-1">
         <div class="hero-card">
-          <div class="session-heading"><div><h2 id="recorderTitle">Ready when you are.</h2></div><span class="local-badge"><svg aria-hidden="true"><use href="#i-check"/></svg>On-device</span></div>
+          <div class="session-heading"><div><h2 id="recorderTitle">Ready when you are.</h2></div><span class="local-badge"><svg aria-hidden="true"><use href="#i-check"/></svg>Saved in browser</span></div>
           <p id="recorderSubtitle" class="recorder-subtitle">Connect to start recording.</p>
           <div class="capture-strip">
           <div class="recording-stage">
@@ -121,7 +121,6 @@
       </section>
 
       <section id="processing" class="section-card queue-panel" aria-label="Sequential processing queue">
-
         <h2>Processing queue</h2>
         <ol class="pipeline" aria-label="Processing order"><li><span>01</span> Transcribe</li><li><span>02</span> Summarize</li><li><span>03</span> Consolidate</li></ol>
         <p id="queueStatus" role="status" aria-live="polite">Ready to process your recordings.</p>
@@ -181,10 +180,11 @@
       <div class="modal-actions"><button class="button button-primary" type="submit">Done <svg aria-hidden="true"><use href="#i-check"/></svg></button></div>
     </form>
   </dialog>
-  <script src="audio-store.js?v=1.0.0-device1" defer></script>
-  <script src="ota.js?v=1.0.0-diag1" defer></script>
-  <script src="releases.js?v=1.0.0-idota1" defer></script>
+  <script src="audio-store.js?v=1.0.0-prod2" defer></script>
+  <script src="ota.js?v=1.0.0-prod2" defer></script>
+  <script src="releases.js?v=1.0.0-prod2" defer></script>
   <script src="device-identity.js?v=1.0.0-device1" defer></script>
+  <script src="enhancements.js?v=1.0.0-prod2" defer></script>
   <script src="app.js?v=1.0.0-diag1" defer></script>
 </body>
 </html>
