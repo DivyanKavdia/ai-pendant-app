@@ -8,14 +8,16 @@ const theme=fs.readFileSync(path.join(root,'theme.js'),'utf8');
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const brandCss=fs.readFileSync(path.join(root,'settings-icon-fix.css'),'utf8');
 
-test('startup fix is isolated from the restored runtime UI',()=>{
+test('startup reset remains isolated while explicit tab navigation is controlled',()=>{
   assert.match(theme,/scrollRestoration='manual'/);
   assert.match(theme,/location\.hash/);
   assert.match(theme,/history\.replaceState\(history\.state,'',location\.pathname\+location\.search\)/);
   assert.doesNotMatch(runtime,/enforceStartupPosition/);
   assert.doesNotMatch(runtime,/stripFragment/);
-  assert.doesNotMatch(runtime,/section\.scrollIntoView/);
-  assert.match(runtime,/nav\.addEventListener\('click',event=>\{const link=event\.target\.closest\('a\[href\^="#"\]'\);if\(link\)select\(link\)\}\)/);
+  assert.match(runtime,/event\.preventDefault\(\)/);
+  assert.match(runtime,/section\.scrollIntoView/);
+  assert.match(runtime,/lock\(link\)/);
+  assert.match(runtime,/history\.replaceState\(history\.state,'',location\.pathname\+location\.search\)/);
 });
 
 test('restored Home and Settings wordmarks retain pre-consolidation styling',()=>{
@@ -28,4 +30,4 @@ test('restored Home and Settings wordmarks retain pre-consolidation styling',()=
   assert.match(runtime,/home-wordmark/);
 });
 
-console.log('PASS: pre-consolidation runtime restored with isolated startup guard');
+console.log('PASS: startup reset stays isolated and tab navigation is controlled');
