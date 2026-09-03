@@ -14,6 +14,16 @@
     "Bluetooth connection changed.", "Update timed out.", "Update cancelled.", "Stop recording first.",
     "The update targets a different pendant device ID."];
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const hidden = () => root.document && root.document.visibilityState === "hidden";
+  async function waitUntilVisible(epoch, ensure) {
+    if (!hidden()) return 0;
+    const started = Date.now();
+    while (hidden()) {
+      ensure(epoch);
+      await sleep(250);
+    }
+    return Date.now() - started;
+  }
   function interrupted(message="BLE interrupted. Reconnect to continue this update.") {
     const error=new Error(message);error.resumable=true;return error;
   }
@@ -117,20 +127,36 @@
       }
     }
     async ack(predicate, epoch, session, timeout=15000) {
-      const end=Date.now()+timeout;let nextRead=Date.now()+350;
+      // Count only foreground/active time toward an ACK timeout. Mobile browsers
+      // can freeze JavaScript and BLE delivery while the screen is locked; on
+      // resume Date.now() jumps forward and the old implementation failed
+      // immediately even though the pendant had safely retained OTA state.
+      let end=Date.now()+timeout,nextRead=Date.now()+350;
       while(Date.now()<end) {
         this.ensure(epoch);
+        if(hidden()) {
+          const paused=await waitUntilVisible(epoch,this.ensure.bind(this));
+          end+=paused;nextRead=Date.now();
+          continue;
+        }
         const s=this.status;
-        if (s && s.error && (s.session===session || s.state===1 || s.state===2)) throw new Error(errors[s.error] || "Firmware update failed.");
+        if (s && s.error && (s.session===session || s.state===1 || s.state===2)) {
+          if (s.error===8 || s.error===9) throw interrupted("Firmware transfer paused while the phone was inactive. Reconnect to continue the update.");
+          throw new Error(errors[s.error] || "Firmware update failed.");
+        }
         if (s && s.session===session && predicate(s)) return s;
         if(Date.now()>=nextRead) { await this.read();nextRead=Date.now()+350; }
         else await sleep(12);
       }
-      throw new Error("Firmware acknowledgement timed out. Reconnect and try Continue update.");
+      const status=await this.read().catch(()=>null);
+      if(status && status.session===session && !status.error && [3,4].includes(status.state)) return status;
+      throw interrupted("Firmware progress paused. Reconnect to continue from the saved position.");
     }
     async ackWindow(start, target, epoch, session, timeout=15000) {
       try {
-        return await this.ack(s=>s.state===3 && s.offset>=target,epoch,session,timeout);
+        const status=await this.ack(s=>s.state===3 && s.offset>=target,epoch,session,timeout);
+        if(status.state===3 && status.offset>=start && status.offset<=target) return status;
+        return status;
       } catch(error) {
         if(error.resumable) throw error;
         const status=await this.read().catch(()=>null);
@@ -169,6 +195,7 @@
           this.status=null;begun=true;await this.send(resume,epoch,true,true);
           const resumed=await this.ack(s=>[3,4].includes(s.state)&&s.offset===offset,epoch,session,15000);
           ready=resumed.state===4;
+          offset=resumed.offset;
           this.io.progress("Resuming · "+Math.floor(offset*100/bytes.length)+"%",offset/bytes.length,false);
         } else {
           session=crypto.getRandomValues(new Uint32Array(1))[0] || 1;
@@ -176,7 +203,8 @@
           begin.set(new TextEncoder().encode(expectedDeviceId),41);
           this.status=null; // Never reject a retry using the previous attempt's cached error.
           begun=true;await this.send(begin,epoch,true,true);
-          await this.ack(s=>s.state===3 && s.offset===0,epoch,session,30000);
+          const started=await this.ack(s=>s.state===3 && s.offset===0,epoch,session,30000);
+          offset=started.offset;
         }
         // Each DATA write still asks Bluetooth for a response, but flash progress is
         // acknowledged cumulatively after a short window rather than round-tripping
