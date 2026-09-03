@@ -31,7 +31,7 @@
     const modelFields = document.createElement('div');
     modelFields.id = 'openAIModelFields';
     modelFields.className = 'processing-fields';
-    modelFields.innerHTML = '<label class="field"><span>Transcription model</span><select id="sttModelInput"><option value="gpt-4o-mini-transcribe">GPT-4o mini Transcribe</option><option value="gpt-4o-transcribe">GPT-4o Transcribe</option><option value="gpt-4o-transcribe-diarize">GPT-4o Transcribe Diarize</option></select></label><label class="field"><span>Meeting model</span><select id="llmModelInput"><option value="gpt-5-mini">GPT-5 mini</option><option value="gpt-5">GPT-5</option><option value="gpt-4.1-mini">GPT-4.1 mini</option></select></label><label class="field"><span>Transcription language</span><select id="languageInput"><option value="auto">Auto detect</option><option value="en">English</option><option value="hi">Hindi</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option><option value="ja">Japanese</option></select></label>';
+    modelFields.innerHTML = '<label class="field"><span>Transcription model</span><select id="sttModelInput"><option value="gpt-4o-mini-transcribe">GPT-4o mini Transcribe</option><option value="gpt-4o-transcribe">GPT-4o Transcribe</option><option value="gpt-4o-transcribe-diarize">GPT-4o Transcribe Diarize</option></select></label><label class="field"><span>Meeting model</span><select id="llmModelInput"><option value="gpt-5-mini">GPT-5 mini</option><option value="gpt-5">GPT-5</option><option value="gpt-4.1-mini">GPT-4.1 mini</option></select><small>Used for ~5-minute context blocks and the final meeting memory.</small></label><label class="field"><span>Transcription language</span><select id="languageInput"><option value="auto">Auto detect</option><option value="en">English</option><option value="hi">Hindi</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option><option value="ja">Japanese</option></select></label>';
 
     const custom = document.createElement('div');
     custom.id = 'customEndpointFields';
@@ -49,7 +49,7 @@
     fields.prepend(providerField, modelFields, custom);
 
     const script = document.createElement('script');
-    script.src = 'ai-providers.js?v=1.0.0-ai1';
+    script.src = 'ai-providers.js?v=1.0.0-ai2';
     script.defer = true;
     script.onerror = () => {
       const status = document.getElementById('queueStatus');
