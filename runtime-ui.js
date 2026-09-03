@@ -72,7 +72,7 @@
   }
 
   function bindReducedMotion(){
-    const media=matchMedia?.('(prefers-reduced-motion: reduce)');
+    const media=typeof window.matchMedia==='function'?window.matchMedia('(prefers-reduced-motion: reduce)'):null;
     const apply=()=>document.documentElement.toggleAttribute('data-reduced-motion',!!media?.matches);
     media?.addEventListener?.('change',apply);apply();
   }
