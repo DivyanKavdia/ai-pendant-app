@@ -16,6 +16,46 @@
       button.setAttribute('aria-pressed', String(button.dataset.themeChoice === preference));
     });
   }
+  function installAISettings() {
+    const fields = document.querySelector('.processing-fields');
+    const endpoint = document.getElementById('endpointInput');
+    const llmEndpoint = document.getElementById('llmEndpointInput');
+    const token = document.getElementById('tokenInput');
+    if (!fields || !endpoint || !llmEndpoint || !token || document.getElementById('providerInput')) return;
+
+    const providerField = document.createElement('label');
+    providerField.className = 'field';
+    providerField.innerHTML = '<span>AI provider</span><select id="providerInput"><option value="openai">OpenAI</option><option value="custom">Custom / other provider</option></select><small>OpenAI needs only an API key. Custom mode keeps endpoint support.</small>';
+
+    const modelFields = document.createElement('div');
+    modelFields.id = 'openAIModelFields';
+    modelFields.className = 'processing-fields';
+    modelFields.innerHTML = '<label class="field"><span>Transcription model</span><select id="sttModelInput"><option value="gpt-4o-mini-transcribe">GPT-4o mini Transcribe</option><option value="gpt-4o-transcribe">GPT-4o Transcribe</option><option value="gpt-4o-transcribe-diarize">GPT-4o Transcribe Diarize</option></select></label><label class="field"><span>Meeting model</span><select id="llmModelInput"><option value="gpt-5-mini">GPT-5 mini</option><option value="gpt-5">GPT-5</option><option value="gpt-4.1-mini">GPT-4.1 mini</option></select></label><label class="field"><span>Transcription language</span><select id="languageInput"><option value="auto">Auto detect</option><option value="en">English</option><option value="hi">Hindi</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option><option value="ja">Japanese</option></select></label>';
+
+    const custom = document.createElement('div');
+    custom.id = 'customEndpointFields';
+    custom.className = 'processing-fields';
+    custom.append(endpoint.closest('label'), llmEndpoint.closest('label'));
+
+    const tokenLabel = token.closest('label')?.querySelector('span');
+    if (tokenLabel) {
+      tokenLabel.id = 'apiKeyLabel';
+      tokenLabel.textContent = 'OpenAI API key';
+    }
+    token.placeholder = 'sk-…';
+    token.autocomplete = 'off';
+
+    fields.prepend(providerField, modelFields, custom);
+
+    const script = document.createElement('script');
+    script.src = 'ai-providers.js?v=1.0.0-ai1';
+    script.defer = true;
+    script.onerror = () => {
+      const status = document.getElementById('queueStatus');
+      if (status) status.textContent = 'AI provider module could not load. Reload while online.';
+    };
+    document.head.appendChild(script);
+  }
   function bind() {
     document.querySelectorAll('[data-theme-choice]').forEach(button => {
       button.addEventListener('click', () => {
@@ -24,6 +64,7 @@
         apply();
       });
     });
+    installAISettings();
     apply();
   }
   system.addEventListener('change', () => { if (preference === 'system') apply(); });
