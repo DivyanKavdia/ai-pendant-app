@@ -32,20 +32,22 @@ const block=(from,to)=>source.slice(source.indexOf(from),source.indexOf(to));
   vm.runInContext(block('  async function acquireWakeLock()','  async function releaseWakeLock()'),c);
   await c.acquireWakeLock();assert.equal(c.wakeLock,lock);assert.equal(released,0);
   c.wakeLock=null;c.firmwareBusy=false;await c.acquireWakeLock();assert.equal(released,1);
-  // FIFO cannot resume or start a job after OTA takes ownership during a storage await.
-  require('../audio-store.js');let allowed=false,processed=0,heads=0;
-  const store={head:async()=>{heads++;return null;}};
+  // Scheduler cannot launch a job after OTA takes ownership during an awaited selection.
+  require('../audio-store.js');let allowed=false,processed=0,selections=0;
+  const store={nextRunnable:async()=>{selections++;return{job:null,wakeAt:0,blockedCount:0};}};
   let fifo=new globalThis.DKFIFOProcessor(store,{canRun:()=>allowed,settings:()=>({}),locks:{request:async(n,o,f)=>f({})}});
-  await fifo.resume();assert.equal(heads,0);assert.equal(fifo.paused,true);
-  let resolveHead;store.head=()=>new Promise(resolve=>resolveHead=resolve);allowed=true;
-  const running=fifo.resume();await Promise.resolve();allowed=false;fifo.pause();resolveHead({id:1});
-  fifo.process=async()=>processed++;await running;assert.equal(processed,0);
+  await fifo.resume();assert.equal(selections,0);assert.equal(fifo.paused,true);
+  let resolveSelection;store.nextRunnable=()=>new Promise(resolve=>resolveSelection=resolve);allowed=true;
+  const running=fifo.resume();await Promise.resolve();allowed=false;fifo.pause();
+  resolveSelection({job:{id:1,recordingId:'r',kind:'transcribe',segmentIndex:0},wakeAt:0,blockedCount:0});
+  fifo.execute=async()=>processed++;await running;assert.equal(processed,0);
+  // A direct processor job also re-checks ownership after awaited browser storage reads.
   let resolveSegment,uploads=0;allowed=true;
   fifo=new globalThis.DKFIFOProcessor({get:()=>new Promise(resolve=>resolveSegment=resolve)},
     {canRun:()=>allowed,fetch:async()=>uploads++,settings:()=>({})});
   fifo.paused=false;
-  const pending=fifo.process({kind:'summarize',recordingId:'r',segmentIndex:0},{},'https://example.test/summary');
+  const pending=fifo.process({id:2,kind:'summarize',recordingId:'r',segmentIndex:0},{},'https://example.test/summary');
   allowed=false;fifo.pause();resolveSegment({transcript:'test'});
   await assert.rejects(pending,{name:'AbortError'});assert.equal(uploads,0,'no upload after an awaited storage read');
-  console.log('PASS: OTA-only controls, recording locks, wake lock and FIFO ownership race.');
+  console.log('PASS: OTA-only controls, recording locks, wake lock and processing ownership race.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
