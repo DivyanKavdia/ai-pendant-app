@@ -6,13 +6,14 @@ const root=path.join(__dirname,'..');
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const brain=fs.readFileSync(path.join(root,'brain-ui.js'),'utf8');
 const product=fs.readFileSync(path.join(root,'product-ui.js'),'utf8');
+const runtime=fs.readFileSync(path.join(root,'runtime-ui.js'),'utf8');
 
 test('Sep 4 official fallback uses Digital Twin identity',()=>{
   assert.match(html,/<p class="brain-kicker">YOUR DIGITAL TWIN<\/p>/);
   assert.doesNotMatch(html,/<p class="brain-kicker">YOUR SECOND BRAIN<\/p>/);
 });
 
-test('Settings promotes the firmware-backed Synap serial into the device title',()=>{
+test('Settings promotes the firmware-backed synap serial into the device title',()=>{
   const start=html.indexOf('<section class="settings-card pendant-settings-card">');
   const end=html.indexOf('</section>',start);
   const card=html.slice(start,end);
@@ -23,7 +24,15 @@ test('Settings promotes the firmware-backed Synap serial into the device title',
   assert.match(html,/el\.dataset\.deviceId=id/);
 });
 
-test('rich Synap UI feature modules remain present in the release',()=>{
+test('all rendered brand references normalize Synap to synap, including dynamic UI',()=>{
+  assert.match(runtime,/const BRAND_PATTERN=\/\\bSynap\\b\/g/);
+  assert.match(runtime,/replace\(BRAND_PATTERN,'synap'\)/);
+  assert.match(runtime,/BRAND_ATTRS=\['aria-label','title','placeholder','alt'\]/);
+  assert.match(runtime,/MutationObserver/);
+  assert.match(runtime,/bindBrandCase\(\)/);
+});
+
+test('rich synap UI feature modules remain present in the release',()=>{
   assert.match(brain,/Ask Synap/);
   assert.match(brain,/Follow-up inbox/);
   assert.match(brain,/People/);
@@ -33,4 +42,4 @@ test('rich Synap UI feature modules remain present in the release',()=>{
   assert.match(product,/Create memories automatically/);
 });
 
-console.log('PASS: Sep 4 Digital Twin release identity and rich UI fallback contract');
+console.log('PASS: Sep 4 Digital Twin release identity, lowercase brand rendering and rich UI fallback contract');
