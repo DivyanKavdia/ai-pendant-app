@@ -1,11 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="t">
-  <title id="t">Synap infinity icon</title>
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#5B4CF6"/>
-      <stop offset=".48" stop-color="#1687F7"/>
-      <stop offset="1" stop-color="#15D4C8"/>
-    </linearGradient>
-  </defs>
-  <path d="M92 256c47-75 117-75 164 0s117 75 164 0c-47-75-117-75-164 0s-117 75-164 0Z" fill="none" stroke="url(#g)" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
+  <title id="t">synap</title>
+  <rect width="512" height="512" rx="112" fill="#ffffff"/>
+  <image href="logo.webp?v=0.0.1" x="72" y="206" width="368" height="100" preserveAspectRatio="xMidYMid meet"/>
 </svg>
