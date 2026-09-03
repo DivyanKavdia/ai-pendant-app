@@ -9,7 +9,7 @@ const RELEASES_PATH = "./releases.js";
 const RELEASES_ASSET = "./releases.js?v=1.0.0-prod2";
 const APP_SHELL = [
   ENTRY_PATH, "./theme.js?v=0.0.1", "./device-identity.js?v=1.0.0-device1", OTA_ASSET, RELEASES_ASSET, "./styles.css?v=1.0.0-diag1", "./brand.css?v=1.0.0-brain1", "./compact.css?v=0.0.1", "./capture-ui.js?v=0.0.1", "./audio-store.js?v=1.0.0-prod2", "./enhancements.js?v=1.0.0-brain1", "./app.js?v=1.0.0-diag1", "./ai-providers.js?v=1.0.0-ai2", "./recording-bridge.js?v=1.0.0-touch1",
-  "./manifest.webmanifest", "./icon.svg?v=1.0.0-infinity2", "./logo.webp?v=0.0.1", "./icon-192.png", "./icon-512.png"
+  "./manifest.webmanifest", "./icon.svg?v=0.0.1", "./logo.webp?v=0.0.1", "./icon-192.png", "./icon-512.png"
 ];
 const SHELL_URLS = new Set(APP_SHELL.map(path => new URL(path, self.registration.scope).href));
 self.addEventListener("install", event => { event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting())); });
