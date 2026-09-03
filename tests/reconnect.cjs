@@ -92,24 +92,25 @@ async function connectionTest({fail=false,reselect=false,auto=false,orphan=false
 }
 async function workerTests(){
   const handlers={},entries=new Map(),scope='https://example.test/ai-pendant-app/';let installed=[],job;
-  const cache={async addAll(paths){installed=Array.from(paths);for(const p of paths)entries.set(new URL(p,scope).href,p);},async match(key){return entries.get(typeof key==='string'?key:key.url);}};
+  const cache={async addAll(paths){installed=Array.from(paths);for(const p of paths)entries.set(new URL(p,scope).href,p);},async match(key){return entries.get(typeof key==='string'?key:key.url);},async put(key,value){entries.set(typeof key==='string'?key:key.url,value);}};
   const ctx={URL,Set,Promise,self:{registration:{scope},addEventListener(t,f){handlers[t]=f;},skipWaiting:async()=>{},clients:{claim:async()=>{}}},
     caches:{open:async()=>cache,keys:async()=>[],delete:async()=>{}},fetch:async()=>{throw new Error('unexpected fetch');}};
   vm.runInNewContext(fs.readFileSync(path.join(root,'sw.js'),'utf8'),ctx);handlers.install({waitUntil:p=>job=p});await job;
   installed.forEach(p=>assert(fs.existsSync(path.join(root,p.split('?')[0]))));
   async function fetch(url,mode='navigate',method='GET'){let result;handlers.fetch({request:{url,mode,method},respondWith:p=>result=p});return result;}
-  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=1.0.0-prod3');
+  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=1.0.0-prod4');
   assert.equal(await fetch(scope+'app.js?v=1.0.0-diag1','cors'),'./app.js?v=1.0.0-diag1');
-  assert.equal(await fetch(scope+'ota.js?v=1.0.0-prod2','cors'),'./ota.js?v=1.0.0-prod2');
+  assert.equal(await fetch(scope+'ota.js?v=1.0.0-prod2','cors'),'./ota.js?v=1.0.0-ota4','stale OTA query is forced to canonical updater');
+  assert.equal(await fetch(scope+'ota.js?v=anything-old','cors'),'./ota.js?v=1.0.0-ota4','all stale OTA query variants are migrated');
   assert.equal(await fetch(scope+'releases.js?v=1.0.0-prod2','cors'),'./releases.js?v=1.0.0-prod2');
   assert.equal(await fetch(scope+'enhancements.js?v=1.0.0-prod2','cors'),'./enhancements.js?v=1.0.0-prod2');
   assert.equal(await fetch(scope+'api','cors','POST'),undefined);
-  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'1.0.0-prod3');assert.equal(reply.release,'1.0.0');
+  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'1.0.0-prod4');assert.equal(reply.release,'1.0.0');
 }
 (async()=>{
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);
   for(const m of app.matchAll(/getElementById\("([^"]+)"\)/g))assert(ids.includes(m[1]),'missing DOM '+m[1]);
   await recoveryTests();
   for(const options of [{},{reselect:true},{auto:true},{orphan:true},{fail:true,auto:true},{reselect:true,cancel:true},{fail:true},{auto:true,missing:true}])await connectionTest(options);
-  await workerTests();console.log('PASS: permission restoration, ambiguous/revoked devices, selection race, lifecycle recovery, cooldown, opt-out, active-session guards, 8 mocked GATT flows, DOM and service-worker cache.');
+  await workerTests();console.log('PASS: permission restoration, ambiguous/revoked devices, selection race, lifecycle recovery, cooldown, opt-out, active-session guards, 8 mocked GATT flows, DOM and service-worker OTA cache migration.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
