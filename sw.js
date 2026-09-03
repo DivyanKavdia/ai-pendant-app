@@ -1,1 +1,52 @@
-const APP_VERSION = "0.0.1",APP_REVISION = "0.0.1-brain14",ENTRY_PATH="./index.html?v="+APP_VERSION,CACHE_NAME="dk-pendant-pwa-v"+APP_REVISION,APP_SHELL=["./",ENTRY_PATH,"./theme.js?v=0.0.1-brain14","./product-ui.js?v=0.0.1-ui2","./touch-event-bridge.js?v=0.0.1-touch3","./memory-ui-fix.js?v=0.0.1-memory1","./device-identity.js?v=1.0.0-device1","./ota.js?v=1.0.0-ota4","./releases.js?v=1.0.0-prod2","./styles.css?v=1.0.0-diag1","./brand.css?v=1.0.0-brain1","./compact.css?v=0.0.1-ui3","./brain.css?v=0.0.1-brain10","./polish.css?v=0.0.1-ui2","./capture-ui.js?v=0.0.1-ui2","./brain-ui.js?v=0.0.1-brain7","./audio-store.js?v=1.0.0-prod2","./enhancements.js?v=1.0.0-brain1","./app.js?v=0.0.1-fwlabel1","./ai-providers.js?v=0.0.1-brain3","./recording-bridge.js?v=1.0.0-touch1","./manifest.webmanifest","./icon.svg?v=1.0.0-infinity2","./logo.webp?v=0.0.1","./icon-192.png","./icon-512.png"],OTA_ASSET="./ota.js?v=1.0.0-ota4",RELEASES_ASSET="./releases.js?v=1.0.0-prod2",SCOPE=self.registration.scope,ENTRY_URL=new URL(ENTRY_PATH,SCOPE).href,ROOT_URL=new URL("./",SCOPE).href;self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(APP_SHELL)).then(()=>self.skipWaiting()))});self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});self.addEventListener("message",e=>{if(e.data?.type==="SKIP_WAITING")self.skipWaiting();if(e.data?.type==="GET_APP_VERSION")e.source?.postMessage({type:"APP_VERSION",version:APP_VERSION,revision:APP_REVISION});if(e.data?.type==="GET_VERSION")e.source?.postMessage({type:"VERSION",version:APP_VERSION,release:APP_VERSION,revision:APP_REVISION})});self.addEventListener("fetch",e=>{if(e.request.method!=="GET")return;const u=new URL(e.request.url),scopeOrigin=self.location?.origin||new URL(SCOPE).origin,same=u.origin===scopeOrigin,match=k=>caches.open(CACHE_NAME).then(c=>c.match(k));if(same&&(u.pathname.endsWith("/ota.js")||u.pathname.endsWith("/releases.js")||u.pathname.endsWith("/theme.js")||u.pathname.endsWith("/product-ui.js")||u.pathname.endsWith("/touch-event-bridge.js")||u.pathname.endsWith("/memory-ui-fix.js")||u.pathname.endsWith("/polish.css"))){e.respondWith(fetch(e.request,{cache:"no-store"}).then(r=>{if(r?.ok){const copy=r.clone();caches.open(CACHE_NAME).then(c=>c.put(e.request,copy))}return r}).catch(()=>match(e.request).then(r=>r||Response.error())));return}if(e.request.mode==="navigate"){e.respondWith(fetch(e.request,{cache:"no-store"}).then(r=>{if(r?.ok){const copy=r.clone();caches.open(CACHE_NAME).then(c=>c.put(ENTRY_URL,copy))}return r}).catch(()=>match(ENTRY_URL).then(r=>r||match(ROOT_URL))));return}if(!same)return;e.respondWith(match(e.request).then(cached=>cached||fetch(e.request).then(r=>{if(r?.ok){const copy=r.clone();caches.open(CACHE_NAME).then(c=>c.put(e.request,copy))}return r}))) });
+/* Synap production service worker: network-first code, resilient offline shell. */
+const APP_VERSION='1.0.0';
+const APP_REVISION='1.0.0-diag1';
+const CACHE_NAME=`synap-pwa-${APP_REVISION}`;
+const APP_SHELL=[
+  './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css',
+  './touch-event-bridge.js','./memory-ui-fix.js','./device-identity.js','./audio-store.js','./ota.js','./releases.js',
+  './app.js','./enhancements.js','./capture-ui.js','./brain-ui.js','./product-ui.js','./runtime-ui.js',
+  './ai-providers.js','./recording-bridge.js','./manifest.webmanifest','./logo.webp','./icon-192.png','./icon-512.png'
+];
+
+self.addEventListener('install',event=>{
+  event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()));
+});
+
+self.addEventListener('activate',event=>{
+  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE_NAME).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));
+});
+
+function versionMessage(){return{type:'APP_VERSION',version:APP_VERSION,release:APP_VERSION,revision:APP_REVISION}}
+self.addEventListener('message',event=>{
+  if(event.data?.type==='SKIP_WAITING')self.skipWaiting();
+  if(event.data?.type==='GET_VERSION'||event.data?.type==='GET_APP_VERSION')event.source?.postMessage(versionMessage());
+});
+
+async function cached(request){return (await caches.open(CACHE_NAME)).match(request,{ignoreSearch:true})}
+async function remember(request,response){
+  if(response?.ok){const cache=await caches.open(CACHE_NAME);await cache.put(request,response.clone())}
+  return response;
+}
+async function networkFirst(request){
+  try{return await remember(request,await fetch(request,{cache:'no-store'}))}
+  catch(error){return await cached(request)||Promise.reject(error)}
+}
+async function navigation(request){
+  try{return await remember('./index.html',await fetch(request,{cache:'no-store'}))}
+  catch(_){return await cached('./index.html')||await cached('./')||Response.error()}
+}
+async function cacheFirst(request){
+  const hit=await cached(request);
+  if(hit){fetch(request).then(response=>remember(request,response)).catch(()=>{});return hit}
+  return remember(request,await fetch(request));
+}
+
+self.addEventListener('fetch',event=>{
+  if(event.request.method!=='GET')return;
+  const url=new URL(event.request.url);
+  if(url.origin!==self.location.origin)return;
+  if(event.request.mode==='navigate'){event.respondWith(navigation(event.request));return}
+  const code=/\.(?:js|css|html)$/i.test(url.pathname)||url.pathname.endsWith('/manifest.webmanifest');
+  event.respondWith(code?networkFirst(event.request):cacheFirst(event.request));
+});
