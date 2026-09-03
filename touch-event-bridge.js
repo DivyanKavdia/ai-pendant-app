@@ -1,0 +1,13 @@
+/* Synap pendant memory-event bridge. Intercepts 0xB6 control notifications without changing BLE core. */
+(function(root){'use strict';
+const MAGIC=0xB6,VERSION=1,REMEMBER=1,HKEY='synap-memory-highlights',DB='dk-pendant-recordings';
+let lastCounter=0;
+function readHighlights(){try{return JSON.parse(localStorage.getItem(HKEY)||'[]')}catch(_){return[]}}
+function saveHighlights(v){try{localStorage.setItem(HKEY,JSON.stringify(v.slice(-500)))}catch(_){}}
+function timerSeconds(){const t=document.getElementById('timer')?.textContent||'';const p=t.split(':').map(Number);if(p.some(Number.isNaN))return null;return p.length===2?p[0]*60+p[1]:p.length===3?p[0]*3600+p[1]*60+p[2]:null}
+function latestRecording(){return new Promise(resolve=>{try{const req=indexedDB.open(DB);req.onerror=()=>resolve(null);req.onsuccess=()=>{const db=req.result;try{const r=db.transaction('recordings').objectStore('recordings').getAll();r.onerror=()=>{db.close();resolve(null)};r.onsuccess=()=>{const list=(r.result||[]).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));db.close();resolve(list.find(x=>x.status==='recording')||list[0]||null)}}catch(_){db.close();resolve(null)}}}catch(_){resolve(null)}})}
+async function store(detail){const rec=await latestRecording(),hs=readHighlights();if(hs.some(h=>h.source==='pendant'&&h.counter===detail.counter))return;const h={id:root.crypto?.randomUUID?.()||String(Date.now()),createdAt:new Date().toISOString(),recordingId:rec?.id||null,offsetSeconds:timerSeconds(),source:'pendant',counter:detail.counter,pendantUptimeMs:detail.uptimeMs};hs.push(h);saveHighlights(hs);const b=document.getElementById('rememberThis');if(b){const old=b.textContent;b.textContent='✓ Remembered';b.classList.add('remembered');setTimeout(()=>{b.textContent=old;b.classList.remove('remembered')},1600)}root.dispatchEvent(new CustomEvent('synap-memory-highlight',{detail:h}))}
+function inspect(event){try{const v=event?.target?.value;if(!v||v.byteLength!==12||v.getUint8(0)!==MAGIC||v.getUint8(1)!==VERSION||v.getUint8(2)!==REMEMBER)return;const counter=v.getUint32(4,true),uptimeMs=v.getUint32(8,true);if(!counter||counter===lastCounter)return;lastCounter=counter;store({counter,uptimeMs,flags:v.getUint8(3)})}catch(_){}}
+const proto=root.BluetoothRemoteGATTCharacteristic?.prototype;if(proto&&!proto.__synapMemoryBridge){const add=proto.addEventListener;proto.addEventListener=function(type,listener,options){if(type==='characteristicvaluechanged'&&!this.__synapMemoryInspect){this.__synapMemoryInspect=true;add.call(this,type,inspect)}return add.call(this,type,listener,options)};proto.__synapMemoryBridge=true}
+root.SynapMemoryEventBridge={MAGIC,VERSION,REMEMBER,inspect};
+})(globalThis);
