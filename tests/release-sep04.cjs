@@ -24,6 +24,16 @@ test('Settings promotes the firmware-backed synap serial into the device title',
   assert.match(html,/el\.dataset\.deviceId=id/);
 });
 
+test('static shell never paints a capitalized synap brand before runtime normalization',()=>{
+  const start=html.indexOf('<body');
+  const end=html.indexOf('<script src="device-identity.js',start);
+  const visibleShell=html.slice(start,end);
+  assert.doesNotMatch(visibleShell,/\bSynap\b/);
+  assert.match(visibleShell,/What synap remembers/);
+  assert.match(visibleShell,/let synap listen/);
+  assert.match(visibleShell,/Back to synap/);
+});
+
 test('all rendered brand references normalize Synap to synap, including dynamic UI',()=>{
   assert.match(runtime,/const BRAND_PATTERN=\/\\bSynap\\b\/g/);
   assert.match(runtime,/replace\(BRAND_PATTERN,'synap'\)/);
