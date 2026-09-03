@@ -1,6 +1,6 @@
 /* Synap production service worker: network-first code, resilient offline shell. */
 const APP_VERSION='1.0.0';
-const APP_REVISION='1.0.0-auto2';
+const APP_REVISION='1.0.0-logo3';
 const CACHE_NAME=`synap-pwa-${APP_REVISION}`;
 const APP_SHELL=[
   './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css','./settings-icon-fix.css',
