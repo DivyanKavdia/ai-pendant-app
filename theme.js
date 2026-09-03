@@ -3,16 +3,16 @@
   'use strict';
   if(typeof history!=='undefined'&&'scrollRestoration'in history)history.scrollRestoration='manual';
   const key='synap-appearance';
-  const SHELL_REVISION='1.0.0-diag1';
+  const SHELL_REVISION='1.0.0-auto2';
   const root=document.documentElement;
-  const systemTheme=typeof window!=='undefined'&&typeof window.matchMedia==='function'
-    ? window.matchMedia('(prefers-color-scheme: dark)')
-    : null;
   const valid=v=>['system','light','dark'].includes(v)?v:'system';
   let preference='system';
   try{preference=valid(localStorage.getItem(key))}catch(_){}
 
-  function autoMode(){return systemTheme?.matches?'dark':'light'}
+  function autoMode(){
+    const hour=new Date().getHours();
+    return hour>=7&&hour<19?'light':'dark';
+  }
   function apply(){
     const mode=preference==='system'?autoMode():preference;
     root.dataset.theme=mode;
@@ -22,8 +22,8 @@
     document.querySelectorAll('[data-theme-choice]').forEach(b=>{
       b.setAttribute('aria-pressed',String(b.dataset.themeChoice===preference));
       if(b.dataset.themeChoice==='system'){
-        b.title='Follow device appearance';
-        b.setAttribute('aria-label','Auto appearance — follow device setting');
+        b.title='Auto: light 7 AM–7 PM, dark 7 PM–7 AM';
+        b.setAttribute('aria-label','Auto appearance — light 7 AM to 7 PM, dark 7 PM to 7 AM');
       }
     });
   }
@@ -32,6 +32,7 @@
     try{localStorage.setItem(key,preference)}catch(_){}
     apply();
   }
+  function refreshAuto(){if(preference==='system')apply()}
   function css(href,k,v){
     if(document.querySelector(`link[data-synap-${k}]`))return;
     const l=document.createElement('link');l.rel='stylesheet';l.href=href;
@@ -69,7 +70,10 @@
   css('compact.css?v=0.0.1-ui3','compact','ui3');
   css('brain.css?v=0.0.1-brain10','brain','brain10');
   window.addEventListener('storage',e=>{if(e.key===key||e.key===null){preference=valid(e.newValue);apply()}});
-  systemTheme?.addEventListener?.('change',()=>{if(preference==='system')apply()});
+  window.addEventListener('focus',refreshAuto);
+  window.addEventListener('pageshow',refreshAuto);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshAuto()});
+  if(typeof setInterval==='function')setInterval(refreshAuto,60000);
   apply();
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind,{once:true});else bind();
 })();
