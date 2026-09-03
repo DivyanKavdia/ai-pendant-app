@@ -11,15 +11,15 @@
     if (document.querySelector('link[data-synap-brand]')) return;
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = 'brand.css?v=1.0.0-infinity1';
-    link.dataset.synapBrand = 'infinity1';
+    link.href = 'brand.css?v=1.0.0-infinity2';
+    link.dataset.synapBrand = 'infinity2';
     document.head.appendChild(link);
   }
   function apply() {
     const mode = preference === 'system' ? (system.matches ? 'dark' : 'light') : preference;
     root.dataset.theme = mode;
     root.style.colorScheme = mode;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', mode === 'dark' ? '#100f1a' : '#f6f4ff');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', mode === 'dark' ? '#091426' : '#f7f9fc');
     document.querySelectorAll('[data-theme-choice]').forEach(button => {
       button.setAttribute('aria-pressed', String(button.dataset.themeChoice === preference));
     });
