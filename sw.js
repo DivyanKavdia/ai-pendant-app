@@ -1,10 +1,10 @@
 /* Release 1.0.0 production reliability shell. */
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-prod3";
+const APP_REVISION = "1.0.0-ai1";
 const ENTRY_PATH = "./index.html?v=" + APP_REVISION;
 const CACHE_NAME = "dk-pendant-pwa-v" + APP_REVISION;
 const APP_SHELL = [
-  ENTRY_PATH, "./theme.js?v=1.0.0-prod2", "./device-identity.js?v=1.0.0-device1", "./ota.js?v=1.0.0-prod2", "./releases.js?v=1.0.0-prod2", "./styles.css?v=1.0.0-diag1", "./audio-store.js?v=1.0.0-prod2", "./enhancements.js?v=1.0.0-prod2", "./app.js?v=1.0.0-diag1",
+  ENTRY_PATH, "./theme.js?v=1.0.0-prod2", "./device-identity.js?v=1.0.0-device1", "./ota.js?v=1.0.0-prod2", "./releases.js?v=1.0.0-prod2", "./styles.css?v=1.0.0-diag1", "./audio-store.js?v=1.0.0-prod2", "./enhancements.js?v=1.0.0-prod2", "./app.js?v=1.0.0-diag1", "./ai-providers.js?v=1.0.0-ai1",
   "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png", "./logo.webp?v=1.0.0"
 ];
 const SHELL_URLS = new Set(APP_SHELL.map(path => new URL(path, self.registration.scope).href));
