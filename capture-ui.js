@@ -19,9 +19,11 @@
     const settings=document.getElementById('settingsButton');
     if(!header||!actions||!section||!connect||!start||!stop||!settings||document.getElementById('headerCaptureToggle'))return;
 
-    /* Only the primary wordmark uses logo.webp. The Settings device tile intentionally keeps icon-192.png. */
+    /* Use the exact same Synap wordmark in the Home header and Settings pendant row. */
     const headerLogo=header.querySelector('.brand-logo');
     if(headerLogo){headerLogo.src=LOGO;headerLogo.alt='synap';headerLogo.classList.add('synap-brand-image');}
+    const settingsLogo=document.querySelector('.pendant-settings-top .settings-brand-logo');
+    if(settingsLogo){settingsLogo.src=LOGO;settingsLogo.alt='synap';settingsLogo.classList.add('synap-brand-image');}
     document.title='synap · '+TAGLINE;
     document.querySelector('meta[name="description"]')?.setAttribute('content','synap — '+TAGLINE);
     const appVersion=document.getElementById('appVersion');
