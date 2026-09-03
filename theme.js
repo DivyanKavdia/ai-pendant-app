@@ -3,7 +3,7 @@
   'use strict';
   if(typeof history!=='undefined'&&'scrollRestoration'in history)history.scrollRestoration='manual';
   /* iOS/PWA can reopen the last fragment (#library/#ask/etc.) and restore into the
-     middle of the app. Remove it before layout so a new Synap launch is canonical. */
+     middle of the app. Remove it before layout so a new synap launch is canonical. */
   try{
     if(typeof location!=='undefined'&&location.hash&&typeof history?.replaceState==='function'){
       history.replaceState(history.state,'',location.pathname+location.search);
@@ -71,7 +71,7 @@
     script('capture-ui.js?v=1.0.0-ui6');
     script('brain-ui.js?v=0.0.1-brain7');
     script('product-ui.js?v=1.0.0-ui4');
-    script('runtime-ui.js?v=1.0.0-runtime2');
+    script('runtime-ui.js?v=1.0.0-runtime3');
     apply();
   }
   css('brand.css?v=1.0.0-brain1','brand','brain1');
