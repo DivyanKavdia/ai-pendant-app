@@ -1,7 +1,10 @@
 /* Synap production service worker: network-first code, resilient offline shell. */
 const APP_VERSION='1.0.0';
-const APP_REVISION='1.0.0-logo3';
-const CACHE_NAME=`synap-pwa-${APP_REVISION}`;
+/* app.js still owns the client compatibility revision used for update signalling. */
+const CLIENT_REVISION='1.0.0-diag1';
+/* Cache revision is independent: UI/cache-only changes must not create a false app-update banner. */
+const CACHE_REVISION='1.0.0-shell4';
+const CACHE_NAME=`synap-pwa-${CACHE_REVISION}`;
 const APP_SHELL=[
   './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css','./settings-icon-fix.css',
   './touch-event-bridge.js','./memory-ui-fix.js','./device-identity.js','./audio-store.js','./ota.js','./releases.js',
@@ -21,7 +24,7 @@ self.addEventListener('activate',event=>{
   event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE_NAME).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));
 });
 
-function versionMessage(){return{type:'APP_VERSION',version:APP_VERSION,release:APP_VERSION,revision:APP_REVISION}}
+function versionMessage(){return{type:'APP_VERSION',version:APP_VERSION,release:APP_VERSION,revision:CLIENT_REVISION,shellRevision:CACHE_REVISION}}
 self.addEventListener('message',event=>{
   if(event.data?.type==='SKIP_WAITING')self.skipWaiting();
   if(event.data?.type==='GET_VERSION'||event.data?.type==='GET_APP_VERSION')event.source?.postMessage(versionMessage());
