@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#f7f9fc">
+  <meta name="theme-color" content="#f7f9fd">
   <meta name="color-scheme" content="light dark">
   <meta name="description" content="synap — Stay present. Keep the memory">
   <title>synap · Stay present. Keep the memory</title>
@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <script src="theme.js?v=1.0.0-prod2"></script>
   <link rel="stylesheet" href="styles.css?v=1.0.0-diag1">
-  <link rel="stylesheet" href="brand.css?v=1.0.0-infinity3">
+  <link rel="stylesheet" href="brand.css?v=1.0.0-infinity4">
 </head>
 <body data-state="disconnected">
   <a class="skip-link" href="#capture">Skip to recorder</a>
@@ -37,155 +37,29 @@
     <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M12 3a9 9 0 0 1 0 18Z" fill="currentColor"/></symbol>
   </defs></svg>
 
-  <aside class="rail" aria-label="Main navigation">
-    <nav class="rail-nav">
-      <a class="rail-link active" href="#insights" aria-current="location" aria-label="Meetings and transcripts"><svg><use href="#i-spark"/></svg><span>Insights</span></a>
-      <a class="rail-link" href="#library" aria-label="Your recordings"><svg><use href="#i-library"/></svg><span>Library</span></a>
-      <a class="rail-link" href="#processing" aria-label="Processing queue"><svg><use href="#i-check"/></svg><span>Queue</span></a>
-    </nav>
-  </aside>
+  <aside class="rail" aria-label="Main navigation"><nav class="rail-nav"><a class="rail-link active" href="#insights" aria-current="location" aria-label="Meetings and transcripts"><svg><use href="#i-spark"/></svg><span>Insights</span></a><a class="rail-link" href="#library" aria-label="Your recordings"><svg><use href="#i-library"/></svg><span>Library</span></a><a class="rail-link" href="#processing" aria-label="Processing queue"><svg><use href="#i-check"/></svg><span>Queue</span></a></nav></aside>
 
   <div class="app-shell">
-    <header class="topbar">
-      <a class="brand" href="#capture" aria-label="synap"><img class="brand-logo" src="logo.webp?v=1.0.0" width="800" height="216" alt="synap"></a>
-      <div class="top-actions">
-        <button id="connectButton" class="connection-pill" type="button">
-          <span id="connectionBadge" class="status-badge status-offline"><span class="status-dot" aria-hidden="true"></span><span id="connectionText" role="status" aria-live="polite">Not connected</span></span>
-          <span id="connectButtonLabel" class="connection-action">Connect pendant</span>
-        </button>
-        <button id="settingsButton" class="icon-button" type="button" title="Settings" aria-label="Open settings"><svg><use href="#i-settings"/></svg></button>
-      </div>
-    </header>
+    <header class="topbar"><a class="brand" href="#capture" aria-label="synap"><img class="brand-logo" src="synap-logo.svg?v=1.0.0-infinity2" width="260" height="66" alt="synap"></a><div class="top-actions"><button id="connectButton" class="connection-pill" type="button"><span id="connectionBadge" class="status-badge status-offline"><span class="status-dot" aria-hidden="true"></span><span id="connectionText" role="status" aria-live="polite">Not connected</span></span><span id="connectButtonLabel" class="connection-action">Connect pendant</span></button><button id="settingsButton" class="icon-button" type="button" title="Settings" aria-label="Open settings"><svg><use href="#i-settings"/></svg></button></div></header>
 
     <main>
       <p id="updateNotice" class="update-notice" role="status" hidden></p>
       <div id="firmwareNotice" class="update-notice" role="status" hidden><span id="firmwareNoticeText"></span> <button id="firmwareUpdateButton" class="button button-primary button-small" type="button">Update pendant</button></div>
       <div class="page-heading compact-heading"><div><h1>Your <span>digital twin</span></h1></div></div>
 
-      <section id="capture" class="capture-layout compact-recorder" aria-label="Recorder" tabindex="-1">
-        <div class="hero-card">
-          <div class="session-heading"><div><h2 id="recorderTitle">Ready when you are.</h2></div><span class="local-badge"><svg aria-hidden="true"><use href="#i-check"/></svg>Saved in browser</span></div>
-          <p id="recorderSubtitle" class="recorder-subtitle">Connect to start recording.</p>
-          <div class="capture-strip">
-          <div class="recording-stage">
-            <div id="timer" class="timer" aria-label="Recording duration">00:00</div>
-            <div class="canvas-wrap"><canvas id="waveformCanvas" aria-label="Audio level history"></canvas></div>
-          </div>
-          <div class="recorder-controls">
-            <button id="startButton" class="record-button" type="button" aria-label="Start recording" disabled><span class="record-orb" aria-hidden="true"><svg><use href="#i-mic"/></svg></span><span>Record</span></button>
-            <button id="stopButton" class="button stop-button" type="button" disabled><span class="stop-square" aria-hidden="true"></span><span>Stop &amp; save</span></button>
-          </div>
-          </div>
-          <div id="levelText" class="level-text">Waiting for pendant</div>
-          <details class="recorder-details">
-          <summary><span>Audio &amp; connection details</span><span class="detail-chevron" aria-hidden="true">+</span></summary>
-          <div class="device-panel">
-            <div class="panel-label"><p class="eyebrow">LIVE CONNECTION</p><span class="format-chip">16 kHz · MONO</span></div>
-            <div class="led-key"><span><i class="led-off"></i>Offline</span><span><i class="led-idle"></i>Ready</span><span><i class="led-live"></i>Recording</span></div>
-            <div class="metrics-grid" aria-label="Live transport health">
-              <div class="metric-card"><span>Audio level</span><strong id="signalMetric">—</strong><small id="signalDetail">No stream</small></div>
-              <div class="metric-card"><span>Frames</span><strong id="framesMetric">0</strong><small id="framesDetail">Complete</small></div>
-              <div class="metric-card"><span>Transport</span><strong id="transportMetric">—</strong><small id="transportDetail">MTU / chunks</small></div>
-              <div class="metric-card"><span>Quality</span><strong id="qualityMetric">—</strong><small id="qualityDetail">Waiting</small></div>
-            </div>
-          </div>
-          </details>
-        </div>
-      </section>
+      <section id="capture" class="capture-layout compact-recorder" aria-label="Recorder" tabindex="-1"><div class="hero-card"><div class="session-heading"><div><h2 id="recorderTitle">Ready when you are.</h2></div><span class="local-badge"><svg aria-hidden="true"><use href="#i-check"/></svg>Saved in browser</span></div><p id="recorderSubtitle" class="recorder-subtitle">Connect to start recording.</p><div class="capture-strip"><div class="recording-stage"><div id="timer" class="timer" aria-label="Recording duration">00:00</div><div class="canvas-wrap"><canvas id="waveformCanvas" aria-label="Audio level history"></canvas></div></div><div class="recorder-controls"><button id="startButton" class="record-button" type="button" aria-label="Start recording" disabled><span class="record-orb" aria-hidden="true"><svg><use href="#i-mic"/></svg></span><span>Record</span></button><button id="stopButton" class="button stop-button" type="button" disabled><span class="stop-square" aria-hidden="true"></span><span>Stop &amp; save</span></button></div></div><div id="levelText" class="level-text">Waiting for pendant</div><details class="recorder-details"><summary><span>Audio &amp; connection details</span><span class="detail-chevron" aria-hidden="true">+</span></summary><div class="device-panel"><div class="panel-label"><p class="eyebrow">LIVE CONNECTION</p><span class="format-chip">16 kHz · MONO</span></div><div class="led-key"><span><i class="led-off"></i>Offline</span><span><i class="led-idle"></i>Ready</span><span><i class="led-live"></i>Recording</span></div><div class="metrics-grid" aria-label="Live transport health"><div class="metric-card"><span>Audio level</span><strong id="signalMetric">—</strong><small id="signalDetail">No stream</small></div><div class="metric-card"><span>Frames</span><strong id="framesMetric">0</strong><small id="framesDetail">Complete</small></div><div class="metric-card"><span>Transport</span><strong id="transportMetric">—</strong><small id="transportDetail">MTU / chunks</small></div><div class="metric-card"><span>Quality</span><strong id="qualityMetric">—</strong><small id="qualityDetail">Waiting</small></div></div></div></details></div></section>
 
-      <section class="day-lens" aria-labelledby="dayLensTitle">
-        <div class="day-lens-heading"><h2 id="dayLensTitle">Today</h2><label class="calendar-picker"><svg aria-hidden="true"><use href="#i-calendar"/></svg><span id="selectedDateLabel">Choose date</span><input id="datePicker" type="date" aria-label="Choose a date"></label></div>
-        <div id="dateStrip" class="date-strip" role="group" aria-label="Recent days"></div>
-        <div class="glance-grid" aria-live="polite"><div><strong id="glanceRecordings">0</strong><span>Recordings</span></div><div><strong id="glanceDuration">0m</strong><span>Recorded</span></div><div><strong id="glanceSummaries">0</strong><span>Summaries</span></div><div><strong id="glanceTranscripts">0</strong><span>Transcripts</span></div></div>
-      </section>
+      <section class="day-lens" aria-labelledby="dayLensTitle"><div class="day-lens-heading"><h2 id="dayLensTitle">Today</h2><label class="calendar-picker"><svg aria-hidden="true"><use href="#i-calendar"/></svg><span id="selectedDateLabel">Choose date</span><input id="datePicker" type="date" aria-label="Choose a date"></label></div><div id="dateStrip" class="date-strip" role="group" aria-label="Recent days"></div><div class="glance-grid" aria-live="polite"><div><strong id="glanceRecordings">0</strong><span>Recordings</span></div><div><strong id="glanceDuration">0m</strong><span>Recorded</span></div><div><strong id="glanceSummaries">0</strong><span>Summaries</span></div><div><strong id="glanceTranscripts">0</strong><span>Transcripts</span></div></div></section>
 
-      <section id="insights" class="section-card insights-section" aria-labelledby="insightsTitle">
-        <div class="section-heading"><div><h2 id="insightsTitle">Meetings &amp; transcripts <span id="insightsCount" class="count-badge">0</span></h2></div></div>
-        <div id="emptyInsights" class="empty-state"><div class="empty-art" aria-hidden="true"><span></span><svg><use href="#i-spark"/></svg><span></span></div><h3>No notes yet</h3><p>Process a recording to create notes.</p></div>
-        <div id="insightsList" class="insights-list"></div>
-      </section>
-
-      <section id="library" class="section-card recordings-section" aria-labelledby="libraryTitle">
-        <div class="section-heading"><h2 id="libraryTitle">Library <span id="recordingsCount" class="count-badge">0</span></h2><button id="clearRecordingsButton" class="text-button library-clear" type="button" aria-label="Delete all recordings from this browser" title="Delete all recordings from this browser"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/></svg></button></div>
-        <div id="emptyRecordings" class="empty-state">
-          <div class="empty-art" aria-hidden="true"><span></span><svg><use href="#i-wave"/></svg><span></span></div>
-          <p>No moments saved for this day.</p>
-        </div>
-        <div id="recordingsList" class="recordings-list"></div>
-        <div id="libraryPagination" class="library-pagination" hidden>
-          <p id="libraryCountLabel" role="status" aria-live="polite"></p>
-          <div class="library-page-actions">
-            <button id="showMoreRecordingsButton" class="button button-secondary button-small" type="button" aria-controls="recordingsList">Show more</button>
-            <button id="showLessRecordingsButton" class="text-button" type="button" aria-controls="recordingsList" hidden>Show less</button>
-          </div>
-        </div>
-      </section>
-
-      <section id="processing" class="section-card queue-panel" aria-label="Sequential processing queue">
-        <h2>Processing queue</h2>
-        <ol class="pipeline" aria-label="Processing order"><li><span>01</span> Transcribe</li><li><span>02</span> Summarize</li><li><span>03</span> Consolidate</li></ol>
-        <p id="queueStatus" role="status" aria-live="polite">Ready to process your recordings.</p>
-        <div class="settings-actions"><button id="runQueueButton" class="button button-primary" type="button">Process recordings</button><button id="pauseQueueButton" class="button button-secondary" type="button">Pause queue</button></div>
-      </section>
+      <section id="insights" class="section-card insights-section" aria-labelledby="insightsTitle"><div class="section-heading"><div><h2 id="insightsTitle">Meetings &amp; transcripts <span id="insightsCount" class="count-badge">0</span></h2></div></div><div id="emptyInsights" class="empty-state"><div class="empty-art" aria-hidden="true"><span></span><svg><use href="#i-spark"/></svg><span></span></div><h3>No notes yet</h3><p>Process a recording to create notes.</p></div><div id="insightsList" class="insights-list"></div></section>
+      <section id="library" class="section-card recordings-section" aria-labelledby="libraryTitle"><div class="section-heading"><h2 id="libraryTitle">Library <span id="recordingsCount" class="count-badge">0</span></h2><button id="clearRecordingsButton" class="text-button library-clear" type="button" aria-label="Delete all recordings from this browser" title="Delete all recordings from this browser"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/></svg></button></div><div id="emptyRecordings" class="empty-state"><div class="empty-art" aria-hidden="true"><span></span><svg><use href="#i-wave"/></svg><span></span></div><p>No moments saved for this day.</p></div><div id="recordingsList" class="recordings-list"></div><div id="libraryPagination" class="library-pagination" hidden><p id="libraryCountLabel" role="status" aria-live="polite"></p><div class="library-page-actions"><button id="showMoreRecordingsButton" class="button button-secondary button-small" type="button" aria-controls="recordingsList">Show more</button><button id="showLessRecordingsButton" class="text-button" type="button" aria-controls="recordingsList" hidden>Show less</button></div></div></section>
+      <section id="processing" class="section-card queue-panel" aria-label="Sequential processing queue"><h2>Processing queue</h2><ol class="pipeline" aria-label="Processing order"><li><span>01</span> Transcribe</li><li><span>02</span> Summarize</li><li><span>03</span> Consolidate</li></ol><p id="queueStatus" role="status" aria-live="polite">Ready to process your recordings.</p><div class="settings-actions"><button id="runQueueButton" class="button button-primary" type="button">Process recordings</button><button id="pauseQueueButton" class="button button-secondary" type="button">Pause queue</button></div></section>
     </main>
     <footer><span>synap</span><span id="appVersion">1.0.0</span></footer>
   </div>
 
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
-
-  <dialog id="settingsDialog" class="modal" aria-labelledby="settingsTitle">
-    <form id="settingsForm" class="settings-form">
-      <div class="modal-header"><h2 id="settingsTitle">Settings</h2><button id="closeSettingsButton" class="icon-button" type="button" aria-label="Close settings"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div>
-
-      <section class="settings-card device-settings" aria-labelledby="setupTitle">
-        <div class="settings-card-head"><span class="settings-icon device-icon"><svg aria-hidden="true"><use href="#i-bt"/></svg></span><div class="settings-heading"><h3 id="setupTitle">synap</h3><p id="setupDeviceStatus" class="device-connection" role="status" aria-live="polite">Not connected</p></div><button id="setupConnect" class="button button-primary button-small" type="button">Connect</button><button id="chooseDeviceButton" class="icon-button" type="button" aria-label="Switch pendant" title="Switch pendant"><svg aria-hidden="true"><use href="#i-switch"/></svg></button></div>
-      </section>
-
-      <section id="firmwareSettings" class="settings-card ota-section" tabindex="-1" aria-labelledby="firmwareTitle">
-        <div class="settings-card-head"><span class="settings-icon update-icon"><svg aria-hidden="true"><use href="#i-download"/></svg></span><div class="settings-heading"><h3 id="firmwareTitle">Device update</h3><p id="otaStatus" role="status" aria-live="polite">Connect to check</p></div><button id="otaReleaseCheck" class="icon-button" type="button" aria-label="Check for updates" title="Check for updates"><svg aria-hidden="true"><use href="#i-refresh"/></svg></button></div>
-        <progress id="otaProgress" value="0" max="1" aria-label="Firmware transfer progress" hidden></progress>
-        <div class="setting-actions update-actions"><button id="otaLatest" class="button button-primary button-small" type="button" hidden>Update now</button><button id="otaCancel" class="text-button" type="button" disabled hidden>Cancel</button></div>
-      </section>
-
-      <section class="settings-card appearance-settings" aria-labelledby="appearanceTitle">
-        <h3 id="appearanceTitle">Appearance</h3>
-        <div class="theme-picker" role="group" aria-label="Color theme">
-          <button type="button" data-theme-choice="system" aria-pressed="true"><svg aria-hidden="true"><use href="#i-auto"/></svg>Auto</button>
-          <button type="button" data-theme-choice="light" aria-pressed="false"><svg aria-hidden="true"><use href="#i-sun"/></svg>Light</button>
-          <button type="button" data-theme-choice="dark" aria-pressed="false"><svg aria-hidden="true"><use href="#i-moon"/></svg>Dark</button>
-        </div>
-      </section>
-
-      <section class="settings-card preference-settings" aria-label="Recording preferences">
-        <label class="toggle-row"><span class="setting-label"><span class="settings-icon"><svg aria-hidden="true"><use href="#i-refresh"/></svg></span><strong>Auto-reconnect</strong></span><input id="autoReconnectInput" class="switch-input" role="switch" type="checkbox" checked></label>
-        <label class="toggle-row"><span class="setting-label"><span class="settings-icon sun-icon"><svg aria-hidden="true"><use href="#i-sun"/></svg></span><strong>Keep screen awake</strong></span><input id="wakeLockInput" class="switch-input" role="switch" type="checkbox" checked></label>
-      </section>
-
-      <details class="settings-card processing-settings">
-        <summary class="settings-card-head"><span class="settings-icon ai-icon"><svg aria-hidden="true"><use href="#i-spark"/></svg></span><span class="settings-heading"><strong>AI processing</strong></span><svg class="disclosure-chevron" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
-        <div class="processing-fields"><label class="field"><span>Transcription URL</span><input id="endpointInput" type="url" inputmode="url" placeholder="https://…/transcribe"></label><label class="field"><span>Summary URL</span><input id="llmEndpointInput" type="url" inputmode="url" placeholder="https://…/summarize"></label><label class="field"><span>Access token <span class="optional">Optional</span></span><input id="tokenInput" type="password" autocomplete="off"><small>For this session only</small></label><label class="toggle-row"><span><strong>Auto-process recordings</strong></span><input id="autoProcessInput" class="switch-input" role="switch" type="checkbox"></label></div>
-      </details>
-
-      <details class="settings-card recovery-settings">
-        <summary class="settings-card-head"><span class="settings-icon"><svg aria-hidden="true"><use href="#i-wave"/></svg></span><span class="settings-heading"><strong>Recover audio</strong></span><svg class="disclosure-chevron" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
-        <div class="setting-actions"><button id="recoveryButton" class="button button-secondary button-small" type="button"><svg aria-hidden="true"><use href="#i-download"/></svg>Export unsaved audio</button><button id="retrySaveButton" class="text-button" type="button">Retry save</button></div>
-      </details>
-
-      <details id="diagnostics" class="settings-card diagnostics-settings">
-        <summary class="settings-card-head"><span class="settings-icon"><svg aria-hidden="true"><use href="#i-info"/></svg></span><span class="settings-heading"><strong>Diagnostics</strong></span><svg class="disclosure-chevron" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
-        <div class="setting-actions"><button id="copyDiagnosticsButton" class="button button-secondary button-small" type="button">Copy diagnostics</button><button id="clearDiagnosticsButton" class="text-button" type="button">Clear log</button></div>
-        <pre id="diagnosticsLog" class="diagnostics-log" tabindex="0" aria-label="Diagnostic log"></pre>
-      </details>
-
-      <button id="installButton" class="button button-secondary" type="button"><svg aria-hidden="true"><use href="#i-download"/></svg>Install app</button>
-      <div class="modal-actions"><button class="button button-primary" type="submit">Done <svg aria-hidden="true"><use href="#i-check"/></svg></button></div>
-    </form>
-  </dialog>
-  <script src="audio-store.js?v=1.0.0-prod2" defer></script>
-  <script src="ota.js?v=1.0.0-prod2" defer></script>
-  <script src="releases.js?v=1.0.0-prod2" defer></script>
-  <script src="device-identity.js?v=1.0.0-device1" defer></script>
-  <script src="enhancements.js?v=1.0.0-prod2" defer></script>
-  <script src="app.js?v=1.0.0-diag1" defer></script>
+  <dialog id="settingsDialog" class="modal" aria-labelledby="settingsTitle"><form id="settingsForm" class="settings-form"><div class="modal-header"><h2 id="settingsTitle">Settings</h2><button id="closeSettingsButton" class="icon-button" type="button" aria-label="Close settings"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div><section class="settings-card device-settings" aria-labelledby="setupTitle"><div class="settings-card-head"><span class="settings-icon device-icon"><svg aria-hidden="true"><use href="#i-bt"/></svg></span><div class="settings-heading"><h3 id="setupTitle">synap</h3><p id="setupDeviceStatus" class="device-connection" role="status" aria-live="polite">Not connected</p></div><button id="setupConnect" class="button button-primary button-small" type="button">Connect</button><button id="chooseDeviceButton" class="icon-button" type="button" aria-label="Switch pendant" title="Switch pendant"><svg aria-hidden="true"><use href="#i-switch"/></svg></button></div></section><section id="firmwareSettings" class="settings-card ota-section" tabindex="-1" aria-labelledby="firmwareTitle"><div class="settings-card-head"><span class="settings-icon update-icon"><svg aria-hidden="true"><use href="#i-download"/></svg></span><div class="settings-heading"><h3 id="firmwareTitle">Device update</h3><p id="otaStatus" role="status" aria-live="polite">Connect to check</p></div><button id="otaReleaseCheck" class="icon-button" type="button" aria-label="Check for updates" title="Check for updates"><svg aria-hidden="true"><use href="#i-refresh"/></svg></button></div><progress id="otaProgress" value="0" max="1" aria-label="Firmware transfer progress" hidden></progress><div class="setting-actions update-actions"><button id="otaLatest" class="button button-primary button-small" type="button" hidden>Update now</button><button id="otaCancel" class="text-button" type="button" disabled hidden>Cancel</button></div></section><section class="settings-card appearance-settings" aria-labelledby="appearanceTitle"><h3 id="appearanceTitle">Appearance</h3><div class="theme-picker" role="group" aria-label="Color theme"><button type="button" data-theme-choice="system" aria-pressed="true"><svg aria-hidden="true"><use href="#i-auto"/></svg>Auto</button><button type="button" data-theme-choice="light" aria-pressed="false"><svg aria-hidden="true"><use href="#i-sun"/></svg>Light</button><button type="button" data-theme-choice="dark" aria-pressed="false"><svg aria-hidden="true"><use href="#i-moon"/></svg>Dark</button></div></section><section class="settings-card preference-settings" aria-label="Recording preferences"><label class="toggle-row"><span class="setting-label"><span class="settings-icon"><svg aria-hidden="true"><use href="#i-refresh"/></svg></span><strong>Auto-reconnect</strong></span><input id="autoReconnectInput" class="switch-input" role="switch" type="checkbox" checked></label><label class="toggle-row"><span class="setting-label"><span class="settings-icon sun-icon"><svg aria-hidden="true"><use href="#i-sun"/></svg></span><strong>Keep screen awake</strong></span><input id="wakeLockInput" class="switch-input" role="switch" type="checkbox" checked></label></section><details class="settings-card processing-settings"><summary class="settings-card-head"><span class="settings-icon ai-icon"><svg aria-hidden="true"><use href="#i-spark"/></svg></span><span class="settings-heading"><strong>AI processing</strong></span><svg class="disclosure-chevron" aria-hidden="true"><use href="#i-chevron"/></svg></summary><div class="processing-fields"><label class="field"><span>Transcription URL</span><input id="endpointInput" type="url" inputmode="url" placeholder="https://…/transcribe"></label><label class="field"><span>Summary URL</span><input id="llmEndpointInput" type="url" inputmode="url" placeholder="https://…/summarize"></label><label class="field"><span>Access token <span class="optional">Optional</span></span><input id="tokenInput" type="password" autocomplete="off"><small>For this session only</small></label><label class="toggle-row"><span><strong>Auto-process recordings</strong></span><input id="autoProcessInput" class="switch-input" role="switch" type="checkbox"></label></div></details><details class="settings-card recovery-settings"><summary class="settings-card-head"><span class="settings-icon"><svg aria-hidden="true"><use href="#i-wave"/></svg></span><span class="settings-heading"><strong>Recover audio</strong></span><svg class="disclosure-chevron" aria-hidden="true"><use href="#i-chevron"/></svg></summary><div class="setting-actions"><button id="recoveryButton" class="button button-secondary button-small" type="button"><svg aria-hidden="true"><use href="#i-download"/></svg>Export unsaved audio</button><button id="retrySaveButton" class="text-button" type="button">Retry save</button></div></details><details id="diagnostics" class="settings-card diagnostics-settings"><summary class="settings-card-head"><span class="settings-icon"><svg aria-hidden="true"><use href="#i-info"/></svg></span><span class="settings-heading"><strong>Diagnostics</strong></span><svg class="disclosure-chevron" aria-hidden="true"><use href="#i-chevron"/></svg></summary><div class="setting-actions"><button id="copyDiagnosticsButton" class="button button-secondary button-small" type="button">Copy diagnostics</button><button id="clearDiagnosticsButton" class="text-button" type="button">Clear log</button></div><pre id="diagnosticsLog" class="diagnostics-log" tabindex="0" aria-label="Diagnostic log"></pre></details><button id="installButton" class="button button-secondary" type="button"><svg aria-hidden="true"><use href="#i-download"/></svg>Install app</button><div class="modal-actions"><button class="button button-primary" type="submit">Done <svg aria-hidden="true"><use href="#i-check"/></svg></button></div></form></dialog>
+  <script src="audio-store.js?v=1.0.0-prod2" defer></script><script src="ota.js?v=1.0.0-prod2" defer></script><script src="releases.js?v=1.0.0-prod2" defer></script><script src="device-identity.js?v=1.0.0-device1" defer></script><script src="enhancements.js?v=1.0.0-prod2" defer></script><script src="app.js?v=1.0.0-diag1" defer></script>
 </body>
 </html>
