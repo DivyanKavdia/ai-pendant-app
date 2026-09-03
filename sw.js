@@ -10,6 +10,8 @@ const APP_SHELL=[
 ];
 const SCOPE=self.registration?.scope||'https://local.invalid/';
 const ORIGIN=self.location?.origin||new URL(SCOPE).origin;
+const ENTRY_URL=new URL('./index.html',SCOPE).href;
+const ROOT_URL=new URL('./',SCOPE).href;
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()));
@@ -35,8 +37,8 @@ async function networkFirst(request){
   catch(error){return await cached(request)||Promise.reject(error)}
 }
 async function navigation(request){
-  try{return await remember('./index.html',await fetch(request,{cache:'no-store'}))}
-  catch(_){return await cached('./index.html')||await cached('./')||Response.error()}
+  try{return await remember(ENTRY_URL,await fetch(request,{cache:'no-store'}))}
+  catch(_){return await cached(ENTRY_URL)||await cached(ROOT_URL)||Response.error()}
 }
 async function cacheFirst(request){
   const hit=await cached(request);
