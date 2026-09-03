@@ -2,7 +2,7 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),asse
 const root=path.join(__dirname,'..'),html=fs.readFileSync(path.join(root,'index.html'),'utf8'),source=fs.readFileSync(path.join(root,'app.js'),'utf8');
 assert(!html.slice(html.indexOf('<main>'),html.indexOf('</main>')).includes('id="diagnostics"'));
 const settings=html.slice(html.indexOf('<dialog id="settingsDialog"'),html.indexOf('</dialog>'));
-assert.match(settings,/<details id="diagnostics" class="settings-card diagnostics-settings">/);
+assert.match(settings,/<details id="diagnostics" class="settings-row diagnostics-settings">/);
 for(const id of ['copyDiagnosticsButton','clearDiagnosticsButton'])assert.match(settings,new RegExp('id="'+id+'"[^>]*type="button"'));
 const block=source.slice(source.indexOf('    ui.copyDiagnosticsButton.addEventListener('),source.indexOf('    ui.clearDiagnosticsButton.addEventListener('));
 async function check({clipboard=true,copy=true,open=true}={}){
@@ -15,4 +15,4 @@ async function check({clipboard=true,copy=true,open=true}={}){
   if(clipboard){assert.equal(host,undefined);assert.equal(messages[0],'Diagnostics copied');}
   else {assert.equal(host,open?'dialog':'body');assert(removed&&focused&&selected);assert.equal(messages[0],copy?'Diagnostics copied':'Could not copy. Select the log text to copy it.');}
 }
-(async()=>{await check();await check({clipboard:false});await check({clipboard:false,copy:false});await check({clipboard:false,open:false});console.log('PASS: Diagnostics in Settings, collapsed by default, modal-safe clipboard fallback and failure reporting');})().catch(error=>{console.error(error);process.exitCode=1;});
+(async()=>{await check();await check({clipboard:false});await check({clipboard:false,copy:false});await check({clipboard:false,open:false});console.log('PASS: Diagnostics in Settings wireframe, collapsed by default, modal-safe clipboard fallback and failure reporting');})().catch(error=>{console.error(error);process.exitCode=1;});
