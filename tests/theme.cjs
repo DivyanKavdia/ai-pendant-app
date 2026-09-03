@@ -8,7 +8,7 @@ function setup({saved=null,dark=false,blocked=false}={}){
     window:{matchMedia:()=>media,addEventListener(t,f){events[t]=f;}},localStorage:{getItem:k=>{if(blocked)throw Error('blocked');return storage.get(k);},setItem:(k,v)=>{if(blocked)throw Error('blocked');storage.set(k,v);}}};
   vm.runInNewContext(source,c);return {html,meta,buttons,media,storage,events};
 }
-let t=setup({dark:true});assert.equal(t.html.dataset.theme,'dark');assert.equal(t.meta.content,'#07172f');
+let t=setup({dark:true});assert.equal(t.html.dataset.theme,'dark');assert.equal(t.meta.content,'#071426');
 t.buttons[1].click();assert.equal(t.html.dataset.theme,'light');assert.equal(t.storage.get('synap-appearance'),'light');
 t.media.matches=true;t.media.change();assert.equal(t.html.dataset.theme,'light','explicit choice overrides system');
 t.buttons[0].click();assert.equal(t.html.dataset.theme,'dark');t.media.matches=false;t.media.change();assert.equal(t.html.dataset.theme,'light');
