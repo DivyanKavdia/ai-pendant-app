@@ -1,9 +1,12 @@
-/* Synap BLE OTA protocol 3: public device-ID targeting, not authentication. */
+/* Synap BLE OTA protocol 3: public device-ID targeting with resumable cumulative ACK windows. */
 (function (root) {
   "use strict";
   const WRITE_UUID = "4fa12348-0000-1000-8000-00805f9b34fb";
   const STATUS_UUID = "4fa12349-0000-1000-8000-00805f9b34fb";
   const DEVICE_UUID = "4fa1234c-0000-1000-8000-00805f9b34fb";
+  // Real Web Bluetooth uses a conservative four-packet window. Node/host mocks
+  // stay at one packet so existing deterministic transport regressions remain valid.
+  const WINDOW_CHUNKS = root.navigator?.bluetooth ? 4 : 1;
   const MIGRATION_MESSAGE = "This pendant uses an older updater. Install the device-ID firmware by USB once during developer/factory provisioning. Future updates need only this app; no key is required.";
   const errors = ["", "Updater is not available.", "Invalid OTA packet.",
     "Firmware does not fit the inactive slot.", "Chunk order or duplicate mismatch.", "Flash operation failed.",
@@ -114,16 +117,29 @@
       }
     }
     async ack(predicate, epoch, session, timeout=15000) {
-      const end=Date.now()+timeout;let nextRead=Date.now()+500;
+      const end=Date.now()+timeout;let nextRead=Date.now()+350;
       while(Date.now()<end) {
         this.ensure(epoch);
         const s=this.status;
         if (s && s.error && (s.session===session || s.state===1 || s.state===2)) throw new Error(errors[s.error] || "Firmware update failed.");
         if (s && s.session===session && predicate(s)) return s;
-        if(Date.now()>=nextRead) { await this.read();nextRead=Date.now()+500; }
-        else await sleep(15);
+        if(Date.now()>=nextRead) { await this.read();nextRead=Date.now()+350; }
+        else await sleep(12);
       }
       throw new Error("Firmware acknowledgement timed out. Reconnect and try Continue update.");
+    }
+    async ackWindow(start, target, epoch, session, timeout=15000) {
+      try {
+        return await this.ack(s=>s.state===3 && s.offset>=target,epoch,session,timeout);
+      } catch(error) {
+        if(error.resumable) throw error;
+        const status=await this.read().catch(()=>null);
+        // A notification/read may show that only part of the sent window made it
+        // through the firmware queue. Resume from the exact persisted offset.
+        if(status && status.session===session && status.state===3 && !status.error &&
+          status.offset>start && status.offset<target) return status;
+        throw error;
+      }
     }
     async update(file, expectedDeviceId) {
       if (this.busy) throw new Error("An update is already running.");
@@ -162,17 +178,21 @@
           begun=true;await this.send(begin,epoch,true,true);
           await this.ack(s=>s.state===3 && s.offset===0,epoch,session,30000);
         }
-        // Installed protocol-3 firmware only tolerates the immediately preceding
-        // duplicate. Confirm Bluetooth delivery AND flash progress per chunk so
-        // a lost write cannot leave later offsets queued ahead of recovery.
+        // Each DATA write still asks Bluetooth for a response, but flash progress is
+        // acknowledged cumulatively after a short window rather than round-tripping
+        // after every individual chunk. Installed build 1008 can safely queue four.
         while(!ready && offset<bytes.length) {
-          const count=Math.min(info.maxData,bytes.length-offset);
-          const target=offset+count;
-          const chunk=packet(2,session,9+count);new DataView(chunk.buffer).setUint32(5,offset,true);
-          chunk.set(bytes.subarray(offset,target),9);
-          await this.send(chunk,epoch,true,true);
-          await this.ack(s=>s.state===3 && s.offset===target,epoch,session);
-          offset=target;
+          const start=offset;let target=offset;
+          for(let i=0;i<WINDOW_CHUNKS && target<bytes.length;i+=1) {
+            const count=Math.min(info.maxData,bytes.length-target),next=target+count;
+            const chunk=packet(2,session,9+count);new DataView(chunk.buffer).setUint32(5,target,true);
+            chunk.set(bytes.subarray(target,next),9);
+            await this.send(chunk,epoch,true,true);
+            target=next;
+          }
+          const confirmed=await this.ackWindow(start,target,epoch,session);
+          if(confirmed.offset<start || confirmed.offset>target) throw new Error("Firmware returned an invalid cumulative offset.");
+          offset=confirmed.offset;
           this.io.progress("Updating · "+Math.floor(offset*100/bytes.length)+"%",offset/bytes.length,false);
         }
         if(!ready) {
@@ -193,6 +213,6 @@
       } finally { this.busy=false; }
     }
   }
-  root.SynapOTA={Client,decode,packet,validateImage,validDeviceId,MIGRATION_MESSAGE};
+  root.SynapOTA={Client,decode,packet,validateImage,validDeviceId,MIGRATION_MESSAGE,WINDOW_CHUNKS};
   if(typeof module!=="undefined" && module.exports) module.exports=root.SynapOTA;
 })(globalThis);

@@ -1,227 +1,126 @@
-# synap — PWA only
+# synap — PWA
 
-Stay present. Keep the memory
+**Stay present. Keep the memory.**
 
-Release 1.0.0. This repository contains only the browser application.
-ESP32-S3 firmware is maintained separately and must not be committed here.
+Release **1.0.0**. This repository contains the browser application only. ESP32-S3 firmware lives in `DivyanKavdia/synap-firmware`.
 
-## One-click firmware updates
+## Product boundary
 
-The synchronized public version remains **1.0.0**; increasing firmware build numbers identify newer binaries. After a pendant connects, the PWA checks the verified `synap-firmware` feed, displays **Update pendant** for a newer build, and installs only after explicit user confirmation. Checks also run when the app returns to the foreground, every minute while eligible, or when **Check updates** is tapped. Updating is blocked while connecting, recording, saving, opening a capture, or holding unsaved audio.
+The pendant is intentionally **stateless for recordings**. It captures PCM audio and streams it over BLE; it does not store recordings locally. Audio, transcripts, summaries, device associations and processing state are stored in the browser/PWA.
 
-Official target: **ESP32-S3FH4R2 / SuperMini, 4 MB QIO flash, 2 MB QSPI PSRAM, default two-slot OTA partition scheme**. Only protocol-3 application images with the exact target/build identity, size, SHA-256, chip ID and immutable raw GitHub URL from the manifest are accepted. Bootloaders, partition tables, merged images, incompatible hardware and downgrades are rejected before flashing.
+The recorder UI therefore says **Saved in browser**, not “On-device”. Clearing site data can remove locally stored memories. Settings → System status shows storage usage and whether the browser reports storage as protected/persisted.
 
-No OTAKEY or signing configuration is required. The PWA reads the permanent device ID and keeps the device association automatically. Confirmation names that ID; discovery, transfer and post-reboot verification must all match it. Pending update results are persisted under the permanent ID. Switching browsers still requires normal Bluetooth permission; clearing site data creates a new association.
+## Supported hardware and audio
 
-Connect, approve and keep the powered pendant and PWA foregrounded. The pendant compares the public target ID before flash and verifies received SHA-256 plus image compatibility. This is identification, not authorization: another nearby BLE client can also update the device. Existing firmware with the old updater requires one developer/factory USB migration; no owner-key input is exposed.
+- ESP32-S3FH4R2 / ESP32-S3 SuperMini
+- 4 MB flash, 2 MB QSPI PSRAM
+- default two-slot OTA partition scheme
+- BLE service `4fa12345-0000-1000-8000-00805f9b34fb`
+- audio `...346`, control/status `...347`
+- permanent device ID `...34c`
+- firmware identity `...34b`
+- firmware updater write `...348`, status `...349`
+- PCM16 mono, 16 kHz, 800 samples / 50 ms frame
 
-Publisher trust is currently the GitHub repository/account plus HTTPS and reviewed workflow; the manifest hash is not an independent publisher signature. Stock Arduino bootloaders may not provide rollback, so protect firmware `main`, review workflow changes, and hardware-test releases before broad rollout.
+## Recording reliability
 
-Release feed: https://raw.githubusercontent.com/DivyanKavdia/synap-firmware/ota-releases/latest.json
+Incoming BLE chunks are journaled to IndexedDB in short batches while recording. A take is sealed only after pending writes complete. On application recovery, unsealed takes are closed from the committed packet journal.
 
-## Deploy
+After sealing, each approximately 30-second segment is compacted into contiguous PCM stored in IndexedDB and its raw packet rows are removed. This materially reduces IndexedDB object overhead without adding any storage to the pendant.
 
-Serve the repository root over HTTPS (for example, GitHub Pages). No npm
-installation, build step, or runtime framework is required. Upload all fourteen
-application assets together: `index.html`, `styles.css`, `app.js`, `theme.js`,
-`audio-store.js`, `ota.js`, `releases.js`, `device-identity.js`, `sw.js`, `manifest.webmanifest`, `logo.webp`, and the three icon files.
-Verify the footer shows 1.0.0. Do not clear site data to update the app:
-recordings and pending processing jobs are stored there.
+BLE sequence gaps are preserved on the audio timeline. Missing frame positions are represented by silence instead of collapsing time, so playback/transcription timing is not shifted forward when radio packets were lost. The recording metadata separately reports complete, incomplete and missing frames.
 
-Use a browser with Web Bluetooth, IndexedDB, and Web Locks support. Keep the
-application open while recording or processing; background execution is not
-guaranteed. Only one tab may own the recorder at a time.
+The browser requests persistent storage when supported, but browser eviction policy remains outside the app's control. Settings → System status reports quota/usage and warns at high usage. Recovery controls can export audio if normal finalization fails.
 
-## Mobile-first interface
+## Your digital twin
 
-Settings → Appearance offers Auto, Light and Dark. Auto follows the system theme;
-an explicit choice is remembered in `synap-appearance` and applied before first paint.
-Shared color roles keep cards, controls and status colors consistent in both modes.
-Bottom navigation follows section positions while scrolling, including after content
-expands, regardless of an earlier anchor link. Run `node tests/theme.cjs` and
-`node tests/navigation.cjs` for theme/contrast and scroll-selection regressions.
+Insights includes **Search your memory…**. It searches recording names, notes, summaries and transcripts across locally stored recordings and ranks matches without uploading the library to a search service. Selecting a result switches the timeline to the original date and opens the recording.
 
-All screen sizes use Insights, Library and Queue in that order in the bottom
-navigation and page content. The compact recorder sits above the timeline;
-Record, Stop & Save, elapsed time, and status stay visible. Audio and connection
-metrics expand on demand. Wider screens gain spacing and a two-column Insights
-layout, while Library stays a single compact list. It shows the newest five recordings for the
-selected day as collapsed rows. Show more reveals five at a time; Show less
-restores the compact view. Playback and editing controls load on first expansion,
-and collapsing a recording pauses playback. Insights can reveal older recordings.
-Settings opens as a bottom sheet on small
-screens. Inputs use readable 16 px text, controls have large touch targets,
-safe-area insets are respected, and reduced-motion preferences are supported.
-This release preserves audio BLE commands and the audio storage schema. It adds
-an optional BLE firmware updater and prevents FIFO work from starting during OTA.
-Branding adds one optimized logo asset and no runtime dependencies. Existing
-Bluetooth device names and storage identifiers are preserved for compatibility.
-The service worker serves a complete precached release; an update notice asks
-you to finish your work and reload when a newer worker takes control. It never
-reloads automatically or clears IndexedDB. Compare the footer version on both
-devices. Recordings are device-local; this release does not add cloud sync.
+This is local retrieval, not cloud sync. Another browser or cleared site profile has a separate memory library.
 
-## Firmware updates over BLE
+## AI processing queue
 
-Settings → Device update checks for a verified release. When one is available, tap Update now.
-Progress and Cancel appear only during an update; interrupted transfers offer Continue update.
-The app verifies the pendant's permanent identity before transfer and checks the installed build
-on reconnect. The only customer update flow is OTA from the verified release feed; local file
-selection, developer controls and owner-key input have been removed.
+Processing remains browser-controlled and uses user-configured HTTPS STT/LLM endpoints.
 
-Settings uses a compact connection card, recording switches, and collapsed AI processing and
-audio recovery sections. Device associations remain stored internally. Diagnostic details stay
-in the diagnostic log rather than the normal settings flow. No recording storage is cleared.
+- Stable `Idempotency-Key` values are sent for every job.
+- Transcription → segment summary → recording consolidation ordering is preserved within each recording.
+- Up to two **different recordings** can process concurrently.
+- Two dependent jobs for the same recording never run together.
+- A permanently failed recording does not block unrelated recordings.
+- Retryable HTTP 408/409/425/429 and 5xx responses use exponential backoff, capped at 60 seconds and five attempts.
+- Other HTTP errors fail that recording immediately and can be retried manually.
+- Web Locks prevent another tab from processing the same local queue concurrently.
+- Firmware OTA pauses processing.
 
-Transfer confirms each chunk with a Bluetooth write response and a written-byte ACK before sending
-the next offset, with a SHA-256 check and read fallback for lost notifications. This also works with
-installed builds 1005/1007; no USB reflash is needed for this transport fix. Keep the app open and the pendant powered. Cancel works before commit;
-a link loss can resume from the pendant's saved offset for two minutes. A connected 45-second stall,
-device reboot or power loss requires a new transfer. A lost commit acknowledgement is
-uncertain until reconnect confirms the exact expected permanent device ID and build.
-Processing remains paused until resumed from Queue.
+Expected endpoints:
 
-**Security tradeoff:** IDs, hashes and markers are not authentication or firmware signatures.
-Any nearby client able to establish BLE can initiate an update; PWA confirmation does not
-enforce exclusive ownership on the device. No signing keys, BLE bonding, eFuse changes, Secure
-Boot or boot rollback are provisioned. Keeping an old slot does not guarantee automatic
-recovery from a valid but broken new app. This is not a production security qualification.
-Old authorization-vault data is no longer used and is not automatically erased.
+1. STT: multipart POST containing `audio`, `recording_id`, `segment_index`, `sample_rate=16000`; return `{"transcript":"..."}` or text.
+2. LLM: JSON POST with `task`, `recording_id`, `segment_index`, `input`; return `{"summary":"..."}` or text.
 
-### OTA protocol 3
+Keep provider secrets server-side. The optional PWA bearer token is session-memory only.
 
-Existing service: 4fa12345-0000-1000-8000-00805f9b34fb.
-Write-with-response: ...348; read/notify status: ...349; read-only permanent device ID: ...34c.
-The ...34b firmware build identity remains separate. No challenge characteristic is used.
-All integers are little-endian, and packets start with command u8 + nonzero transfer ID u32.
+## Signed one-click firmware updates
 
-| Command | Remaining bytes |
-| --- | --- |
-| 1 Begin | image length u32, SHA-256 (32 bytes), device ID (18 UTF-8 bytes, no NUL) |
-| 2 Data | offset u32, data up to advertised maxData |
-| 3 Verify | none; after exactly the declared size |
-| 4 Commit | none; after successful Verify |
-| 5 Abort | none; not accepted after Commit |
-| 6 Resume | image length u32, SHA-256 (32 bytes), device ID (18 UTF-8 bytes, no NUL) |
+Normal users never paste OTA keys or choose firmware files. The PWA targets the permanent `SYNAP-XXXXXXXXXXXX` device ID and downloads only from the production `ota-releases` feed.
 
-BEGIN is 59 bytes. Status remains 20 bytes: D7, protocol 03, state u8, error u8,
-transfer ID u32, next offset u32, capacity u32, maxData u16, build u16.
-States are 0 unavailable, 1 available, 2 reserved, 3 receiving, 4 verified,
-5 committed, 6 failed. Error 12 is a device-ID mismatch.
-maxData is 64–503 bytes. Packet writes are at most 512 bytes. Data prefers
-write-without-response in eight-packet windows; control packets use write-with-response.
-Only an identical repeat of the immediately previous data packet is idempotent.
-The protocol marker is SYNAP-ESP32S3-OTA-ID-V3, not a cryptographic signature.
+Production manifests use schema 2 and must be signed with **ES256 / P-256**, key ID `prod-2026-01`. The PWA embeds only the public verification key. It verifies the publisher signature before downloading, then verifies size, SHA-256, target identity, ESP32-S3 image header, device ID and installed build before commit.
 
-### Verification
+The already-deployed unsigned production feed is accepted only through **build 1008** as a migration bridge. Any production build above 1008 must have a valid Synap publisher signature. This allows existing build-1008 pendants to receive the first signed release without USB reflashing.
 
-Run node --test tests/*.cjs. Tests exercise device targeting, explicit confirmation,
-legacy migration, same-ID/new-browser-handle reboot recovery, mismatched IDs,
-corrupt downloads, cancellation, disconnects, uncertain commits, local associations,
-audio metadata, reconnect and the offline shell. These are host tests, not physical BLE tests.
+Production feed:
 
-## Daily timeline and insights
+`https://raw.githubusercontent.com/DivyanKavdia/synap-firmware/ota-releases/latest.json`
 
-The app opens on the current local calendar day. Seven recent-day controls and
-the date picker filter Saved moments, meeting summaries, and transcripts without
-changing or duplicating stored recordings. The day-at-a-glance card reports the
-selected day's recording count, captured duration, summaries, and transcripts.
-Insights appear only after the FIFO has produced a transcript or consolidated
-summary; all content remains in the same local IndexedDB as its source recording.
+### OTA transfer behavior
 
-## Reconnect after reload
+Protocol 3 supports BEGIN, DATA, VERIFY, COMMIT, ABORT and RESUME. The PWA sends a conservative four-packet write-with-response window on real Web Bluetooth, then waits for the firmware's cumulative persisted offset. This reduces round trips while preserving exact-offset recovery and compatibility with build 1008.
 
-Settings now includes **Reconnect remembered pendant** (on by default) and a
-browser capability explanation. Recovery runs on page load, return to the
-foreground, back/forward-cache restoration, and Bluetooth availability events
-where supported. Foreground recovery is rate-limited to once per 30 seconds;
-each cycle retains the existing bounded retries. It never opens a device chooser
-without a tap, replaces a manual selection while permissions are loading, or
-restarts recording. Turning the preference off prevents future automatic
-attempts; it does not disconnect an existing connection. Manual disconnect
-suppresses automatic recovery for the current page session.
+A BLE interruption can resume for up to two minutes while the firmware process remains powered and its in-RAM OTA session is alive. Power loss restarts the transfer because there is deliberately no pendant-local OTA session storage. A connected transfer timeout fails closed and may be retried cleanly.
 
-Reload **ends the original GATT session**. Automatic reconnection creates a new
-session; it is not uninterrupted audio capture. Browsers without
-`navigator.bluetooth.getDevices()` cannot restore a device from its saved ID
-alone and need device selection after reload. Retained permission, the same
-browser profile/site origin, Bluetooth enabled, and advertising firmware are
-required. Installing the PWA does not add missing Web Bluetooth APIs.
+## Release-channel separation
 
-The last successfully connected device ID is remembered locally. On reload,
-the app uses `navigator.bluetooth.getDevices()` when available to recover that
-permitted device, reconnect GATT, and subscribe again to audio and status.
-For older installations without a saved ID, exactly one permitted device named
-`synap` or `dk-pendant` is accepted. Ambiguous or revoked devices require manual selection.
-After a failed automatic connection, up to three retries are scheduled. A manual
-retry then offers Reselect pendant, opening the chooser directly in the user's
-click so the same pendant can be selected again without visiting Settings.
-Timed-out connects are cancelled, and stale-device disconnect events are ignored. An
-orphaned stream is stopped before returning to idle; recording never restarts
-automatically. Committed audio chunks from an interrupted take are recovered.
+Firmware `main` pushes publish to the **test** channel (`ota-test`) only. They are not visible to normal PWA update checks.
 
-This requires retained permission on the same origin, a supporting browser,
-Bluetooth enabled, and a nearby advertising pendant. If `getDevices()` is
-unavailable, tap Connect pendant. Reloading does not preserve the old GATT
-connection. A closed/suspended browser cannot guarantee an ongoing connection.
+A production firmware release is a deliberate GitHub Actions `workflow_dispatch` with channel `production`. The protected production job requires the repository/environment secret:
 
-## Separate hardware interface
+`SYNAP_RELEASE_PRIVATE_KEY_PEM`
 
-The PWA expects DK Pendant BLE protocol v2, PCM16 mono at 16 kHz:
+The production job signs the manifest, atomically publishes manifest + immutable binary to `ota-releases`, and verifies public CORS, digest and signature policy. If the signing secret is absent, production publication fails closed.
 
-- Service: `4fa12345-0000-1000-8000-00805f9b34fb`
-- Audio notifications: `4fa12346-0000-1000-8000-00805f9b34fb`
-- Control/status: `4fa12347-0000-1000-8000-00805f9b34fb`
+## PWA updates and offline shell
 
-Received chunks are journaled individually in IndexedDB with 100 ms batched
-commits. Closed recordings are grouped into approximately 30-second segments.
-The persistent FIFO performs transcription, segment summaries, then final
-consolidation. A failed job blocks later jobs. Packets lost before reception
-and the uncommitted tail of a browser crash cannot be recovered.
+`sw.js` precaches one complete shell revision. It never clears IndexedDB. A newer worker can surface an update banner; Reload is disabled while recording, saving or updating firmware.
 
-## Processing endpoints
+Current shell revision: `1.0.0-prod2`.
 
-Configure two HTTPS endpoints in Settings. No inference backend is bundled.
+Deploy all app assets together over HTTPS. Required runtime capabilities are Web Bluetooth, IndexedDB and Web Locks. Background BLE/audio execution is not guaranteed; keep the app open while recording and during firmware updates.
 
-1. STT: multipart POST containing `audio` (WAV), `recording_id`,
-   `segment_index`, and `sample_rate=16000`. Return HTTP 200 JSON
-   `{"transcript":"..."}`; an empty transcript is valid for silence/test tone.
-2. LLM: JSON POST with `task`, `recording_id`, `segment_index`, and `input`.
-   For `summarize_segment`, input is transcript text. For `consolidate`,
-   segment_index is -1 and input is an ordered array of `{index, summary}`.
-   Return HTTP 200 JSON `{"summary":"..."}`.
+## Device association and reconnect
 
-Allow the deployed PWA origin in CORS and permit POST/OPTIONS with
-Content-Type, Authorization, and Idempotency-Key headers. Persist idempotency
-keys and results server-side: retries must not trigger duplicate provider
-charges. Requests time out after 120 seconds. Keep provider keys on the
-server; the optional PWA access token is memory-only. Treat transcripts as
-untrusted data, not instructions to execute.
+On each connection the PWA reads the permanent `...34c` device ID. Browser Bluetooth handles are mapped to that identity only after the same connection reaches a valid idle state. A handle that later reports a different permanent ID is rejected.
 
-## Release boundary
+When supported, `navigator.bluetooth.getDevices()` restores a previously permitted pendant after reload. Reconnect never restarts recording automatically. Manual disconnect suppresses automatic reconnect in the current page session.
 
-Push only PWA changes and this setup guide to this repository. Do not add ESP
-sketches, firmware binaries, release ZIPs, generated dependencies, or credentials.
-Future test/build tooling belongs in source control only when deliberately
-introduced; exclude it from deployed assets. JavaScript syntax and asset
-references can be checked locally, but real BLE operation still requires
-testing with the phone and pendant.
+Clearing site data removes browser associations and recordings but does not change the hardware's permanent ID.
 
-Run dependency-free regression checks with `node tests/reconnect.cjs`.
-They cover mocked GATT and lifecycle/permission recovery plus release cache
-contracts; they do not substitute for physical Android/pendant testing.
+## Diagnostics
 
+Settings → Diagnostics provides copy, clear and **Download log**. Settings → System status reports:
 
-## Device setup and persistent associations
+- browser storage usage/quota and persistence status
+- offline/service-worker readiness
+- network online/offline state
 
-Settings → Set up your device now consists of connecting, automatically remembering the identified pendant, and recording. Firmware updates use the same permanent device ID; no owner-key enrollment is required.
+The firmware also exposes read-only runtime diagnostics on `4fa1234d-0000-1000-8000-00805f9b34fb`, including reset reason, capture drops, notification rejects, control-queue drops, free heap, minimum free heap and uptime.
 
-On every connection, `device-identity.js` reads `4fa1234c-0000-1000-8000-00805f9b34fb`. A valid value is `SYNAP-` plus 12 uppercase hexadecimal digits. Only after a valid idle acknowledgement on that same connection does the app persist the association. Reconnect never automatically starts recording.
+## Tests
 
-The localStorage record `synap-device-associations-v1` contains schema version 1, a random `installationId` for this PWA origin, and device records with `deviceId`, a stable random `associationId`, observed browser Bluetooth IDs, display name, first connection time and last connection time. A new browser handle for the same permanent ID reuses its association; multiple pendants have separate associations. A previously mapped Bluetooth handle reporting another permanent ID is rejected without overwriting the mapping. `dk-pendant-device-id` remains the browser permission handle used for reconnect, not the permanent ID.
+Run all dependency-free browser regressions with:
 
-Settings displays the connected ID and saved devices. New recording records snapshot `deviceId`, `deviceAssociationId`, and `pwaInstallationId`; old recordings are not retrospectively assigned. Clearing site data removes local associations; a later connection creates a new installation and association. Another browser or app origin has its own mapping. This is not cloud sync, BLE bonding, exclusive ownership, or cryptographic authentication. No owner keys enter this registry or recording metadata; updates no longer use the old authorization vault.
+```bash
+node --test tests/*.cjs
+```
 
-Old firmware without the new characteristic can still record but setup reports that permanent identification is unavailable. Read failures and malformed IDs do not create associations. Storage failures are shown as identified but not saved, rather than successful setup. Install an identity-enabled firmware build once to enable automatic association on subsequent connections.
+The suite covers device identity/reconnect, OTA targeting/resume, production release validation, shell behavior, theme/navigation, library UX, diagnostics, signed-release migration policy and audio timeline gap preservation.
 
-Run `node --test tests/*.cjs` for association, actual connection-handler, recording metadata, reconnect, service-worker, release and OTA regressions.
+These tests do not replace physical Android/iPhone-compatible Web Bluetooth browser + pendant validation. Production firmware promotion should follow a hardware smoke test of connection, record/save, OTA interruption/resume and post-reboot reconnect.
