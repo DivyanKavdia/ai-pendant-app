@@ -8,7 +8,20 @@
   const RECORDING_STATES=new Set(['recording','starting']);
   const BUSY_STATES=new Set(['stopping','saving','updating','connecting']);
 
+  function syncBrand(){
+    const headerLogo=document.querySelector('.topbar .brand-logo');
+    if(headerLogo){headerLogo.src=LOGO;headerLogo.alt='synap';headerLogo.classList.add('synap-brand-image');}
+    const settingsLogo=document.querySelector('.pendant-settings-top .settings-brand-logo');
+    if(settingsLogo){
+      settingsLogo.src=headerLogo?.getAttribute('src')||LOGO;
+      settingsLogo.alt='synap';
+      settingsLogo.classList.add('synap-brand-image');
+      settingsLogo.dataset.brandSource='home-wordmark';
+    }
+  }
+
   function init(){
+    syncBrand();
     const header=document.querySelector('.topbar');
     const actions=document.querySelector('.top-actions');
     const section=document.getElementById('capture');
@@ -17,13 +30,9 @@
     const stop=document.getElementById('stopButton');
     const timer=document.getElementById('timer');
     const settings=document.getElementById('settingsButton');
+    settings?.addEventListener('click',()=>requestAnimationFrame(syncBrand));
     if(!header||!actions||!section||!connect||!start||!stop||!settings||document.getElementById('headerCaptureToggle'))return;
 
-    /* Use the exact same Synap wordmark in the Home header and Settings pendant row. */
-    const headerLogo=header.querySelector('.brand-logo');
-    if(headerLogo){headerLogo.src=LOGO;headerLogo.alt='synap';headerLogo.classList.add('synap-brand-image');}
-    const settingsLogo=document.querySelector('.pendant-settings-top .settings-brand-logo');
-    if(settingsLogo){settingsLogo.src=LOGO;settingsLogo.alt='synap';settingsLogo.classList.add('synap-brand-image');}
     document.title='synap · '+TAGLINE;
     document.querySelector('meta[name="description"]')?.setAttribute('content','synap — '+TAGLINE);
     const appVersion=document.getElementById('appVersion');
