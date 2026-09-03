@@ -93,8 +93,9 @@
   function bindBrainTabs(){
     const nav=document.querySelector('.brain-tabs');
     if(!nav)return;
-    let raf=0;
+    let raf=0,lockedHref='',lockTimer=0;
     const links=()=>[...nav.querySelectorAll('a[href^="#"]')];
+    const findLink=href=>links().find(link=>link.getAttribute('href')===href)||null;
     function select(link){
       for(const item of links()){
         const active=item===link;
@@ -102,22 +103,61 @@
         if(active)item.setAttribute('aria-current','page');else item.removeAttribute('aria-current');
       }
     }
+    function releaseLock(){
+      lockedHref='';
+      lockTimer=0;
+      schedule();
+    }
+    function lock(link,duration=1400){
+      lockedHref=link?.getAttribute('href')||'';
+      if(lockTimer)clearTimeout(lockTimer);
+      lockTimer=lockedHref?setTimeout(releaseLock,duration):0;
+    }
     function update(){
       raf=0;
       const items=links().map(link=>({link,section:document.querySelector(link.getAttribute('href'))})).filter(x=>x.section);
       if(!items.length)return;
+      if(lockedHref){
+        const locked=items.find(item=>item.link.getAttribute('href')===lockedHref);
+        if(locked){select(locked.link);return;}
+        lockedHref='';
+      }
       const header=document.querySelector('.topbar');
       const boundary=(header?.getBoundingClientRect().bottom||70)+28;
       let chosen=items[0];
       for(const item of items)if(item.section.getBoundingClientRect().top<=boundary)chosen=item;
-      if(window.scrollY>0&&window.scrollY+window.innerHeight>=document.documentElement.scrollHeight-6)chosen=items[items.length-1];
+      const bottomGap=document.documentElement.scrollHeight-(window.scrollY+window.innerHeight);
+      const bottomTolerance=Math.max(96,Math.round(window.innerHeight*.08));
+      if(window.scrollY>0&&bottomGap<=bottomTolerance)chosen=items[items.length-1];
       select(chosen.link);
     }
     function schedule(){if(!raf)raf=requestAnimationFrame(update)}
-    nav.addEventListener('click',event=>{const link=event.target.closest('a[href^="#"]');if(link)select(link)});
+    function navigate(link){
+      const href=link.getAttribute('href');
+      const section=href?document.querySelector(href):null;
+      lock(link);
+      select(link);
+      if(section){
+        const reduced=typeof window.matchMedia==='function'&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        section.scrollIntoView({behavior:reduced?'auto':'smooth',block:'start'});
+      }
+      try{
+        if(typeof history!=='undefined'&&typeof history.replaceState==='function')history.replaceState(history.state,'',location.pathname+location.search);
+      }catch(_){}
+    }
+    nav.addEventListener('click',event=>{
+      const link=event.target.closest('a[href^="#"]');
+      if(!link)return;
+      event.preventDefault();
+      navigate(link);
+    });
     addEventListener('scroll',schedule,{passive:true});
     addEventListener('resize',schedule,{passive:true});
-    addEventListener('hashchange',schedule);
+    addEventListener('hashchange',()=>{
+      const link=typeof location!=='undefined'?findLink(location.hash):null;
+      if(link){lock(link,1000);select(link)}
+      schedule();
+    });
     new MutationObserver(schedule).observe(nav,{childList:true,subtree:true});
     if(typeof ResizeObserver!=='undefined'){
       const observer=new ResizeObserver(schedule);observer.observe(document.querySelector('main')||document.body);
