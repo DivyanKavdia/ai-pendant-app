@@ -1,6 +1,6 @@
 /* Release 1.0.0 production reliability shell. */
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-ai1";
+const APP_REVISION = "1.0.0-prod3";
 const ENTRY_PATH = "./index.html?v=" + APP_REVISION;
 const CACHE_NAME = "dk-pendant-pwa-v" + APP_REVISION;
 const APP_SHELL = [
