@@ -20,6 +20,7 @@ The recorder UI therefore says **Saved in browser**, not “On-device”. Cleari
 - permanent device ID `...34c`
 - firmware identity `...34b`
 - firmware updater write `...348`, status `...349`
+- runtime diagnostics `...34d`
 - PCM16 mono, 16 kHz, 800 samples / 50 ms frame
 
 ## Recording reliability
@@ -28,7 +29,7 @@ Incoming BLE chunks are journaled to IndexedDB in short batches while recording.
 
 After sealing, each approximately 30-second segment is compacted into contiguous PCM stored in IndexedDB and its raw packet rows are removed. This materially reduces IndexedDB object overhead without adding any storage to the pendant.
 
-BLE sequence gaps are preserved on the audio timeline. Missing frame positions are represented by silence instead of collapsing time, so playback/transcription timing is not shifted forward when radio packets were lost. The recording metadata separately reports complete, incomplete and missing frames.
+BLE sequence gaps are preserved on the audio timeline. Missing frame positions are represented by silence instead of collapsing time, so playback/transcription timing is not shifted forward when radio packets were lost. The recording metadata separately reports complete, incomplete and missing frames. Even an outage spanning an entire 30-second segment is preserved as elapsed silence rather than disappearing from the timeline.
 
 The browser requests persistent storage when supported, but browser eviction policy remains outside the app's control. Settings → System status reports quota/usage and warns at high usage. Recovery controls can export audio if normal finalization fails.
 
@@ -49,6 +50,7 @@ Processing remains browser-controlled and uses user-configured HTTPS STT/LLM end
 - A permanently failed recording does not block unrelated recordings.
 - Retryable HTTP 408/409/425/429 and 5xx responses use exponential backoff, capped at 60 seconds and five attempts.
 - Other HTTP errors fail that recording immediately and can be retried manually.
+- Jobs left in `running` state by a page/process interruption are returned to `pending` during startup recovery.
 - Web Locks prevent another tab from processing the same local queue concurrently.
 - Firmware OTA pauses processing.
 
@@ -91,7 +93,7 @@ The production job signs the manifest, atomically publishes manifest + immutable
 
 `sw.js` precaches one complete shell revision. It never clears IndexedDB. A newer worker can surface an update banner; Reload is disabled while recording, saving or updating firmware.
 
-Current shell revision: `1.0.0-prod2`.
+Current shell revision: `1.0.0-prod3`.
 
 Deploy all app assets together over HTTPS. Required runtime capabilities are Web Bluetooth, IndexedDB and Web Locks. Background BLE/audio execution is not guaranteed; keep the app open while recording and during firmware updates.
 
@@ -107,11 +109,15 @@ Clearing site data removes browser associations and recordings but does not chan
 
 Settings → Diagnostics provides copy, clear and **Download log**. Settings → System status reports:
 
+- pendant health when an authorised pendant is connected and idle
+- last reset class, including panic/watchdog/brownout/power-glitch indications
+- capture-queue, notification and control-queue drop counts
+- free/minimum-free heap and uptime
 - browser storage usage/quota and persistence status
 - offline/service-worker readiness
 - network online/offline state
 
-The firmware also exposes read-only runtime diagnostics on `4fa1234d-0000-1000-8000-00805f9b34fb`, including reset reason, capture drops, notification rejects, control-queue drops, free heap, minimum free heap and uptime.
+Pendant health is read from the firmware's read-only `4fa1234d-0000-1000-8000-00805f9b34fb` characteristic. The same snapshot is appended to the downloadable Diagnostics log. Older build-1008 firmware simply shows that health telemetry will be available after the next firmware update; recording and OTA remain unaffected.
 
 ## Tests
 
@@ -121,6 +127,6 @@ Run all dependency-free browser regressions with:
 node --test tests/*.cjs
 ```
 
-The suite covers device identity/reconnect, OTA targeting/resume, production release validation, shell behavior, theme/navigation, library UX, diagnostics, signed-release migration policy and audio timeline gap preservation.
+The suite covers device identity/reconnect, OTA targeting/resume, production release validation, shell behavior, theme/navigation, library UX, diagnostics, signed-release migration policy, AI failure isolation and audio timeline gap preservation.
 
 These tests do not replace physical Android/iPhone-compatible Web Bluetooth browser + pendant validation. Production firmware promotion should follow a hardware smoke test of connection, record/save, OTA interruption/resume and post-reboot reconnect.
