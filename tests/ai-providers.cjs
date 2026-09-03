@@ -58,8 +58,10 @@ assert.match(formatted, /Decisions/);
 assert.match(formatted, /Send note — Alex · Friday/);
 assert.equal(ai.MEETING_SCHEMA.additionalProperties, false);
 assert(ai.MEETING_SCHEMA.required.includes('action_items'));
-assert.match(source, /processingStrategy: '30s-stt-5m-blocks-final'/);
+assert.match(source, /30s-stt-5m-blocks-final/);
+assert.match(source, /continuous-45m-parts-30s-stt-5m-blocks-final/);
+assert.match(source, /continuousContext/);
 assert.match(source, /meetingBlocks/);
 assert.match(source, /later block explicitly changes an earlier proposal or decision/);
 
-console.log('PASS: OpenAI preset, non-persistent keys, 30s STT grouping, 5-minute block synthesis and structured meeting formatting.');
+console.log('PASS: OpenAI preset, non-persistent keys, 30s STT grouping, 5-minute block synthesis, continuous parts and structured meeting formatting.');
