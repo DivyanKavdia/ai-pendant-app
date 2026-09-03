@@ -3,7 +3,7 @@
   'use strict';
   if(typeof history!=='undefined'&&'scrollRestoration'in history)history.scrollRestoration='manual';
   const key='synap-appearance';
-  const SHELL_REVISION='1.0.0-auto2';
+  const SHELL_REVISION='1.0.0-logo3';
   const root=document.documentElement;
   const valid=v=>['system','light','dark'].includes(v)?v:'system';
   let preference='system';
@@ -60,11 +60,11 @@
     document.querySelectorAll('[data-theme-choice]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();choose(b.dataset.themeChoice)}));
     document.addEventListener('click',e=>{const b=e.target.closest?.('[data-theme-choice]');if(b){e.preventDefault();choose(b.dataset.themeChoice)}});
     installAISettings();
-    css('settings-icon-fix.css?v=1.0.0-icon1','settingsicon','icon1');
-    script('capture-ui.js?v=1.0.0-ui5');
+    css('settings-icon-fix.css?v=1.0.0-logo3','settingsicon','logo3');
+    script('capture-ui.js?v=1.0.0-ui6');
     script('brain-ui.js?v=0.0.1-brain7');
     script('product-ui.js?v=1.0.0-ui4');
-    script('runtime-ui.js?v=1.0.0-runtime1');
+    script('runtime-ui.js?v=1.0.0-runtime2');
     apply();
   }
   css('brand.css?v=1.0.0-brain1','brand','brain1');
