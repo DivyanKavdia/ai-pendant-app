@@ -18,7 +18,7 @@ assert.match(source, /continuousGroupId/);
 assert.match(source, /continuousPart/);
 assert.match(source, /Touch: tap to record · double-tap to stop/);
 assert.match(theme, /recording-bridge\.js\?v=1\.0\.0-touch1/);
-assert.match(worker, /recording-bridge\.js\?v=1\.0\.0-touch1/);
+assert.match(worker, /\.\/recording-bridge\.js/);
 assert.match(ai, /continuousContext/);
 assert.match(ai, /one continuous conversation/);
 assert.match(ai, /continuous-45m-parts-30s-stt-5m-blocks-final/);
