@@ -59,7 +59,7 @@
     document.querySelectorAll('[data-theme-choice]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();choose(b.dataset.themeChoice)}));
     document.addEventListener('click',e=>{const b=e.target.closest?.('[data-theme-choice]');if(b){e.preventDefault();choose(b.dataset.themeChoice)}});
     installAISettings();
-    script('capture-ui.js?v=0.0.1-ui2');
+    script('capture-ui.js?v=1.0.0-ui5');
     script('brain-ui.js?v=0.0.1-brain7');
     script('product-ui.js?v=1.0.0-ui4');
     script('runtime-ui.js?v=1.0.0-runtime1');
