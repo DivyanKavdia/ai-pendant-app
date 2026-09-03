@@ -8,6 +8,8 @@ const APP_SHELL=[
   './app.js','./enhancements.js','./capture-ui.js','./brain-ui.js','./product-ui.js','./runtime-ui.js',
   './ai-providers.js','./recording-bridge.js','./manifest.webmanifest','./logo.webp','./icon-192.png','./icon-512.png'
 ];
+const SCOPE=self.registration?.scope||'https://local.invalid/';
+const ORIGIN=self.location?.origin||new URL(SCOPE).origin;
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()));
@@ -45,7 +47,7 @@ async function cacheFirst(request){
 self.addEventListener('fetch',event=>{
   if(event.request.method!=='GET')return;
   const url=new URL(event.request.url);
-  if(url.origin!==self.location.origin)return;
+  if(url.origin!==ORIGIN)return;
   if(event.request.mode==='navigate'){event.respondWith(navigation(event.request));return}
   const code=/\.(?:js|css|html)$/i.test(url.pathname)||url.pathname.endsWith('/manifest.webmanifest');
   event.respondWith(code?networkFirst(event.request):cacheFirst(event.request));
