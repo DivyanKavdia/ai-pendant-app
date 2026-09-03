@@ -1,7 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#f5f7fa"/>
-  <rect x="54" y="54" width="404" height="404" rx="116" fill="#ffffff" stroke="#dce3ec" stroke-width="2"/>
-  <g stroke="#086bdc" stroke-width="23" stroke-linecap="round">
-    <path d="M156 231v50M206 184v144M256 144v224M306 196v120M356 237v38"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="t">
+  <title id="t">Synap infinity icon</title>
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4936f2"/><stop offset=".5" stop-color="#0a8cf0"/><stop offset="1" stop-color="#16d7c6"/></linearGradient></defs>
+  <rect width="512" height="512" rx="116" fill="#0b1020"/>
+  <path d="M92 256c47-75 117-75 164 0s117 75 164 0c-47-75-117-75-164 0s-117 75-164 0Z" fill="none" stroke="url(#g)" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
