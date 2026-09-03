@@ -11,10 +11,27 @@ test('timeline assembly preserves missing frame positions as silence',()=>{
   assert.equal(compact.frames[1].byteLength,1600);assert(compact.frames[1].every(b=>b===0));
   assert.equal(codec.wav(compact.frames).size,44+3*1600);
 });
+test('timeline can preserve outages spanning an entire 30-second segment',()=>{
+  const packets=[...fullFrame(0),...fullFrame(1200)];
+  const compact=codec.assemble(packets,{preserveTimeline:true,startSequence:0,endSequence:1200});
+  assert.equal(compact.completeFrames,2);assert.equal(compact.frames.length,1201);assert.equal(compact.missing,1199);
+  const source=fs.readFileSync(path.join(root,'audio-store.js'),'utf8');
+  assert.match(source,/lastIndex=Math\.floor\(lastSequence\/SEGMENT_FRAMES\)/);
+  assert.match(source,/for\(let index=0;index<=lastIndex;index\+\+\)/);
+});
 test('duplicate chunks do not falsely make a complete frame',()=>{
   const packets=fullFrame(5);packets.push(packet(5,0,10,160));
   const result=codec.assemble(packets);assert.equal(result.completeFrames,1);assert.equal(result.incomplete,0);
   const broken=codec.assemble(packets.filter(p=>p.chunk!==9));assert.equal(broken.completeFrames,0);assert.equal(broken.incomplete,1);
+});
+test('failed recording does not block a different recording in the scheduler',async()=>{
+  const store=new globalThis.DKAudioStore();
+  store.all=async()=>[
+    {id:1,recordingId:'a',state:'failed',nextAt:0},
+    {id:2,recordingId:'a',state:'pending',nextAt:0},
+    {id:3,recordingId:'b',state:'pending',nextAt:0,kind:'transcribe',segmentIndex:0}
+  ];
+  const selected=await store.nextRunnable(100);assert.equal(selected.job.id,3);assert.equal(selected.blockedCount,1);
 });
 test('production shell includes reliability UX and browser-only storage copy',()=>{
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8'),sw=fs.readFileSync(path.join(root,'sw.js'),'utf8'),enhancements=fs.readFileSync(path.join(root,'enhancements.js'),'utf8');
