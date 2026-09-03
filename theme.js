@@ -7,6 +7,14 @@
   const valid = value => ['system', 'light', 'dark'].includes(value) ? value : 'system';
   let preference = 'system';
   try { preference = valid(localStorage.getItem(key)); } catch (_) {}
+  function installBrandStyles() {
+    if (document.querySelector('link[data-synap-brand]')) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'brand.css?v=1.0.0-infinity1';
+    link.dataset.synapBrand = 'infinity1';
+    document.head.appendChild(link);
+  }
   function apply() {
     const mode = preference === 'system' ? (system.matches ? 'dark' : 'light') : preference;
     root.dataset.theme = mode;
@@ -73,6 +81,7 @@
     installAISettings();
     apply();
   }
+  installBrandStyles();
   system.addEventListener('change', () => { if (preference === 'system') apply(); });
   window.addEventListener('storage', event => {
     if (event.key === key || event.key === null) { preference = valid(event.newValue); apply(); }
