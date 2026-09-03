@@ -1,9 +1,9 @@
 /* Synap production service worker: network-first code, resilient offline shell. */
 const APP_VERSION='1.0.0';
-/* app.js still owns the client compatibility revision used for update signalling. */
+/* app.js owns the client compatibility revision used for update signalling. */
 const CLIENT_REVISION='1.0.0-diag1';
-/* Cache revision is independent: UI/cache-only changes must not create a false app-update banner. */
-const CACHE_REVISION='1.0.0-shell4';
+/* Fresh restore cache: forces the pre-consolidation UI/runtime back onto installed PWAs. */
+const CACHE_REVISION='1.0.0-shell5-restore';
 const CACHE_NAME=`synap-pwa-${CACHE_REVISION}`;
 const APP_SHELL=[
   './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css','./settings-icon-fix.css',
