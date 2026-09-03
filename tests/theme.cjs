@@ -4,7 +4,7 @@ function setup({saved=null,dark=false,blocked=false}={}){
   const storage=new Map(saved?[['synap-appearance',saved]]:[]),events={},media={matches:dark,addEventListener(t,f){this.change=f;}};
   const buttons=['system','light','dark'].map(value=>({dataset:{themeChoice:value},attributes:{},setAttribute(k,v){this.attributes[k]=v;},addEventListener(t,f){this.click=f;}}));
   const html={dataset:{},style:{},attributes:{},setAttribute(k,v){this.attributes[k]=v;}},meta={setAttribute(k,v){this[k]=v;}};
-  const c={document:{documentElement:html,readyState:'complete',querySelector:()=>meta,querySelectorAll:()=>buttons,getElementById:()=>null},
+  const c={document:{documentElement:html,readyState:'complete',querySelector:()=>meta,querySelectorAll:()=>buttons,getElementById:()=>null,addEventListener(t,f){events['document:'+t]=f;}},
     window:{matchMedia:()=>media,addEventListener(t,f){events[t]=f;}},localStorage:{getItem:k=>{if(blocked)throw Error('blocked');return storage.get(k);},setItem:(k,v)=>{if(blocked)throw Error('blocked');storage.set(k,v);}}};
   vm.runInNewContext(source,c);return {html,meta,buttons,media,storage,events};
 }
