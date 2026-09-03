@@ -1,6 +1,6 @@
 /* Release 1.0.0 production reliability shell. */
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-prod4";
+const APP_REVISION = "1.0.0-prod5";
 const ENTRY_PATH = "./index.html?v=" + APP_REVISION;
 const CACHE_NAME = "dk-pendant-pwa-v" + APP_REVISION;
 const OTA_PATH = "./ota.js";
@@ -8,8 +8,8 @@ const OTA_ASSET = "./ota.js?v=1.0.0-ota4";
 const RELEASES_PATH = "./releases.js";
 const RELEASES_ASSET = "./releases.js?v=1.0.0-prod2";
 const APP_SHELL = [
-  ENTRY_PATH, "./theme.js?v=1.0.0-prod2", "./device-identity.js?v=1.0.0-device1", OTA_ASSET, RELEASES_ASSET, "./styles.css?v=1.0.0-diag1", "./audio-store.js?v=1.0.0-prod2", "./enhancements.js?v=1.0.0-prod2", "./app.js?v=1.0.0-diag1", "./ai-providers.js?v=1.0.0-ai2", "./recording-bridge.js?v=1.0.0-touch1",
-  "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png", "./logo.webp?v=1.0.0"
+  ENTRY_PATH, "./theme.js?v=1.0.0-prod2", "./device-identity.js?v=1.0.0-device1", OTA_ASSET, RELEASES_ASSET, "./styles.css?v=1.0.0-diag1", "./brand.css?v=1.0.0-infinity1", "./audio-store.js?v=1.0.0-prod2", "./enhancements.js?v=1.0.0-prod2", "./app.js?v=1.0.0-diag1", "./ai-providers.js?v=1.0.0-ai2", "./recording-bridge.js?v=1.0.0-touch1",
+  "./manifest.webmanifest", "./icon.svg?v=1.0.0-infinity1", "./synap-logo.svg?v=1.0.0-infinity1", "./icon-192.png", "./icon-512.png", "./logo.webp?v=1.0.0"
 ];
 const SHELL_URLS = new Set(APP_SHELL.map(path => new URL(path, self.registration.scope).href));
 
@@ -41,8 +41,6 @@ self.addEventListener("fetch", event => {
   const isEntry = request.mode === "navigate" && url.origin === scope.origin &&
     (url.pathname === scope.pathname || url.pathname === scope.pathname + "index.html");
 
-  // Route all updater/trust-client query variants to canonical assets so an
-  // already-installed page cannot keep stale OTA timeout or release-verifier code.
   if (isOta || isReleases) {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
