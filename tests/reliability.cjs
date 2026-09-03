@@ -33,17 +33,19 @@ test('failed recording does not block a different recording in the scheduler',as
   ];
   const selected=await store.nextRunnable(100);assert.equal(selected.job.id,3);assert.equal(selected.blockedCount,1);
 });
-test('production shell includes reliability UX, pendant health, forced OTA cache migration and browser-only storage copy',()=>{
+test('production shell includes reliability UX, pendant health, forced OTA and provenance cache migration and browser-only storage copy',()=>{
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8'),sw=fs.readFileSync(path.join(root,'sw.js'),'utf8'),enhancements=fs.readFileSync(path.join(root,'enhancements.js'),'utf8');
   assert.match(html,/Saved in browser/);assert.doesNotMatch(html,/>On-device</);
-  assert.match(html,/enhancements\.js\?v=1\.0\.0-prod2/);assert.match(sw,/APP_REVISION = "1\.0\.0-prod4"/);assert.match(sw,/enhancements\.js\?v=1\.0\.0-prod2/);
-  assert.match(sw,/OTA_ASSET = "\.\/ota\.js\?v=1\.0\.0-ota4"/);assert.match(sw,/url\.pathname === otaUrl\.pathname/);
+  assert.match(html,/enhancements\.js\?v=1\.0\.0-prod2/);assert.match(sw,/APP_REVISION = "1\.0\.0-prod5"/);assert.match(sw,/enhancements\.js\?v=1\.0\.0-prod2/);
+  assert.match(sw,/OTA_ASSET = "\.\/ota\.js\?v=1\.0\.0-ota4"/);assert.match(sw,/RELEASES_ASSET = "\.\/releases\.js\?v=1\.0\.0-prov1"/);
+  assert.match(sw,/url\.pathname === otaUrl\.pathname/);assert.match(sw,/url\.pathname === releasesUrl\.pathname/);
   assert.match(enhancements,/Search your memory/);assert.match(enhancements,/System status/);assert.match(enhancements,/Download log/);
   assert.match(enhancements,/4fa1234d-0000-1000-8000-00805f9b34fb/);assert.match(enhancements,/Pendant health/);
   assert.match(enhancements,/captureDrops/);assert.match(enhancements,/notifyRejects/);assert.match(enhancements,/minFreeHeap/);assert.match(enhancements,/Brownout/);
 });
-test('future production firmware requires a publisher signature while build 1008 stays migratable',()=>{
+test('production firmware supports legacy publisher signatures and keyless GitHub provenance',()=>{
   const releases=fs.readFileSync(path.join(root,'releases.js'),'utf8');
   assert.match(releases,/LEGACY_UNSIGNED_MAX_BUILD=1008/);assert.match(releases,/SIGNING_KEY_ID='prod-2026-01'/);
-  assert.match(releases,/crypto\.subtle\.verify/);assert.match(releases,/channel==='production'/);
+  assert.match(releases,/crypto\.subtle\.verify/);assert.match(releases,/schema===3/);assert.match(releases,/github-actions/);
+  assert.match(releases,/attestations\/sha256:/);assert.match(releases,/verification\?\.verified/);
 });
