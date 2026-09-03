@@ -178,7 +178,7 @@
     }
     async compactSegment(recordingId,index,data) {
       const pcmBlob=new Blob(data.frames,{type:'application/octet-stream'});
-      await this.atomic(['segments','packets'],s=>{
+      await this.atomic(['segments','packets','jobs'],s=>{
         const req=s.segments.get([recordingId,index]);
         req.onsuccess=()=>{
           const current=req.result||{recordingId,index};
@@ -188,30 +188,34 @@
         };
         const cursor=s.packets.index('segment').openCursor(this.keys.only([recordingId,index]));
         cursor.onsuccess=()=>{if(cursor.result){cursor.result.delete();cursor.result.continue();}};
+        if(data.completeFrames)for(const kind of ['transcribe','summarize']){
+          const dedupe=recordingId+':'+index+':'+kind,check=s.jobs.index('dedupe').get(dedupe);
+          check.onsuccess=()=>{if(!check.result)s.jobs.add({recordingId,segmentIndex:index,kind,dedupe,state:'pending',attempts:0,nextAt:0});};
+        }
       });
     }
     async close(recordingId,reason='normal') {
       await this.flush();
       const record=await this.get('recordings',recordingId);if(!record || !record.journal)return;
       const segments=(await this.all('segments','recording',recordingId)).sort((a,b)=>a.index-b.index);
-      const raw=new Map();let lastSequence=-1,packets=0,frameGroups=0,incomplete=0;
+      const byIndex=new Map(segments.map(segment=>[segment.index,segment])),raw=new Map();
+      let lastSequence=-1,packets=0,incomplete=0;
       for(const segment of segments){
-        if(segment.pcmBlob){lastSequence=Math.max(lastSequence,segment.lastSequence??-1);packets+=segment.packets||0;frameGroups+=segment.frameCount||0;incomplete+=segment.incomplete||0;continue;}
+        if(segment.pcmBlob){lastSequence=Math.max(lastSequence,segment.lastSequence??-1);packets+=segment.packets||0;incomplete+=segment.incomplete||0;continue;}
         const list=await this.all('packets','segment',[recordingId,segment.index]);raw.set(segment.index,list);
-        const scan=assemble(list);lastSequence=Math.max(lastSequence,scan.lastSequence);packets+=scan.packets;frameGroups+=scan.frameGroups;incomplete+=scan.incomplete;
+        const scan=assemble(list);lastSequence=Math.max(lastSequence,scan.lastSequence);packets+=scan.packets;incomplete+=scan.incomplete;
       }
       let complete=0,missing=0,timelineFrames=0;
-      for(const segment of segments){
-        if(segment.pcmBlob){complete+=segment.frameCount||0;missing+=segment.missing||0;timelineFrames+=segment.timelineFrameCount||0;continue;}
-        const start=segment.index*SEGMENT_FRAMES,end=Math.min(lastSequence,start+SEGMENT_FRAMES-1);
-        if(end<start)continue;
-        const data=assemble(raw.get(segment.index)||[],{preserveTimeline:true,startSequence:start,endSequence:end});
-        complete+=data.completeFrames;missing+=data.missing;timelineFrames+=data.frames.length;
-        await this.compactSegment(recordingId,segment.index,data);
-        if(data.completeFrames)await this.atomic(['jobs'],s=>{
-          for(const kind of ['transcribe','summarize'])s.jobs.add({recordingId,segmentIndex:segment.index,kind,
-            dedupe:recordingId+':'+segment.index+':'+kind,state:'pending',attempts:0,nextAt:0});
-        });
+      if(lastSequence>=0){
+        const lastIndex=Math.floor(lastSequence/SEGMENT_FRAMES);
+        for(let index=0;index<=lastIndex;index++){
+          const segment=byIndex.get(index);
+          if(segment?.pcmBlob){complete+=segment.frameCount||0;missing+=segment.missing||0;timelineFrames+=segment.timelineFrameCount||0;continue;}
+          const start=index*SEGMENT_FRAMES,end=Math.min(lastSequence,start+SEGMENT_FRAMES-1);
+          const data=assemble(raw.get(index)||[],{preserveTimeline:true,startSequence:start,endSequence:end});
+          complete+=data.completeFrames;missing+=data.missing;timelineFrames+=data.frames.length;
+          await this.compactSegment(recordingId,index,data);
+        }
       }
       await this.atomic(['recordings','jobs'],s=>{
         const req=s.recordings.get(recordingId);
@@ -228,7 +232,13 @@
     }
     async recover() {
       const records=(await this.all('recordings')).filter(r=>r.journal&&!r.sealed).sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
-      for(const r of records)await this.close(r.id,'recovered-after-interruption');return records.length;
+      for(const r of records)await this.close(r.id,'recovered-after-interruption');
+      // A page/process crash can leave a durable job marked running even though no
+      // worker survives. Reset only at application recovery, before a processor starts.
+      for(const job of (await this.all('jobs')).filter(j=>j.state==='running')){
+        await this.patchJob(job.id,{state:'pending',nextAt:0,lastError:'Recovered after interruption'});
+      }
+      return records.length;
     }
     async blob(record) {
       if(record.blob)return record.blob;
