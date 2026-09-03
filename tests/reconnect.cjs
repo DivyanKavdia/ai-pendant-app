@@ -54,11 +54,9 @@ async function recoveryTests() {
   t=context([pendant]);t.c.document.visibilityState='hidden';await t.c.recoverRememberedConnection('foreground',true);assert(!t.calls.some(x=>x[0]==='connect'));
   t=context([pendant]);t.saved.set('dk-pendant-auto-reconnect','off');await t.c.recoverRememberedConnection('page-load',true);assert(!t.calls.some(x=>x[0]==='connect'));
   t=context([pendant]);t.c.isGattConnected=()=>true;await t.c.recoverRememberedConnection('foreground',true);assert(!t.calls.some(x=>x[0]==='connect'));
-  // Enumeration racing manual selection must never overwrite the new handle.
   t=context();let resolve;t.c.navigator.bluetooth.getDevices=()=>new Promise(r=>resolve=r);
   const pending=t.c.restoreKnownPendant();const chosen={id:'new-choice'};t.c.bluetoothDevice=chosen;resolve([pendant]);
   assert.equal(await pending,false);assert.equal(t.c.bluetoothDevice,chosen);
-  // Lifecycle wiring and disabling retry preference.
   t=context([pendant]);t.c.bindReconnectRecovery();assert(t.listeners.visibilitychange&&t.listeners.pageshow&&t.listeners.availabilitychanged);
   t.control.checked=false;t.listeners.preference();assert.equal(t.saved.get('dk-pendant-auto-reconnect'),'off');
   t.c.bluetoothDevice=pendant;t.c.scheduleAutoReconnect();assert(!t.calls.some(x=>x[0]==='timer'));
@@ -98,14 +96,14 @@ async function workerTests(){
   vm.runInNewContext(fs.readFileSync(path.join(root,'sw.js'),'utf8'),ctx);handlers.install({waitUntil:p=>job=p});await job;
   installed.forEach(p=>assert(fs.existsSync(path.join(root,p.split('?')[0]))));
   async function fetch(url,mode='navigate',method='GET'){let result;handlers.fetch({request:{url,mode,method},respondWith:p=>result=p});return result;}
-  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=1.0.0-prod4');
+  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=1.0.0-prod5');
   assert.equal(await fetch(scope+'app.js?v=1.0.0-diag1','cors'),'./app.js?v=1.0.0-diag1');
   assert.equal(await fetch(scope+'ota.js?v=1.0.0-prod2','cors'),'./ota.js?v=1.0.0-ota4','stale OTA query is forced to canonical updater');
   assert.equal(await fetch(scope+'ota.js?v=anything-old','cors'),'./ota.js?v=1.0.0-ota4','all stale OTA query variants are migrated');
   assert.equal(await fetch(scope+'releases.js?v=1.0.0-prod2','cors'),'./releases.js?v=1.0.0-prod2');
   assert.equal(await fetch(scope+'enhancements.js?v=1.0.0-prod2','cors'),'./enhancements.js?v=1.0.0-prod2');
   assert.equal(await fetch(scope+'api','cors','POST'),undefined);
-  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'1.0.0-prod4');assert.equal(reply.release,'1.0.0');
+  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'1.0.0-prod5');assert.equal(reply.release,'1.0.0');
 }
 (async()=>{
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);
