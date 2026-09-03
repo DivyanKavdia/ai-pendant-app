@@ -1,0 +1,33 @@
+/* Settings pendant identity must render the installable app icon without recoloring, cropping, or a second tile treatment. */
+.pendant-settings-top .settings-device-art.settings-brand-lockup{
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  overflow:visible!important;
+}
+.pendant-settings-top .settings-brand-logo{
+  width:46px!important;
+  height:46px!important;
+  display:block!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  filter:none!important;
+}
+:root[data-theme="dark"] .pendant-settings-top .settings-brand-logo{
+  filter:none!important;
+}
+:root[data-theme="dark"] .pendant-settings-top .settings-device-art.settings-brand-lockup{
+  background:transparent!important;
+  border:0!important;
+}
+@media(max-width:430px){
+  .pendant-settings-top .settings-brand-logo{width:42px!important;height:42px!important}
+}
+@media(max-width:360px){
+  .pendant-settings-top .settings-brand-logo{width:38px!important;height:38px!important}
+}
