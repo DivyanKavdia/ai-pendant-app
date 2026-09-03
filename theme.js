@@ -17,6 +17,7 @@
     });
   }
   function installAISettings() {
+    if (typeof document.getElementById !== 'function' || typeof document.createElement !== 'function') return;
     const fields = document.querySelector('.processing-fields');
     const endpoint = document.getElementById('endpointInput');
     const llmEndpoint = document.getElementById('llmEndpointInput');
