@@ -8,15 +8,16 @@ function setup({saved=null,dark=false,blocked=false}={}){
     window:{matchMedia:()=>media,addEventListener(t,f){events[t]=f;}},localStorage:{getItem:k=>{if(blocked)throw Error('blocked');return storage.get(k);},setItem:(k,v)=>{if(blocked)throw Error('blocked');storage.set(k,v);}}};
   vm.runInNewContext(source,c);return {html,meta,buttons,media,storage,events};
 }
+const click=button=>button.click({preventDefault(){}});
 let t=setup({dark:true});assert.equal(t.html.dataset.theme,'dark');assert.equal(t.html.attributes['data-theme'],'dark');assert.equal(t.meta.content,'#071426');
-t.buttons[1].click();assert.equal(t.html.dataset.theme,'light');assert.equal(t.storage.get('synap-appearance'),'light');
+click(t.buttons[1]);assert.equal(t.html.dataset.theme,'light');assert.equal(t.storage.get('synap-appearance'),'light');
 t.media.matches=true;t.media.change();assert.equal(t.html.dataset.theme,'light','explicit choice overrides system');
-t.buttons[0].click();assert.equal(t.html.dataset.theme,'dark');t.media.matches=false;t.media.change();assert.equal(t.html.dataset.theme,'light');
+click(t.buttons[0]);assert.equal(t.html.dataset.theme,'dark');t.media.matches=false;t.media.change();assert.equal(t.html.dataset.theme,'light');
 assert.equal(t.buttons.filter(b=>b.attributes['aria-pressed']==='true').length,1);
 assert.equal(t.buttons[0].title,'Follow device appearance');
 assert.equal(setup({saved:'dark'}).html.dataset.theme,'dark');
 assert.equal(setup({saved:'invalid',dark:true}).html.dataset.theme,'dark');
-t=setup({blocked:true});t.buttons[2].click();assert.equal(t.html.dataset.theme,'dark','blocked storage does not block switching');
+t=setup({blocked:true});click(t.buttons[2]);assert.equal(t.html.dataset.theme,'dark','blocked storage does not block switching');
 t.events.storage({key:'synap-appearance',newValue:'light'});assert.equal(t.html.dataset.theme,'light');
 const css=fs.readFileSync(path.join(root,'styles.css'),'utf8');
 const values=block=>Object.fromEntries([...block.matchAll(/--([\w-]+):([^;]+);/g)].map(m=>[m[1],m[2].trim()]));
