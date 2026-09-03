@@ -124,8 +124,18 @@
       }
       const header=document.querySelector('.topbar');
       const boundary=(header?.getBoundingClientRect().bottom||70)+28;
-      let chosen=items[0];
-      for(const item of items)if(item.section.getBoundingClientRect().top<=boundary)chosen=item;
+      const navHeight=nav.getBoundingClientRect?.().height||0;
+      const viewportBottom=Math.max(boundary+1,window.innerHeight-navHeight-8);
+      let chosen=items[0],bestVisible=-1;
+      for(const item of items){
+        const rect=item.section.getBoundingClientRect();
+        const visible=Math.max(0,Math.min(rect.bottom,viewportBottom)-Math.max(rect.top,boundary));
+        if(visible>bestVisible){bestVisible=visible;chosen=item}
+      }
+      if(bestVisible<=0){
+        chosen=items[0];
+        for(const item of items)if(item.section.getBoundingClientRect().top<=boundary)chosen=item;
+      }
       const bottomGap=document.documentElement.scrollHeight-(window.scrollY+window.innerHeight);
       const bottomTolerance=Math.max(96,Math.round(window.innerHeight*.08));
       if(window.scrollY>0&&bottomGap<=bottomTolerance)chosen=items[items.length-1];
