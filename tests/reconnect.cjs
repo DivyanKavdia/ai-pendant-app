@@ -96,14 +96,14 @@ async function workerTests(){
   vm.runInNewContext(fs.readFileSync(path.join(root,'sw.js'),'utf8'),ctx);handlers.install({waitUntil:p=>job=p});await job;
   installed.forEach(p=>assert(fs.existsSync(path.join(root,p.split('?')[0]))));
   async function fetch(url,mode='navigate',method='GET'){let result;handlers.fetch({request:{url,mode,method},respondWith:p=>result=p});return result;}
-  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=1.0.0-prod5');
+  assert.equal(await fetch(scope+'?from=home'),'./index.html?v=1.0.0-prod6');
   assert.equal(await fetch(scope+'app.js?v=1.0.0-diag1','cors'),'./app.js?v=1.0.0-diag1');
   assert.equal(await fetch(scope+'ota.js?v=1.0.0-prod2','cors'),'./ota.js?v=1.0.0-ota4','stale OTA query is forced to canonical updater');
   assert.equal(await fetch(scope+'ota.js?v=anything-old','cors'),'./ota.js?v=1.0.0-ota4','all stale OTA query variants are migrated');
   assert.equal(await fetch(scope+'releases.js?v=1.0.0-prod2','cors'),'./releases.js?v=1.0.0-prod2');
   assert.equal(await fetch(scope+'enhancements.js?v=1.0.0-prod2','cors'),'./enhancements.js?v=1.0.0-prod2');
   assert.equal(await fetch(scope+'api','cors','POST'),undefined);
-  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'1.0.0-prod5');assert.equal(reply.release,'1.0.0');
+  let reply;handlers.message({data:{type:'GET_VERSION'},source:{postMessage:d=>reply=d}});assert.equal(reply.version,'1.0.0-prod6');assert.equal(reply.release,'1.0.0');
 }
 (async()=>{
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);
