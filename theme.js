@@ -2,6 +2,13 @@
 (function(){
   'use strict';
   if(typeof history!=='undefined'&&'scrollRestoration'in history)history.scrollRestoration='manual';
+  /* iOS/PWA can reopen the last fragment (#library/#ask/etc.) and restore into the
+     middle of the app. Remove it before layout so a new Synap launch is canonical. */
+  try{
+    if(typeof location!=='undefined'&&location.hash&&typeof history?.replaceState==='function'){
+      history.replaceState(history.state,'',location.pathname+location.search);
+    }
+  }catch(_){}
   const key='synap-appearance';
   const SHELL_REVISION='1.0.0-logo3';
   const root=document.documentElement;
