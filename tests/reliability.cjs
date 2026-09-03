@@ -1,6 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const root=path.join(__dirname,'..');
-const codec=require('../audio-store.js').DKAudioCodec;
+require('../audio-store.js');
+const codec=globalThis.DKAudioCodec;
 function packet(sequence,chunk,total,payload){return{sequence,chunk,total,payload:new Uint8Array(payload)};}
 function fullFrame(sequence){const packets=[];for(let i=0;i<10;i++)packets.push(packet(sequence,i,10,160));return packets;}
 test('timeline assembly preserves missing frame positions as silence',()=>{
