@@ -52,7 +52,7 @@ test('PWA receives explicit app-owned GATT service for dedicated EVENT telemetry
 
 test('Bluefy compatibility restores controls and bridges larger audio packets before app startup',()=>{
   const theme=fs.readFileSync(path.join(root,'theme.js'),'utf8');
-  assert.match(theme,/if\(!navigator\.locks\)/);
+  assert.match(theme,/typeof navigator!==['"]undefined['"]&&!navigator\.locks/);
   assert.match(theme,/synapLockFallback/);
   assert.match(theme,/LEGACY_CHUNKS=10,LEGACY_PAYLOAD=160/);
   assert.match(theme,/len>500/);
