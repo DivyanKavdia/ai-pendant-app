@@ -2,8 +2,8 @@
 const APP_VERSION='1.0.0';
 /* app.js owns the client compatibility revision used for update signalling. */
 const CLIENT_REVISION='1.0.0-diag1';
-/* Dedicated BLE EVENT transport replaces global characteristic interception. */
-const CACHE_REVISION='1.0.0-shell15-event-channel';
+/* Dedicated EVENT transport now binds to the app-owned GATT service on Bluefy/iOS. */
+const CACHE_REVISION='1.0.0-shell16-bluefy-event';
 const CACHE_NAME=`synap-pwa-${CACHE_REVISION}`;
 const APP_SHELL=[
   './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css','./settings-icon-fix.css',
