@@ -1,7 +1,7 @@
 /* Synap BLE asynchronous event transport.
    Binds to the exact live GATT service handed off by device-identity.js.
-   This path does not depend on navigator.bluetooth.getDevices(), BluetoothRemoteGATTServer,
-   or EventTarget prototype interception and is therefore Bluefy/iOS friendly. */
+   This path does not depend on browser device rediscovery or prototype interception
+   and is therefore Bluefy/iOS friendly. */
 (function(root){'use strict';
 const EVENT_UUID='4fa1234e-0000-1000-8000-00805f9b34fb';
 const CONTROL_UUID='4fa12347-0000-1000-8000-00805f9b34fb';
@@ -38,8 +38,6 @@ async function attachDedicatedEvent(){
     setMode('event');
     root.dispatchEvent(new CustomEvent('synap-event-channel-ready',{detail:{mode:'event'}}));
     console.info('[synap events] subscribed via explicit app GATT service');
-    // Firmware 1081 retains the latest EVENT value. Read after enabling notifications so
-    // battery UI can populate even if the connect-time publish happened before this listener.
     try{
       const value=await characteristic.readValue();
       if(value?.byteLength)inspect({target:{value}},'event-read');
@@ -58,7 +56,6 @@ function schedule(delay=500){
 root.addEventListener('synap-gatt-service-ready',event=>{
   serviceHint=event?.detail?.service||root.__synapGattService||null;
   setMode('service-ready');
-  // Let app.js finish its queued identity/audio/control discovery before adding EVENT work.
   schedule(700);
   setTimeout(()=>{if(mode!=='event')schedule(0)},1600);
 });
