@@ -2,12 +2,12 @@
 const APP_VERSION='1.0.0';
 /* app.js owns the client compatibility revision used for update signalling. */
 const CLIENT_REVISION='1.0.0-diag1';
-/* Shell refresh for clickable pendant battery health control. */
-const CACHE_REVISION='1.0.0-shell7-battery-health';
+/* Battery transport refresh: generic BLE event interception + clickable battery health UI. */
+const CACHE_REVISION='1.0.0-shell8-battery-ble';
 const CACHE_NAME=`synap-pwa-${CACHE_REVISION}`;
 const APP_SHELL=[
   './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css','./settings-icon-fix.css',
-  './touch-event-bridge.js','./memory-ui-fix.js','./device-identity.js','./audio-store.js','./ota.js','./releases.js',
+  './touch-event-bridge.js','./battery-ble-fix.js','./memory-ui-fix.js','./device-identity.js','./audio-store.js','./ota.js','./releases.js',
   './app.js','./enhancements.js','./capture-ui.js','./brain-ui.js','./product-ui.js','./runtime-ui.js',
   './ai-providers.js','./recording-bridge.js','./manifest.webmanifest','./logo.webp','./icon.svg','./icon-192.png','./icon-512.png'
 ];
