@@ -2,8 +2,8 @@
 const APP_VERSION='1.0.0';
 /* app.js owns the client compatibility revision used for update signalling. */
 const CLIENT_REVISION='1.0.0-diag1';
-/* OTA hotfix cache revision: removes browser dependency on rate-limited GitHub REST provenance checks. */
-const CACHE_REVISION='1.0.0-shell6-ota403';
+/* Shell refresh for clickable pendant battery health control. */
+const CACHE_REVISION='1.0.0-shell7-battery-health';
 const CACHE_NAME=`synap-pwa-${CACHE_REVISION}`;
 const APP_SHELL=[
   './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css','./settings-icon-fix.css',
