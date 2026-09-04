@@ -1,0 +1,34 @@
+name: Apply native audio pipeline v2
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/patch-audio-pipeline-v2.cjs
+permissions:
+  contents: write
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply deterministic audio pipeline migration
+        run: node tools/patch-audio-pipeline-v2.cjs
+      - name: Run PWA regression suite
+        run: |
+          for test_file in tests/*.cjs; do node "$test_file"; done
+      - name: Commit migrated production source
+        run: |
+          if git diff --quiet; then
+            echo "Audio pipeline v2 already applied."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.js theme.js sw.js tests/reconnect.cjs tests/reliability.cjs tests/recording-bridge.cjs
+          git commit -m "Use native BLE audio protocol v2 [skip ci]"
+          git push origin HEAD:main
