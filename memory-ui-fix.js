@@ -1,33 +1,6 @@
 /* Reliable one-tap PWA Remember This handler. Hardware Remember This remains a long press on TTP223. */
 (function(root){'use strict';
 const HKEY='synap-memory-highlights',DB='dk-pendant-recordings';
-/* Install the battery BLE interceptor synchronously while this parser-inserted head script runs.
-   Dynamic script injection was racy on mobile browsers and could miss all later 0xB7 notifications. */
-(function installBatteryBleHook(){
-  if(root.__synapBatteryBleFix)return;root.__synapBatteryBleFix=true;
-  const MAGIC=0xB7,VERSION=1;
-  function inspectEvent(event){
-    try{
-      const v=event&&event.target&&event.target.value;
-      if(!v||v.byteLength!==8||v.getUint8(0)!==MAGIC||v.getUint8(1)!==VERSION)return;
-      if(root.SynapBatteryBridge&&typeof root.SynapBatteryBridge.inspect==='function')root.SynapBatteryBridge.inspect(event);
-      const flags=v.getUint8(3),detail={percent:v.getUint8(2),available:Boolean(flags&1),low:Boolean(flags&2),critical:Boolean(flags&4),millivolts:v.getUint16(4,true),lowThresholdMv:v.getUint16(6,true)};
-      console.info('[synap battery] BLE telemetry',detail);
-    }catch(error){console.warn('[synap battery] telemetry parse failed',error);}
-  }
-  const proto=root.EventTarget&&root.EventTarget.prototype;
-  if(proto&&!proto.__synapBatteryEventHook){
-    const nativeAdd=proto.addEventListener;
-    proto.addEventListener=function(type,listener,options){
-      if(type==='characteristicvaluechanged'&&!this.__synapBatteryInspectBound){
-        this.__synapBatteryInspectBound=true;
-        nativeAdd.call(this,type,inspectEvent);
-      }
-      return nativeAdd.call(this,type,listener,options);
-    };
-    proto.__synapBatteryEventHook=true;
-  }
-})();
 function read(){try{return JSON.parse(localStorage.getItem(HKEY)||'[]')}catch(_){return[]}}
 function write(v){try{localStorage.setItem(HKEY,JSON.stringify(v.slice(-500)))}catch(_){}}
 function timerSeconds(){const t=document.getElementById('timer')?.textContent||'';const p=t.split(':').map(Number);if(p.some(Number.isNaN))return null;return p.length===2?p[0]*60+p[1]:p.length===3?p[0]*3600+p[1]*60+p[2]:null}
