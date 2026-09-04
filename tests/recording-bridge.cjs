@@ -11,16 +11,18 @@ const rollover = Number(source.match(/const ROLLOVER_MS = (\d+) \* 60 \* 1000/)?
 assert.equal(rollover, 45, 'continuous capture rolls before 16-bit sequence wrap');
 assert(rollover < (65536 * 50 / 60000), 'rollover must stay below protocol wrap');
 assert.match(source, /hardware-originated controls/i);
-assert.match(source, /document\.body\.dataset\.deviceState === '2'/);
+assert.match(source, /function adoptHardwareStream\(\)/);
+assert.match(source, /if \(state === '2'\)/);
+assert.match(source, /attempts >= 40/);
 assert.match(source, /start\.click\(\)/, 'hardware STREAMING state opens the browser journal');
 assert.match(source, /stop\.click\(\)/, 'long capture performs a controlled rollover');
 assert.match(source, /continuousGroupId/);
 assert.match(source, /continuousPart/);
-assert.match(source, /Touch: tap to record · double-tap to stop/);
+assert.match(source, /Touch: tap to start\/stop · hold to remember/);
 assert.match(theme, /recording-bridge\.js\?v=1\.0\.0-touch1/);
 assert.match(worker, /\.\/recording-bridge\.js/);
 assert.match(ai, /continuousContext/);
 assert.match(ai, /one continuous conversation/);
 assert.match(ai, /continuous-45m-parts-30s-stt-5m-blocks-final/);
 
-console.log('PASS: hardware-start journal capture, double-tap copy, 45-minute rollover, linked parts and continuous AI consolidation.');
+console.log('PASS: hardware-start journal adoption, tap-toggle copy, 45-minute rollover, linked parts and continuous AI consolidation.');
