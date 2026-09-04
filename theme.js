@@ -4,7 +4,7 @@
 
   // Bluefy/iOS may not expose Web Locks. app.js only needs a page-lifetime
   // exclusive token here; do not abort initialization and leave every control dead.
-  if(!navigator.locks){
+  if(typeof navigator!=='undefined'&&!navigator.locks){
     const fallback={async request(name,options,callback){if(typeof options==='function'){callback=options;options={};}return callback({name:String(name||''),mode:'exclusive'});}};
     try{Object.defineProperty(navigator,'locks',{value:fallback,configurable:true});}catch(_){try{navigator.locks=fallback}catch(__){}}
     document.documentElement.dataset.synapLockFallback='1';
