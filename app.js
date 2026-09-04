@@ -6,7 +6,7 @@
   // -------------------------------------------------------------------------
 
 const APP_VERSION = "1.0.0";
-const APP_REVISION = "1.0.0-diag1";
+const APP_REVISION = "1.0.0-audio2";
   let deviceAssociation = null;
   let deviceIdentityMessage = "Not connected";
   const PROTOCOL_VERSION = 0x02;
@@ -27,8 +27,11 @@ const APP_REVISION = "1.0.0-diag1";
   const AUDIO_HEADER_BYTES = 8;
   const PCM_BYTES_PER_FRAME = 1600;
   const DEFAULT_SAMPLE_RATE = 16000;
-  const MIN_CHUNKS_PER_FRAME = 10;
+  // Native protocol-v2 transport. The browser consumes exactly what firmware sends;
+  // there is no BLE event rewriting or synthetic re-segmentation layer.
+  const MIN_CHUNKS_PER_FRAME = 4;
   const MAX_CHUNKS_PER_FRAME = 20;
+  const MAX_AUDIO_PAYLOAD_BYTES = 500;
 
   const DEVICE_STATE = {
     DISCONNECTED: 0,
@@ -47,7 +50,7 @@ const APP_REVISION = "1.0.0-diag1";
     6: "BLE transport changed. Stop and start again."
   };
 
-  const MAX_RECORDING_MS = 30 * 60 * 1000;
+  const MAX_RECORDING_MS = 50 * 60 * 1000;
   const START_TIMEOUT_MS = 5000;
   const COMMAND_TIMEOUT_MS = 3500;
   const INCOMPLETE_FRAME_TIMEOUT_MS = 900;
@@ -1041,9 +1044,10 @@ const APP_REVISION = "1.0.0-diag1";
       return false;
     }
     if (receivedStatus.state === DEVICE_STATE.STREAMING &&
-        (receivedStatus.mtu < 91 || receivedStatus.chunksPerFrame < 10 ||
-         receivedStatus.chunksPerFrame > 20 || receivedStatus.payloadBytes < 80 ||
-         receivedStatus.payloadBytes > 160)) {
+        (receivedStatus.mtu < 91 || receivedStatus.chunksPerFrame < MIN_CHUNKS_PER_FRAME ||
+         receivedStatus.chunksPerFrame > MAX_CHUNKS_PER_FRAME || receivedStatus.payloadBytes < 1 ||
+         receivedStatus.payloadBytes > MAX_AUDIO_PAYLOAD_BYTES ||
+         receivedStatus.payloadBytes + AUDIO_HEADER_BYTES > receivedStatus.attCapacity)) {
       log("Rejected invalid streaming transport", receivedStatus);
       return false;
     }
@@ -1372,7 +1376,7 @@ const APP_REVISION = "1.0.0-diag1";
       totalChunks > MAX_CHUNKS_PER_FRAME ||
       chunkIndex >= totalChunks ||
       payloadLength === 0 ||
-      payloadLength > 160 ||
+      payloadLength > MAX_AUDIO_PAYLOAD_BYTES ||
       AUDIO_HEADER_BYTES + payloadLength !== value.byteLength
     ) {
       sessionStats.invalidPackets += 1;
@@ -1518,7 +1522,7 @@ const APP_REVISION = "1.0.0-diag1";
 
     if (durationMs >= MAX_RECORDING_MS) {
       log("Maximum recording duration reached");
-      toast("30-minute limit reached. Saving recording.");
+      toast("Recording safety limit reached. Saving recording.");
       stopRecording();
     }
   }

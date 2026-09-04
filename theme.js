@@ -10,42 +10,8 @@
     document.documentElement.dataset.synapLockFallback='1';
   }
 
-  // Firmware may now use 4-20 chunks/frame and up to 500-byte payloads when the
-  // negotiated MTU allows it. Current app.js intentionally keeps its proven
-  // 10x160-byte assembler, so adapt only the BLE event boundary: fewer radio
-  // notifications are re-segmented in memory without changing PCM or protocol v2.
-  const AUDIO_UUID='4fa12346-0000-1000-8000-00805f9b34fb',CONTROL_UUID='4fa12347-0000-1000-8000-00805f9b34fb';
-  const AUDIO_MAGIC=0xA5,STATUS_MAGIC=0x5A,PROTO=2,HEADER=8,FRAME=1600,LEGACY_CHUNKS=10,LEGACY_PAYLOAD=160;
-  const ET=globalThis.EventTarget;
-  if(ET&&ET.prototype&&!globalThis.__synapBleCompatInstalled){
-    globalThis.__synapBleCompatInstalled=true;
-    const add=ET.prototype.addEventListener,remove=ET.prototype.removeEventListener,maps=new WeakMap(),framesByTarget=new WeakMap();
-    const uuid=t=>String(t&&t.uuid||'').toLowerCase();
-    const invoke=(l,c,e)=>typeof l==='function'?l.call(c,e):l?.handleEvent?.(e);
-    const copy=v=>{const b=new Uint8Array(v.byteLength);b.set(new Uint8Array(v.buffer,v.byteOffset,v.byteLength));return b};
-    const fake=(v,e)=>({target:{value:v},currentTarget:e?.currentTarget||null,type:'characteristicvaluechanged'});
-    function audioWrap(listener){return function(event){
-      const target=event?.target,v=target?.value;if(uuid(target)!==AUDIO_UUID||!v||v.byteLength<HEADER||v.getUint8(0)!==AUDIO_MAGIC||v.getUint8(1)!==PROTO)return invoke(listener,this,event);
-      const total=v.getUint8(5),len=v.getUint16(6,true);if(total>=10&&len<=160)return invoke(listener,this,event);
-      const seq=v.getUint16(2,true),idx=v.getUint8(4);if(total<1||total>20||idx>=total||len<1||len>500||HEADER+len!==v.byteLength)return invoke(listener,this,event);
-      let frames=framesByTarget.get(target);if(!frames){frames=new Map();framesByTarget.set(target,frames)}
-      let f=frames.get(seq);if(!f||f.total!==total){f={total,chunks:new Array(total),count:0};frames.set(seq,f)}
-      if(!f.chunks[idx]){const p=new Uint8Array(len);p.set(new Uint8Array(v.buffer,v.byteOffset+HEADER,len));f.chunks[idx]=p;f.count++}
-      if(f.count!==f.total)return;frames.delete(seq);
-      const pcm=new Uint8Array(FRAME);let off=0;for(let i=0;i<f.total;i++){const p=f.chunks[i];if(!p||off+p.length>FRAME)return;pcm.set(p,off);off+=p.length}if(off!==FRAME)return;
-      for(let i=0;i<LEGACY_CHUNKS;i++){const packet=new Uint8Array(HEADER+LEGACY_PAYLOAD);packet[0]=AUDIO_MAGIC;packet[1]=PROTO;packet[2]=seq&255;packet[3]=seq>>8;packet[4]=i;packet[5]=LEGACY_CHUNKS;packet[6]=LEGACY_PAYLOAD;packet[7]=0;packet.set(pcm.subarray(i*LEGACY_PAYLOAD,(i+1)*LEGACY_PAYLOAD),HEADER);invoke(listener,this,fake(new DataView(packet.buffer),event))}
-    }}
-    function controlWrap(listener){return function(event){
-      const target=event?.target,v=target?.value;if(uuid(target)!==CONTROL_UUID||!v||v.byteLength!==16||v.getUint8(0)!==STATUS_MAGIC||v.getUint8(1)!==PROTO)return invoke(listener,this,event);
-      const chunks=v.getUint8(8),payload=v.getUint16(14,true);if(v.getUint8(2)!==2||(chunks>=10&&payload<=160))return invoke(listener,this,event);
-      const b=copy(v);b[8]=LEGACY_CHUNKS;b[14]=LEGACY_PAYLOAD;b[15]=0;return invoke(listener,this,fake(new DataView(b.buffer),event));
-    }}
-    ET.prototype.addEventListener=function(type,listener,options){
-      if(type!=='characteristicvaluechanged'||!listener)return add.call(this,type,listener,options);const u=uuid(this);if(u!==AUDIO_UUID&&u!==CONTROL_UUID)return add.call(this,type,listener,options);
-      let map=maps.get(this);if(!map){map=new Map();maps.set(this,map)}let wrapped=map.get(listener);if(!wrapped){wrapped=u===AUDIO_UUID?audioWrap(listener):controlWrap(listener);map.set(listener,wrapped)}return add.call(this,type,wrapped,options);
-    };
-    ET.prototype.removeEventListener=function(type,listener,options){const wrapped=type==='characteristicvaluechanged'&&listener?maps.get(this)?.get(listener):null;return remove.call(this,type,wrapped||listener,options)};
-  }
+  // Audio protocol parsing belongs to app.js. Do not intercept or rewrite Web Bluetooth
+  // characteristic events here: every valid firmware packet must reach the journal.
 
   if(typeof history!=='undefined'&&'scrollRestoration'in history)history.scrollRestoration='manual';
   /* iOS/PWA can reopen the last fragment (#library/#ask/etc.) and restore into the
@@ -107,7 +73,7 @@
     const custom=document.createElement('div');custom.id='customEndpointFields';custom.className='processing-fields';custom.append(endpoint.closest('label'),llm.closest('label'));
     const tl=token.closest('label')?.querySelector('span');if(tl){tl.id='apiKeyLabel';tl.textContent='OpenAI API key'}
     token.placeholder='sk-…';token.autocomplete='off';fields.prepend(p,models,custom);
-    script('ai-providers.js?v=0.0.1-brain3');script('recording-bridge.js?v=1.0.0-touch1');
+    script('ai-providers.js?v=0.0.1-brain3');script('recording-bridge.js?v=1.0.0-touch2');
   }
   function bind(){
     document.querySelectorAll('[data-theme-choice]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();choose(b.dataset.themeChoice)}));

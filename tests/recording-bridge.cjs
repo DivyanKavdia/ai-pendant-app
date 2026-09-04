@@ -19,7 +19,7 @@ assert.match(source, /stop\.click\(\)/, 'long capture performs a controlled roll
 assert.match(source, /continuousGroupId/);
 assert.match(source, /continuousPart/);
 assert.match(source, /Touch: tap to start\/stop · hold to remember/);
-assert.match(theme, /recording-bridge\.js\?v=1\.0\.0-touch1/);
+assert.match(theme, /recording-bridge\.js\?v=1\.0\.0-touch2/);
 assert.match(worker, /\.\/recording-bridge\.js/);
 assert.match(ai, /continuousContext/);
 assert.match(ai, /one continuous conversation/);

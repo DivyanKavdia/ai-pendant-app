@@ -50,25 +50,18 @@ test('PWA receives explicit app-owned GATT service for dedicated EVENT telemetry
   assert.doesNotMatch(touch,/__synapInteractionBridge/);
 });
 
-test('Bluefy compatibility restores controls and bridges larger audio packets before app startup',()=>{
+test('native audio v2 consumes firmware packets without an EventTarget BLE translation shim',()=>{
   const theme=fs.readFileSync(path.join(root,'theme.js'),'utf8');
+  const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
   assert.match(theme,/typeof navigator!==['"]undefined['"]&&!navigator\.locks/);
   assert.match(theme,/synapLockFallback/);
-  assert.match(theme,/LEGACY_CHUNKS=10,LEGACY_PAYLOAD=160/);
-  assert.match(theme,/len>500/);
-  assert.match(theme,/framesByTarget/);
-  assert.match(theme,/characteristicvaluechanged/);
-  assert.match(theme,/AUDIO_UUID='4fa12346-0000-1000-8000-00805f9b34fb'/);
-  assert.match(theme,/CONTROL_UUID='4fa12347-0000-1000-8000-00805f9b34fb'/);
-});
-
-test('hardware-started stream is adopted until browser Start becomes ready',()=>{
-  const bridge=fs.readFileSync(path.join(root,'recording-bridge.js'),'utf8');
-  assert.match(bridge,/function adoptHardwareStream\(\)/);
-  assert.match(bridge,/document\.body\.dataset\.deviceState !== '2'/);
-  assert.match(bridge,/attempts >= 40/);
-  assert.match(bridge,/start\.click\(\)/);
-  assert.match(bridge,/Touch: tap to start\/stop · hold to remember/);
+  assert.doesNotMatch(theme,/framesByTarget/);
+  assert.doesNotMatch(theme,/LEGACY_CHUNKS/);
+  assert.doesNotMatch(theme,/EventTarget\.prototype|ET\.prototype/);
+  assert.match(app,/MIN_CHUNKS_PER_FRAME = 4/);
+  assert.match(app,/MAX_AUDIO_PAYLOAD_BYTES = 500/);
+  assert.match(app,/payloadLength > MAX_AUDIO_PAYLOAD_BYTES/);
+  assert.match(app,/journal\.append\(currentRecordingId/);
 });
 
 test('memory events remain stream-relative and reboot-safe',()=>{
