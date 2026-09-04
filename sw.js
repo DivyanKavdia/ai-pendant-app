@@ -2,12 +2,12 @@
 const APP_VERSION='1.0.0';
 /* app.js owns the client compatibility revision used for update signalling. */
 const CLIENT_REVISION='1.0.0-diag1';
-/* Explicit app-owned GATT service handoff for EVENT/battery telemetry. */
-const CACHE_REVISION='1.0.0-shell18-explicit-battery';
+/* Battery telemetry v2: raw ADC mV/counts + reconstructed cell voltage. */
+const CACHE_REVISION='1.0.0-shell19-battery-v2';
 const CACHE_NAME=`synap-pwa-${CACHE_REVISION}`;
 const APP_SHELL=[
   './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css','./settings-icon-fix.css',
-  './touch-event-bridge.js','./event-channel.js','./battery-popover-fix.js','./memory-ui-fix.js','./device-identity.js','./audio-store.js','./ota.js','./releases.js',
+  './touch-event-bridge.js','./battery-v2-ui.js','./event-channel.js','./battery-popover-fix.js','./memory-ui-fix.js','./device-identity.js','./audio-store.js','./ota.js','./releases.js',
   './app.js','./enhancements.js','./capture-ui.js','./brain-ui.js','./product-ui.js','./runtime-ui.js',
   './ai-providers.js','./recording-bridge.js','./manifest.webmanifest','./logo.webp','./icon.svg','./icon-192.png','./icon-512.png'
 ];
