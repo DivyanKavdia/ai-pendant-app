@@ -2,131 +2,128 @@
 
 **Stay present. Keep the memory.**
 
-Release **1.0.0**. This repository contains the browser application only. ESP32-S3 firmware lives in `DivyanKavdia/synap-firmware`.
+## Known-good baseline — 4 September 2026
+
+This README is the product/engineering reference for the best-known Synap PWA state as of **4 September 2026**.
+
+- PWA product version: **1.0.0**
+- Firmware production baseline: **ESP32-S3 build 1052**
+- S3 target: `esp32s3-fh4r2-qspi-4m`
+- Recording protocol: **2**
+- OTA protocol: **3**
+- Production pendant: ESP32-S3 SuperMini + real I2S microphone + TTP223 touch sensor on GPIO13.
 
 ## Product boundary
 
-The pendant is intentionally **stateless for recordings**. It captures PCM audio and streams it over BLE; it does not store recordings locally. Audio, transcripts, summaries, device associations and processing state are stored in the browser/PWA.
+The pendant is intentionally **stateless for recordings**. It captures PCM audio and streams it over BLE; it does not store recording audio locally. Audio, packet journal, recordings, transcripts, summaries, device associations, Remember markers and processing state live in the browser/PWA.
 
-The recorder UI therefore says **Saved in browser**, not “On-device”. Clearing site data can remove locally stored memories. Settings → System status shows storage usage and whether the browser reports storage as protected/persisted.
+Clearing site data can remove local memories. Persistent browser storage is requested when available, but browser/OS eviction and background execution remain platform-controlled.
 
-## Supported hardware and audio
+## Supported hardware / BLE
 
-- ESP32-S3FH4R2 / ESP32-S3 SuperMini
-- 4 MB flash, 2 MB QSPI PSRAM
-- default two-slot OTA partition scheme
-- BLE service `4fa12345-0000-1000-8000-00805f9b34fb`
-- audio `...346`, control/status `...347`
-- permanent device ID `...34c`
+Primary production hardware is ESP32-S3FH4R2 / ESP32-S3 SuperMini with 4 MB flash and 2 MB QSPI PSRAM. The firmware project also maintains an explicit ESP32-C3 SuperMini target.
+
+BLE service: `4fa12345-0000-1000-8000-00805f9b34fb`
+
+- audio `...346`
+- control/status `...347`
+- OTA write `...348`
+- OTA status `...349`
 - firmware identity `...34b`
-- firmware updater write `...348`, status `...349`
-- runtime diagnostics `...34d`
-- PCM16 mono, 16 kHz, 800 samples / 50 ms frame
+- permanent device ID `...34c`
+- diagnostics `...34d`
+
+Audio is PCM16 mono at 16 kHz, 800 samples per 50 ms frame.
+
+## Physical touch UX
+
+The PWA and firmware support the pendant-first gesture model:
+
+| Pendant state | Touch gesture | User action |
+| --- | --- | --- |
+| Connected + idle | Long press (~1.2 s) | Start recording |
+| Recording | Long press (~1.2 s) | **Remember This** marker; continue recording |
+| Recording | Double tap (within ~500 ms) | Stop and finalize recording |
+| Idle | Very long press (~3 s) | Enter deep sleep |
+| Deep sleep | Touch/wake | Wake pendant and resume advertising/reconnect path |
+
+The TTP223 input is GPIO13 on production S3. Firmware debounces the input (~35 ms) and guards gestures during OTA.
+
+### Remember This
+
+A hardware Remember gesture produces a dedicated firmware event. The PWA persists the marker against the active recording with its timeline offset so later memory/AI experiences can distinguish a user-highlighted moment without stopping the recording.
 
 ## Recording reliability
 
-Incoming BLE chunks are journaled to IndexedDB in short batches while recording. A take is sealed only after pending writes complete. On application recovery, unsealed takes are closed from the committed packet journal.
+Incoming BLE chunks are journaled to IndexedDB in short batches while recording. A take is sealed only after pending writes complete. Recovery can close unsealed takes from committed packet data.
 
-After sealing, each approximately 30-second segment is compacted into contiguous PCM stored in IndexedDB and its raw packet rows are removed. This materially reduces IndexedDB object overhead without adding any storage to the pendant.
+Approximately 30-second sections are compacted into contiguous PCM after sealing to reduce IndexedDB row overhead. BLE sequence gaps remain represented on the audio timeline as silence so playback/transcription timing does not collapse when radio packets are missing.
 
-BLE sequence gaps are preserved on the audio timeline. Missing frame positions are represented by silence instead of collapsing time, so playback/transcription timing is not shifted forward when radio packets were lost. The recording metadata separately reports complete, incomplete and missing frames. Even an outage spanning an entire 30-second segment is preserved as elapsed silence rather than disappearing from the timeline.
+### Screen lock / background behavior
 
-The browser requests persistent storage when supported, but browser eviction policy remains outside the app's control. Settings → System status reports quota/usage and warns at high usage. Recovery controls can export audio if normal finalization fails.
+A September 4 fix prevents the foreground audio-stall watchdog from immediately false-stopping an active recording merely because the page was hidden/suspended. When the page becomes visible again, the PWA allows a recovery grace period before declaring the audio stream stalled and reacquires Screen Wake Lock where supported.
 
-## Your digital twin
+There is an unavoidable platform boundary: if the mobile OS/browser actually disconnects Web Bluetooth/GATT while the screen is locked, the pendant cannot preserve audio from that disconnected interval because Synap deliberately has no pendant-local recording storage. Diagnostics should therefore distinguish **page suspension** from a real **GATT disconnected** event.
 
-Insights includes **Search your memory…**. It searches recording names, notes, summaries and transcripts across locally stored recordings and ranks matches without uploading the library to a search service. Selecting a result switches the timeline to the original date and opens the recording.
+For highest reliability during long recordings, keep the PWA active and permit the requested screen wake lock. The recovery logic is designed to tolerate browser suspension where the underlying BLE connection survives; it cannot override OS-level Web Bluetooth termination.
 
-This is local retrieval, not cloud sync. Another browser or cleared site profile has a separate memory library.
+## Device identity and reconnect
 
-## AI processing queue
+The PWA reads the permanent `SYNAP-XXXXXXXXXXXX` device identity from the connected pendant. Browser Bluetooth handles are mapped to that identity only after a valid connection is acknowledged. The identity survives firmware updates and removes the old user-facing OTA-key workflow.
 
-Processing remains browser-controlled and uses user-configured HTTPS STT/LLM endpoints.
+Where `navigator.bluetooth.getDevices()` is supported, a previously authorized pendant can be restored/reconnected without reopening the Bluetooth chooser. Manual disconnect suppresses automatic reconnect for that page session. Reconnect does not silently create a new recording unless the physical interaction state explicitly requires the existing recording lifecycle to be bridged.
 
-- Stable `Idempotency-Key` values are sent for every job.
-- Transcription → segment summary → recording consolidation ordering is preserved within each recording.
-- Up to two **different recordings** can process concurrently.
-- Two dependent jobs for the same recording never run together.
-- A permanently failed recording does not block unrelated recordings.
-- Retryable HTTP 408/409/425/429 and 5xx responses use exponential backoff, capped at 60 seconds and five attempts.
-- Other HTTP errors fail that recording immediately and can be retried manually.
-- Jobs left in `running` state by a page/process interruption are returned to `pending` during startup recovery.
-- Web Locks prevent another tab from processing the same local queue concurrently.
-- Firmware OTA pauses processing.
+## One-click firmware OTA
 
-Expected endpoints:
+Normal users do not paste OTA keys, select binary files, connect USB, or press an ESP boot button for routine updates. The PWA reads the pendant target/build, fetches the production release manifest, verifies compatibility and downloads the immutable firmware binary.
 
-1. STT: multipart POST containing `audio`, `recording_id`, `segment_index`, `sample_rate=16000`; return `{"transcript":"..."}` or text.
-2. LLM: JSON POST with `task`, `recording_id`, `segment_index`, `input`; return `{"summary":"..."}` or text.
+Production firmware currently uses manifest schema 3 with GitHub Actions provenance metadata. Runtime OTA deliberately does **not** depend on GitHub REST API calls, avoiding unauthenticated REST HTTP 403/rate-limit failures. The PWA still validates the constrained production manifest, content-addressed binary URL, target/build identity, size, SHA-256 and ESP image before flashing.
 
-Keep provider secrets server-side. The optional PWA bearer token is session-memory only.
-
-## Signed one-click firmware updates
-
-Normal users never paste OTA keys or choose firmware files. The PWA targets the permanent `SYNAP-XXXXXXXXXXXX` device ID and downloads only from the production `ota-releases` feed.
-
-Production manifests use schema 2 and must be signed with **ES256 / P-256**, key ID `prod-2026-01`. The PWA embeds only the public verification key. It verifies the publisher signature before downloading, then verifies size, SHA-256, target identity, ESP32-S3 image header, device ID and installed build before commit.
-
-The already-deployed unsigned production feed is accepted only through **build 1008** as a migration bridge. Any production build above 1008 must have a valid Synap publisher signature. This allows existing build-1008 pendants to receive the first signed release without USB reflashing.
-
-Production feed:
-
-`https://raw.githubusercontent.com/DivyanKavdia/synap-firmware/ota-releases/latest.json`
+Production feed is the `ota-releases/latest.json` file in `DivyanKavdia/synap-firmware`; as of this baseline its S3 build is **1052**.
 
 ### OTA transfer behavior
 
-Protocol 3 supports BEGIN, DATA, VERIFY, COMMIT, ABORT and RESUME. The PWA sends a conservative four-packet write-with-response window on real Web Bluetooth, then waits for the firmware's cumulative persisted offset. This reduces round trips while preserving exact-offset recovery and compatibility with build 1008.
+OTA protocol 3 supports BEGIN, DATA, VERIFY, COMMIT, ABORT and RESUME. Transfer uses bounded BLE packets/windows and firmware-reported persisted offset. A short BLE interruption can reconnect and resume while the firmware OTA session remains alive rather than intentionally restarting at byte zero. Power loss still requires a fresh transfer because OTA session state is not persisted to local pendant storage.
 
-A BLE interruption can resume for up to two minutes while the firmware process remains powered and its in-RAM OTA session is alive. Power loss restarts the transfer because there is deliberately no pendant-local OTA session storage. A connected transfer timeout fails closed and may be retried cleanly.
+Firmware update checks must compare the **connected pendant build** with the manifest selected for the pendant's actual hardware target. A Git commit by itself does not mean a new firmware release exists; production `latest.json` is authoritative.
 
-## Release-channel separation
+## PWA updates / service worker
 
-Firmware `main` pushes publish to the **test** channel (`ota-test`) only. They are not visible to normal PWA update checks.
+The service worker caches the application shell for offline startup but does not clear IndexedDB. Same-origin app assets are refreshed through the deployed PWA. Reload/update actions must not interrupt recording, saving or firmware OTA.
 
-A production firmware release is a deliberate GitHub Actions `workflow_dispatch` with channel `production`. The protected production job requires the repository/environment secret:
+A September 4 validation run exposed a stale regression-test expectation for an older service-worker cache revision. GitHub Pages deployment itself succeeded; the test expectation must track the current shell revision rather than being treated as a firmware publication failure.
 
-`SYNAP_RELEASE_PRIVATE_KEY_PEM`
+## AI processing and digital twin
 
-The production job signs the manifest, atomically publishes manifest + immutable binary to `ota-releases`, and verifies public CORS, digest and signature policy. If the signing secret is absent, production publication fails closed.
+Insights provides local memory search across recording names, notes, summaries and transcripts. Selecting a result opens the original recording/date. This is browser-local retrieval, not cloud synchronization.
 
-## PWA updates and offline shell
-
-`sw.js` precaches one complete shell revision. It never clears IndexedDB. A newer worker can surface an update banner; Reload is disabled while recording, saving or updating firmware.
-
-Current shell revision: `1.0.0-prod3`.
-
-Deploy all app assets together over HTTPS. Required runtime capabilities are Web Bluetooth, IndexedDB and Web Locks. Background BLE/audio execution is not guaranteed; keep the app open while recording and during firmware updates.
-
-## Device association and reconnect
-
-On each connection the PWA reads the permanent `...34c` device ID. Browser Bluetooth handles are mapped to that identity only after the same connection reaches a valid idle state. A handle that later reports a different permanent ID is rejected.
-
-When supported, `navigator.bluetooth.getDevices()` restores a previously permitted pendant after reload. Reconnect never restarts recording automatically. Manual disconnect suppresses automatic reconnect in the current page session.
-
-Clearing site data removes browser associations and recordings but does not change the hardware's permanent ID.
+AI processing remains browser-controlled through user-configured HTTPS STT/LLM endpoints. Jobs use stable idempotency keys, preserve transcription → segment summary → recording consolidation ordering, isolate permanent failures by recording and recover interrupted `running` jobs to pending state. Firmware OTA pauses AI processing.
 
 ## Diagnostics
 
-Settings → Diagnostics provides copy, clear and **Download log**. Settings → System status reports:
+Settings → Diagnostics / System status is the first place to investigate field failures. It can surface/log:
 
-- pendant health when an authorised pendant is connected and idle
-- last reset class, including panic/watchdog/brownout/power-glitch indications
-- capture-queue, notification and control-queue drop counts
-- free/minimum-free heap and uptime
-- browser storage usage/quota and persistence status
-- offline/service-worker readiness
-- network online/offline state
+- connected pendant state and identity
+- firmware build/target where available
+- GATT disconnect/reconnect behavior
+- reset reason
+- capture/notification/control drop counts
+- free/minimum heap and uptime
+- browser storage usage/persistence
+- network/service-worker state
 
-Pendant health is read from the firmware's read-only `4fa1234d-0000-1000-8000-00805f9b34fb` characteristic. The same snapshot is appended to the downloadable Diagnostics log. Older build-1008 firmware simply shows that health telemetry will be available after the next firmware update; recording and OTA remain unaffected.
+For a screen-lock recording complaint, specifically determine whether the log shows a real **GATT disconnected** event. If not, treat it as browser suspension/watchdog recovery rather than a physical pendant disconnect.
 
-## Tests
+## Tests and production discipline
 
-Run all dependency-free browser regressions with:
+Run dependency-free browser regressions with:
 
 ```bash
 node --test tests/*.cjs
 ```
 
-The suite covers device identity/reconnect, OTA targeting/resume, production release validation, shell behavior, theme/navigation, library UX, diagnostics, signed-release migration policy, AI failure isolation and audio timeline gap preservation.
+Tests cover identity/reconnect, OTA targeting/resume, release validation, shell behavior, library UX, diagnostics, AI failure isolation and audio timeline preservation. They complement rather than replace hardware smoke testing.
 
-These tests do not replace physical Android/iPhone-compatible Web Bluetooth browser + pendant validation. Production firmware promotion should follow a hardware smoke test of connection, record/save, OTA interruption/resume and post-reboot reconnect.
+Before calling a release production-good, validate at minimum: BLE connect/reconnect, real-mic recording, touch long-press start, Remember marker, double-tap stop/save, deep sleep/wake, screen-off/resume behavior, OTA update/resume, reboot and post-update reconnect.
+
+Treat **4 September 2026 + firmware build 1052 + this PWA baseline** as the known-good reference point for subsequent regression analysis.
