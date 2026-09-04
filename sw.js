@@ -2,8 +2,8 @@
 const APP_VERSION='1.0.0';
 /* app.js owns the client compatibility revision used for update signalling. */
 const CLIENT_REVISION='1.0.0-diag1';
-/* Capture the app-owned CONTROL subscription, then upgrade to EVENT deterministically. */
-const CACHE_REVISION='1.0.0-shell17-battery-deterministic';
+/* Explicit app-owned GATT service handoff for EVENT/battery telemetry. */
+const CACHE_REVISION='1.0.0-shell18-explicit-battery';
 const CACHE_NAME=`synap-pwa-${CACHE_REVISION}`;
 const APP_SHELL=[
   './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css','./settings-icon-fix.css',
