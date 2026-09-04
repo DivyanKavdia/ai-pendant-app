@@ -1,6 +1,8 @@
 /* Reliable one-tap PWA Remember This handler. Hardware Remember This remains a long press on TTP223. */
 (function(root){'use strict';
 const HKEY='synap-memory-highlights',DB='dk-pendant-recordings';
+/* Load the robust battery BLE interceptor independently of Web Bluetooth constructor timing. */
+if(!document.querySelector('script[data-synap-battery-ble-fix]')){const s=document.createElement('script');s.src='battery-ble-fix.js?v=0.0.1-battery2';s.dataset.synapBatteryBleFix='1';document.head.appendChild(s)}
 function read(){try{return JSON.parse(localStorage.getItem(HKEY)||'[]')}catch(_){return[]}}
 function write(v){try{localStorage.setItem(HKEY,JSON.stringify(v.slice(-500)))}catch(_){}}
 function timerSeconds(){const t=document.getElementById('timer')?.textContent||'';const p=t.split(':').map(Number);if(p.some(Number.isNaN))return null;return p.length===2?p[0]*60+p[1]:p.length===3?p[0]*3600+p[1]*60+p[2]:null}
