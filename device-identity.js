@@ -11,7 +11,14 @@
     if (!validId(id)) throw Error('Invalid pendant device identifier.');
     return id;
   }
+  function publishService(service) {
+    if (!service) return;
+    root.__synapGattService = service;
+    try { root.dispatchEvent(new CustomEvent('synap-gatt-service-ready', { detail: { service } })); }
+    catch (_) {}
+  }
   async function read(service, queue, assertConnection) {
+    publishService(service);
     let characteristic;
     try { characteristic = await queue(() => service.getCharacteristic(UUID), 'Find device identifier'); }
     catch (error) {
@@ -63,6 +70,6 @@
       return { ...record, installationId: data.installationId };
     }
   }
-  root.SynapDevices = { UUID, KEY, decode, read, Registry };
+  root.SynapDevices = { UUID, KEY, decode, read, Registry, publishService };
   if (typeof module !== 'undefined') module.exports = root.SynapDevices;
 })(globalThis);
