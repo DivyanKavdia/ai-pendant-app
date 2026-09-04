@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - tools/patch-audio-pipeline-v2.cjs
+      - .github/workflows/apply-audio-pipeline-v2.yml
 permissions:
   contents: write
 jobs:
