@@ -31,7 +31,8 @@ test('PWA receives explicit app-owned GATT service for dedicated EVENT telemetry
   const events=fs.readFileSync(path.join(root,'event-channel.js'),'utf8');
   const identity=fs.readFileSync(path.join(root,'device-identity.js'),'utf8');
   const memoryFix=fs.readFileSync(path.join(root,'memory-ui-fix.js'),'utf8');
-  assert.match(sw,/CACHE_REVISION='1\.0\.0-shell18-explicit-battery'/);
+  assert.match(sw,/CACHE_REVISION='1\.0\.0-shell19-battery-v2'/);
+  assert.match(sw,/\.\/battery-v2-ui\.js/);
   assert.match(sw,/\.\/event-channel\.js/);
   assert.match(identity,/__synapGattService = service/);
   assert.match(identity,/synap-gatt-service-ready/);
@@ -59,11 +60,16 @@ test('memory events remain stream-relative and reboot-safe',()=>{
   assert.doesNotMatch(touch,/h\.source==='pendant'&&h\.counter===detail\.counter/);
 });
 
-test('battery UX stays percentage-first and voltage is diagnostics-only',()=>{
-  const touch=fs.readFileSync(path.join(root,'touch-event-bridge.js'),'utf8');
-  assert.match(touch,/Sensor unavailable/);assert.match(touch,/receivedAt:Date\.now\(\)/);
-  assert.match(touch,/Detailed electrical readings remain available in Diagnostics/);
-  assert.doesNotMatch(touch,/<span>Voltage<\/span>/);assert.doesNotMatch(touch,/<span>Low threshold<\/span>/);
+test('battery v2 exposes voltage and raw ADC even when percentage is unavailable',()=>{
+  const battery=fs.readFileSync(path.join(root,'battery-v2-ui.js'),'utf8');
+  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+  assert.match(html,/battery-v2-ui\.js\?v=1\.0\.0-battery2/);
+  assert.match(battery,/VERSION=2/);
+  assert.match(battery,/v\.byteLength!==12/);
+  assert.match(battery,/adcMillivolts:v\.getUint16\(8,true\)/);
+  assert.match(battery,/adcRaw:v\.getUint16\(10,true\)/);
+  assert.match(battery,/Voltage detected/);
+  assert.match(battery,/Percentage is shown only when the firmware validates the LiPo range/);
 });
 
 test('production release trust remains GitHub provenance based',()=>{
