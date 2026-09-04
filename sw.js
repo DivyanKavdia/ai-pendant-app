@@ -2,8 +2,8 @@
 const APP_VERSION='1.0.0';
 /* app.js owns the client compatibility revision used for update signalling. */
 const CLIENT_REVISION='1.0.0-diag1';
-/* Battery telemetry is intercepted by the first head script and distinguishes no packet from invalid sensor. */
-const CACHE_REVISION='1.0.0-shell11-battery-core';
+/* Normal battery UI shows percentage + health only; raw voltage remains diagnostic data. */
+const CACHE_REVISION='1.0.0-shell12-battery-percent';
 const CACHE_NAME=`synap-pwa-${CACHE_REVISION}`;
 const APP_SHELL=[
   './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css','./settings-icon-fix.css',
