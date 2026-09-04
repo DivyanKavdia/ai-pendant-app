@@ -25,18 +25,21 @@ test('failed recording does not block a different recording in scheduler',async(
   const selected=await store.nextRunnable(100);assert.equal(selected.job.id,3);assert.equal(selected.blockedCount,1);
 });
 
-test('PWA uses dedicated BLE EVENT channel without global EventTarget interception',()=>{
+test('PWA uses dedicated BLE EVENT channel and Bluefy service handoff',()=>{
   const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');
   const touch=fs.readFileSync(path.join(root,'touch-event-bridge.js'),'utf8');
   const events=fs.readFileSync(path.join(root,'event-channel.js'),'utf8');
   const memoryFix=fs.readFileSync(path.join(root,'memory-ui-fix.js'),'utf8');
-  assert.match(sw,/CACHE_REVISION='1\.0\.0-shell15-event-channel'/);
+  assert.match(sw,/CACHE_REVISION='1\.0\.0-shell16-bluefy-event'/);
   assert.match(sw,/\.\/event-channel\.js/);
   assert.match(touch,/event-channel\.js\?v=1\.0\.0-event1/);
   assert.doesNotMatch(touch,/EventTarget\?\.prototype/);
   assert.doesNotMatch(touch,/__synapInteractionBridge/);
   assert.match(events,/EVENT_UUID='4fa1234e-0000-1000-8000-00805f9b34fb'/);
-  assert.match(events,/CONTROL_UUID='4fa12347-0000-1000-8000-00805f9b34fb'/);
+  assert.match(events,/BluetoothRemoteGATTServer\?\.prototype/);
+  assert.match(events,/getPrimaryService/);
+  assert.match(events,/serviceHint=service/);
+  assert.match(events,/serviceHint\?\.device\?\.gatt\?\.connected/);
   assert.match(events,/getCharacteristic\(EVENT_UUID\)/);
   assert.match(events,/mode:'event'/);
   assert.match(events,/mode:'legacy-control'/);
