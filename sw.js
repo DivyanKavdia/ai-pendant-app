@@ -1,9 +1,9 @@
 /* Synap production service worker: network-first code, resilient offline shell. */
 const APP_VERSION='1.0.0';
 /* app.js owns the client compatibility revision used for update signalling. */
-const CLIENT_REVISION='1.0.0-diag1';
-/* Battery telemetry v2: raw ADC mV/counts + reconstructed cell voltage. */
-const CACHE_REVISION='1.0.0-shell19-battery-v2';
+const CLIENT_REVISION='1.0.0-audio1';
+/* BLE reliability: Bluefy startup compatibility + larger-packet transport bridge. */
+const CACHE_REVISION='1.0.0-shell20-audio-reliability';
 const CACHE_NAME=`synap-pwa-${CACHE_REVISION}`;
 const APP_SHELL=[
   './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css','./settings-icon-fix.css',
