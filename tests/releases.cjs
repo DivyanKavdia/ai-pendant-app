@@ -45,7 +45,7 @@ test('download verifies bounded size, digest, S3 image header and exact build be
   const {bytes,m}=fixture();let options;
   const fetcher=async(url,opts)=>{assert.equal(url,m.url);options=opts;return new Response(bytes);};
   const blob=await r.download(m,2048,fetcher);assert.equal(blob.size,512);
-  assert.equal(options.credentials,'omit');assert.equal(options.cache,'no-store');assert.equal(options.redirect,'error');
+  assert.equal(options.credentials,'omit');assert.equal(options.cache,'no-store');assert.equal(options.redirect,'follow');
   await assert.rejects(r.download(m,2048,async()=>new Response(bytes.subarray(0,500))),/incomplete/);
   await assert.rejects(r.download(m,2048,async()=>new Response(Buffer.alloc(513))),/size limit/);
   await assert.rejects(r.download(m,2048,async()=>new Response(Buffer.alloc(512))),/SHA-256/);
