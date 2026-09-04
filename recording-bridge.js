@@ -10,6 +10,7 @@
   let rolloverTimer = null;
   let rolloverPending = false;
   let startingFromHardware = false;
+  let hardwareAdoptTimer = null;
 
   function readSession() {
     try { return JSON.parse(root.sessionStorage?.getItem(SESSION_KEY) || 'null'); }
@@ -73,6 +74,11 @@
     rolloverTimer = null;
   }
 
+  function clearHardwareAdoptTimer() {
+    if (hardwareAdoptTimer) root.clearInterval(hardwareAdoptTimer);
+    hardwareAdoptTimer = null;
+  }
+
   function scheduleRollover() {
     clearRolloverTimer();
     if (!activeSince) activeSince = performance.now();
@@ -104,31 +110,50 @@
     }, 100);
   }
 
+  function adoptHardwareStream() {
+    if (startingFromHardware || hardwareAdoptTimer) return;
+    startingFromHardware = true;
+    let attempts = 0;
+    hardwareAdoptTimer = root.setInterval(() => {
+      if (document.body.dataset.deviceState !== '2') {
+        clearHardwareAdoptTimer();
+        startingFromHardware = false;
+        return;
+      }
+      const start = document.getElementById('startButton');
+      if (start && !start.disabled) {
+        clearHardwareAdoptTimer();
+        start.click();
+        startingFromHardware = false;
+        return;
+      }
+      if (++attempts >= 40) {
+        clearHardwareAdoptTimer();
+        startingFromHardware = false;
+      }
+    }, 50);
+  }
+
   function handleDeviceState() {
     const state = document.body.dataset.deviceState;
-    const start = document.getElementById('startButton');
     if (state === '2') {
-      // Hardware single-tap can put the pendant into STREAMING before the app has
-      // opened a journal. Clicking Start is safe because firmware START is idempotent.
-      if (start && !start.disabled && !startingFromHardware) {
-        startingFromHardware = true;
-        root.setTimeout(() => {
-          if (document.body.dataset.deviceState === '2' && !start.disabled) start.click();
-          startingFromHardware = false;
-        }, 30);
-      }
+      // Hardware tap can put the pendant into STREAMING before the browser has
+      // opened its journal. Keep trying briefly until the app-side Start action
+      // becomes available; firmware START is idempotent so adoption is safe.
+      adoptHardwareStream();
       if (!activeSince) activeSince = performance.now();
       scheduleRollover();
       return;
     }
 
+    clearHardwareAdoptTimer();
+    startingFromHardware = false;
     clearRolloverTimer();
     activeSince = 0;
     if (state === '1') {
       if (rolloverPending) {
         beginNextPartWhenReady();
       } else {
-        // A deliberate app Stop or pendant double-tap closes the continuous group.
         root.setTimeout(() => {
           if (!rolloverPending && document.body.dataset.deviceState === '1') writeSession(null);
         }, 1200);
@@ -147,7 +172,7 @@
     if (key && !document.getElementById('touchControlHint')) {
       const hint = document.createElement('span');
       hint.id = 'touchControlHint';
-      hint.textContent = 'Touch: tap to record · double-tap to stop';
+      hint.textContent = 'Touch: tap to start/stop · hold to remember';
       key.appendChild(hint);
     }
   }
