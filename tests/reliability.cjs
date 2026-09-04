@@ -31,7 +31,7 @@ test('PWA receives explicit app-owned GATT service for dedicated EVENT telemetry
   const events=fs.readFileSync(path.join(root,'event-channel.js'),'utf8');
   const identity=fs.readFileSync(path.join(root,'device-identity.js'),'utf8');
   const memoryFix=fs.readFileSync(path.join(root,'memory-ui-fix.js'),'utf8');
-  assert.match(sw,/CACHE_REVISION='1\.0\.0-shell20-audio-reliability'/);
+  assert.match(sw,/CACHE_REVISION='1\.0\.0-shell21-touch-reliability'/);
   assert.match(sw,/\.\/battery-v2-ui\.js/);
   assert.match(sw,/\.\/event-channel\.js/);
   assert.match(identity,/__synapGattService = service/);
@@ -60,6 +60,15 @@ test('Bluefy compatibility restores controls and bridges larger audio packets be
   assert.match(theme,/characteristicvaluechanged/);
   assert.match(theme,/AUDIO_UUID='4fa12346-0000-1000-8000-00805f9b34fb'/);
   assert.match(theme,/CONTROL_UUID='4fa12347-0000-1000-8000-00805f9b34fb'/);
+});
+
+test('hardware-started stream is adopted until browser Start becomes ready',()=>{
+  const bridge=fs.readFileSync(path.join(root,'recording-bridge.js'),'utf8');
+  assert.match(bridge,/function adoptHardwareStream\(\)/);
+  assert.match(bridge,/document\.body\.dataset\.deviceState !== '2'/);
+  assert.match(bridge,/attempts >= 40/);
+  assert.match(bridge,/start\.click\(\)/);
+  assert.match(bridge,/Touch: tap to start\/stop · hold to remember/);
 });
 
 test('memory events remain stream-relative and reboot-safe',()=>{
