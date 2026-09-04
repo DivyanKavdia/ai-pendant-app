@@ -1,16 +1,18 @@
-/* Synap BLE OTA protocol 3: public device-ID targeting with resumable cumulative ACK windows. */
+/* synap BLE OTA protocol 3: public device-ID targeting with resumable cumulative ACK windows. */
 (function (root) {
   "use strict";
   const WRITE_UUID = "4fa12348-0000-1000-8000-00805f9b34fb";
   const STATUS_UUID = "4fa12349-0000-1000-8000-00805f9b34fb";
   const DEVICE_UUID = "4fa1234c-0000-1000-8000-00805f9b34fb";
-  // Real Web Bluetooth uses a conservative four-packet window. Node/host mocks
-  // stay at one packet so existing deterministic transport regressions remain valid.
+  const IMAGE_TARGETS = Object.freeze({
+    "esp32s3-fh4r2-qspi-4m":Object.freeze({target:"esp32s3-fh4r2-qspi-4m",chip:9,marker:"SYNAP-ESP32S3-OTA-ID-V3"}),
+    "esp32c3-supermini-4m":Object.freeze({target:"esp32c3-supermini-4m",chip:5,marker:"SYNAP-ESP32C3-OTA-ID-V3"})
+  });
   const WINDOW_CHUNKS = root.navigator?.bluetooth ? 4 : 1;
   const MIGRATION_MESSAGE = "This pendant uses an older updater. Install the device-ID firmware by USB once during developer/factory provisioning. Future updates need only this app; no key is required.";
   const errors = ["", "Updater is not available.", "Invalid OTA packet.",
     "Firmware does not fit the inactive slot.", "Chunk order or duplicate mismatch.", "Flash operation failed.",
-    "Not a compatible Synap ESP32-S3 application image.", "SHA-256 verification failed.",
+    "Not a compatible synap application image.", "SHA-256 verification failed.",
     "Bluetooth connection changed.", "Update timed out.", "Update cancelled.", "Stop recording first.",
     "The update targets a different pendant device ID."];
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -39,22 +41,26 @@
     const data = new Uint8Array(size);data[0]=command;
     new DataView(data.buffer).setUint32(1,session,true);return data;
   }
-  function validateImage(bytes, capacity, protocol=3) {
+  function containsMarker(bytes,text) {
+    const marker=new TextEncoder().encode(text);let match=0;
+    for(const byte of bytes){
+      match=byte===marker[match]?match+1:(byte===marker[0]?1:0);
+      if(match===marker.length)return true;
+    }
+    return false;
+  }
+  function validateImage(bytes, capacity, protocol=3, expectedTarget=null) {
     if (protocol!==3) throw new Error(MIGRATION_MESSAGE);
     if (bytes.length < 36 || bytes.length > capacity || bytes.length > 16*1024*1024) {
       throw new Error("Application .bin is empty or exceeds the available OTA slot.");
     }
-    const view = new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
-    if (bytes[0] !== 0xE9 || view.getUint16(12,true) !== 9 || view.getUint32(32,true) !== 0xABCD5432) {
-      throw new Error("Select the ESP32-S3 application .bin, not a merged, bootloader or partition image.");
-    }
-    const marker = new TextEncoder().encode("SYNAP-ESP32S3-OTA-ID-V3");
-    let match = 0;
-    for (const byte of bytes) {
-      match = byte === marker[match] ? match+1 : (byte === marker[0] ? 1 : 0);
-      if (match === marker.length) return;
-    }
-    throw new Error("This firmware lacks the Synap OTA compatibility marker. Use a trusted Synap build.");
+    const view = new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),chip=view.getUint16(12,true);
+    if(bytes[0]!==0xE9||view.getUint32(32,true)!==0xABCD5432)throw new Error("Select a synap application .bin, not a merged, bootloader or partition image.");
+    const candidates=expectedTarget?[IMAGE_TARGETS[expectedTarget]].filter(Boolean):Object.values(IMAGE_TARGETS).filter(config=>config.chip===chip);
+    if(!candidates.length)throw new Error("This firmware targets unsupported synap hardware.");
+    const target=candidates.find(config=>config.chip===chip&&containsMarker(bytes,config.marker));
+    if(!target)throw new Error("This firmware image does not match the selected synap hardware target.");
+    return target.target;
   }
   function validDeviceId(id) {
     return typeof id==='string' && /^SYNAP-[0-9A-F]{12}$/.test(id) &&
@@ -127,10 +133,6 @@
       }
     }
     async ack(predicate, epoch, session, timeout=15000) {
-      // Count only foreground/active time toward an ACK timeout. Mobile browsers
-      // can freeze JavaScript and BLE delivery while the screen is locked; on
-      // resume Date.now() jumps forward and the old implementation failed
-      // immediately even though the pendant had safely retained OTA state.
       let end=Date.now()+timeout,nextRead=Date.now()+350;
       while(Date.now()<end) {
         this.ensure(epoch);
@@ -160,8 +162,6 @@
       } catch(error) {
         if(error.resumable) throw error;
         const status=await this.read().catch(()=>null);
-        // A notification/read may show that only part of the sent window made it
-        // through the firmware queue. Resume from the exact persisted offset.
         if(status && status.session===session && status.state===3 && !status.error &&
           status.offset>start && status.offset<target) return status;
         throw error;
@@ -201,14 +201,11 @@
           session=crypto.getRandomValues(new Uint32Array(1))[0] || 1;
           const begin=packet(1,session,59);new DataView(begin.buffer).setUint32(5,bytes.length,true);begin.set(digest,9);
           begin.set(new TextEncoder().encode(expectedDeviceId),41);
-          this.status=null; // Never reject a retry using the previous attempt's cached error.
+          this.status=null;
           begun=true;await this.send(begin,epoch,true,true);
           const started=await this.ack(s=>s.state===3 && s.offset===0,epoch,session,30000);
           offset=started.offset;
         }
-        // Each DATA write still asks Bluetooth for a response, but flash progress is
-        // acknowledged cumulatively after a short window rather than round-tripping
-        // after every individual chunk. Installed build 1008 can safely queue four.
         while(!ready && offset<bytes.length) {
           const start=offset;let target=offset;
           for(let i=0;i<WINDOW_CHUNKS && target<bytes.length;i+=1) {
@@ -241,6 +238,6 @@
       } finally { this.busy=false; }
     }
   }
-  root.SynapOTA={Client,decode,packet,validateImage,validDeviceId,MIGRATION_MESSAGE,WINDOW_CHUNKS};
+  root.SynapOTA={Client,decode,packet,validateImage,validDeviceId,MIGRATION_MESSAGE,WINDOW_CHUNKS,IMAGE_TARGETS};
   if(typeof module!=="undefined" && module.exports) module.exports=root.SynapOTA;
 })(globalThis);
