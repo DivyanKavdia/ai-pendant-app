@@ -90,6 +90,24 @@
     render();
   }
 
+  function bindTouchRecordingBridge(){
+    const body=document.body,start=$('startButton');
+    if(!body||!start||typeof MutationObserver==='undefined')return;
+    let lastDeviceState=body.dataset.deviceState||'';
+    function sync(){
+      const deviceState=body.dataset.deviceState||'';
+      const appState=body.dataset.state||'';
+      const physicalStart=deviceState==='2'&&lastDeviceState!=='2';
+      lastDeviceState=deviceState;
+      if(physicalStart&&appState==='idle'&&!start.disabled){
+        start.dataset.trigger='touch';
+        start.click();
+        queueMicrotask(()=>{if(start.dataset.trigger==='touch')delete start.dataset.trigger;});
+      }
+    }
+    new MutationObserver(sync).observe(body,{attributes:true,attributeFilter:['data-device-state','data-state']});
+  }
+
   function bindBrainTabs(){
     const nav=document.querySelector('.brain-tabs');
     if(!nav)return;
@@ -182,6 +200,6 @@
   }
 
   bindBrandCase();
-  function init(){bindSettingsBrand();bindFirmwareAffordance();bindBrainTabs();bindReducedMotion()}
+  function init(){bindSettingsBrand();bindFirmwareAffordance();bindTouchRecordingBridge();bindBrainTabs();bindReducedMotion()}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
