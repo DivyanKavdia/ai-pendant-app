@@ -2,8 +2,8 @@
 const APP_VERSION='1.0.0';
 /* app.js owns the client compatibility revision used for update signalling. */
 const CLIENT_REVISION='1.0.0-diag1';
-/* Interaction telemetry is handled once on the control characteristic only. */
-const CACHE_REVISION='1.0.0-shell13-architecture-cleanup';
+/* Interaction telemetry is control-scoped and hardware memory offsets are stream-relative. */
+const CACHE_REVISION='1.0.0-shell14-memory-timing';
 const CACHE_NAME=`synap-pwa-${CACHE_REVISION}`;
 const APP_SHELL=[
   './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css','./settings-icon-fix.css',
