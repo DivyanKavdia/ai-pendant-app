@@ -2,8 +2,8 @@
 const APP_VERSION='1.0.0';
 /* app.js owns the client compatibility revision used for update signalling. */
 const CLIENT_REVISION='1.0.0-audio1';
-/* BLE reliability: Bluefy startup compatibility + larger-packet transport bridge. */
-const CACHE_REVISION='1.0.0-shell20-audio-reliability';
+/* Recording reliability: hardware-start adoption + TTP223 control semantics. */
+const CACHE_REVISION='1.0.0-shell21-touch-reliability';
 const CACHE_NAME=`synap-pwa-${CACHE_REVISION}`;
 const APP_SHELL=[
   './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css','./settings-icon-fix.css',
