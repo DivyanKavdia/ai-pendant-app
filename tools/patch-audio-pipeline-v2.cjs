@@ -1,4 +1,5 @@
 'use strict';
+// Migration trigger: apply native firmware packet shape directly in app.js.
 const fs=require('node:fs');
 
 function replaceOnce(source,before,after,label){
