@@ -31,7 +31,7 @@ test('PWA receives explicit app-owned GATT service for dedicated EVENT telemetry
   const events=fs.readFileSync(path.join(root,'event-channel.js'),'utf8');
   const identity=fs.readFileSync(path.join(root,'device-identity.js'),'utf8');
   const memoryFix=fs.readFileSync(path.join(root,'memory-ui-fix.js'),'utf8');
-  assert.match(sw,/CACHE_REVISION='1\.0\.0-shell19-battery-v2'/);
+  assert.match(sw,/CACHE_REVISION='1\.0\.0-shell20-audio-reliability'/);
   assert.match(sw,/\.\/battery-v2-ui\.js/);
   assert.match(sw,/\.\/event-channel\.js/);
   assert.match(identity,/__synapGattService = service/);
@@ -48,6 +48,18 @@ test('PWA receives explicit app-owned GATT service for dedicated EVENT telemetry
   assert.doesNotMatch(events,/navigator\.bluetooth\?\.getDevices/);
   assert.doesNotMatch(memoryFix,/installBatteryBleHook/);
   assert.doesNotMatch(touch,/__synapInteractionBridge/);
+});
+
+test('Bluefy compatibility restores controls and bridges larger audio packets before app startup',()=>{
+  const theme=fs.readFileSync(path.join(root,'theme.js'),'utf8');
+  assert.match(theme,/if\(!navigator\.locks\)/);
+  assert.match(theme,/synapLockFallback/);
+  assert.match(theme,/LEGACY_CHUNKS=10,LEGACY_PAYLOAD=160/);
+  assert.match(theme,/len>500/);
+  assert.match(theme,/framesByTarget/);
+  assert.match(theme,/characteristicvaluechanged/);
+  assert.match(theme,/AUDIO_UUID='4fa12346-0000-1000-8000-00805f9b34fb'/);
+  assert.match(theme,/CONTROL_UUID='4fa12347-0000-1000-8000-00805f9b34fb'/);
 });
 
 test('memory events remain stream-relative and reboot-safe',()=>{
