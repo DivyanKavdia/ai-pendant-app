@@ -6,6 +6,17 @@
 const EVENT_UUID='4fa1234e-0000-1000-8000-00805f9b34fb';
 const CONTROL_UUID='4fa12347-0000-1000-8000-00805f9b34fb';
 let characteristic=null,serviceHint=root.__synapGattService||null,mode='none',attachTimer=0,attachEpoch=0,lastPacket=null;
+function loadAudioCodec(){
+  if(root.SynapAudioCodecV3){root.SynapAudioCodecV3.install();return}
+  if(typeof document==='undefined'||document.querySelector('script[data-synap-audio-codec]'))return;
+  const script=document.createElement('script');
+  script.src='audio-codec-v3.js?v=1.0.0-adpcm1';
+  script.async=false;
+  script.dataset.synapAudioCodec='1';
+  script.onload=()=>root.SynapAudioCodecV3?.install();
+  script.onerror=()=>console.error('[synap audio] failed to load protocol-v3 decoder');
+  document.head.appendChild(script);
+}
 function packetBytes(value){try{return Array.from(new Uint8Array(value.buffer,value.byteOffset,value.byteLength)).map(b=>b.toString(16).padStart(2,'0')).join(' ')}catch(_){return''}}
 function inspect(event,source){
   try{
@@ -54,12 +65,14 @@ function schedule(delay=500){
   attachTimer=setTimeout(()=>{attachTimer=0;attachDedicatedEvent()},delay);
 }
 root.addEventListener('synap-gatt-service-ready',event=>{
+  root.SynapAudioCodecV3?.install();
   serviceHint=event?.detail?.service||root.__synapGattService||null;
   setMode('service-ready');
   schedule(700);
   setTimeout(()=>{if(mode!=='event')schedule(0)},1600);
 });
 root.addEventListener('synap-recording-foreground',()=>{if(serviceHint&&mode!=='event')schedule(150)});
+loadAudioCodec();
 if(serviceHint)schedule(900);
 root.SynapEventChannel={EVENT_UUID,CONTROL_UUID,get mode(){return mode},get lastPacket(){return lastPacket},attach:attachDedicatedEvent,reset:clear};
 })(globalThis);
