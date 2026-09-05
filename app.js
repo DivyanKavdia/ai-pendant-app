@@ -21,6 +21,8 @@ const APP_REVISION = "1.0.0-audio2";
   const CMD_STOP = 0x00;
   const CMD_START = 0x01;
   const CMD_GET_STATUS = 0x02;
+  const CMD_STANDBY = 0x03;
+  const CMD_WAKE = 0x04;
 
   const AUDIO_MAGIC = 0xA5;
   const STATUS_MAGIC = 0x5A;
@@ -37,7 +39,8 @@ const APP_REVISION = "1.0.0-audio2";
     DISCONNECTED: 0,
     CONNECTED_IDLE: 1,
     STREAMING: 2,
-    ERROR: 3
+    ERROR: 3,
+    STANDBY: 4
   };
 
   const ERROR_TEXT = {
@@ -361,6 +364,30 @@ const APP_REVISION = "1.0.0-audio2";
         message ||
         "";
       ui.levelText.textContent = "Pendant ready";
+      return;
+    }
+
+    if (nextState === "standby") {
+      ui.connectionBadge.classList.add("status-ready");
+      ui.connectionText.textContent = "Standby";
+      ui.connectButtonLabel.textContent = "Disconnect";
+      ui.startButton.disabled = true;
+      ui.stopButton.disabled = true;
+      ui.recorderTitle.textContent = "Pendant in standby.";
+      ui.recorderSubtitle.textContent = "Wake it from Settings or tap the pendant once.";
+      ui.levelText.textContent = "Bluetooth standby · microphone paused";
+      return;
+    }
+
+    if (nextState === "deep-sleep") {
+      ui.connectionBadge.classList.add("status-offline");
+      ui.connectionText.textContent = "Deep sleep";
+      ui.connectButtonLabel.textContent = "Reconnect after wake";
+      ui.startButton.disabled = true;
+      ui.stopButton.disabled = true;
+      ui.recorderTitle.textContent = "Pendant is sleeping.";
+      ui.recorderSubtitle.textContent = "Tap the pendant once to wake it.";
+      ui.levelText.textContent = "Bluetooth off in deep sleep";
       return;
     }
 
@@ -776,7 +803,8 @@ const APP_REVISION = "1.0.0-audio2";
       }
 
       if (
-        deviceStatus.state === DEVICE_STATE.CONNECTED_IDLE &&
+        (deviceStatus.state === DEVICE_STATE.CONNECTED_IDLE ||
+         deviceStatus.state === DEVICE_STATE.STANDBY) &&
         deviceStatus.error === 0
       ) {
         // Persist only after identity read and idle acknowledgement belong to the same connection.
@@ -789,8 +817,8 @@ const APP_REVISION = "1.0.0-audio2";
         setReconnectCapability(typeof navigator.bluetooth.getDevices === "function"
           ? "Pendant remembered. Automatic reconnect can restore this permission after reload. It does not resume recording."
           : "Connected for this page session. This browser needs device selection again after reload because getDevices() is unavailable.");
-        setAppState("idle");
-        if (!silent) toast("Pendant connected");
+        setAppState(deviceStatus.state === DEVICE_STATE.STANDBY ? "standby" : "idle");
+        if (!silent) toast(deviceStatus.state === DEVICE_STATE.STANDBY ? "Pendant connected in standby" : "Pendant connected");
       } else if (deviceStatus.state === DEVICE_STATE.STREAMING) {
         throw new Error(
           "Pendant is still streaming after recovery Stop. Reconnect it."
@@ -864,14 +892,17 @@ const APP_REVISION = "1.0.0-audio2";
       );
     }
 
+    const deepSleep = document.body.dataset.synapPowerState === "deep-sleep";
     setAppState(
-      "disconnected",
-      manualDisconnect
-        ? "Pendant disconnected."
-        : "Connection was lost. Tap Reconnect to continue."
+      deepSleep ? "deep-sleep" : "disconnected",
+      deepSleep
+        ? "Tap the pendant once to wake it."
+        : manualDisconnect
+          ? "Pendant disconnected."
+          : "Connection was lost. Tap Reconnect to continue."
     );
 
-    if (!manualDisconnect) {
+    if (!manualDisconnect && !deepSleep) {
       toast("Pendant connection lost", "error");
       scheduleAutoReconnect();
     }
@@ -1047,7 +1078,7 @@ const APP_REVISION = "1.0.0-audio2";
       payloadBytes: value.getUint16(14, true)
     };
 
-    if (receivedStatus.state > 3 || receivedStatus.headerBytes !== AUDIO_HEADER_BYTES ||
+    if (receivedStatus.state > 4 || receivedStatus.headerBytes !== AUDIO_HEADER_BYTES ||
         receivedStatus.sampleRate !== DEFAULT_SAMPLE_RATE || receivedStatus.samplesPerFrame !== 800) {
       log("Rejected incompatible status layout", receivedStatus);
       return false;
@@ -1096,6 +1127,15 @@ const APP_REVISION = "1.0.0-audio2";
 
     if (deviceStatus.state === DEVICE_STATE.STREAMING) {
       confirmRecordingStarted("status");
+      return true;
+    }
+
+    if (deviceStatus.state === DEVICE_STATE.STANDBY) {
+      clearStartTimeout();
+      if (recordingConfirmed || appState === "starting" || appState === "stopping") {
+        scheduleFinalize(0, "standby", recordingSessionId);
+      }
+      setAppState("standby");
       return true;
     }
 
