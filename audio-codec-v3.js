@@ -13,8 +13,8 @@
   const ADPCM_BYTES_PER_FRAME=404,SYNTHETIC_CHUNKS=4,SYNTHETIC_PAYLOAD=400;
   const STEP_TABLE=[7,8,9,10,11,12,13,14,16,17,19,21,23,25,28,31,34,37,41,45,50,55,60,66,73,80,88,97,107,118,130,143,157,173,190,209,230,253,279,307,337,371,408,449,494,544,598,658,724,796,876,963,1060,1166,1282,1411,1552,1707,1878,2066,2272,2499,2749,3024,3327,3660,4026,4428,4871,5358,5894,6484,7132,7845,8630,9493,10442,11487,12635,13899,15289,16818,18500,20350,22385,24623,27086,29794,32767];
   const INDEX_TABLE=[-1,-1,-1,-1,2,4,6,8];
-  const listenerMaps=new WeakMap(),states=new WeakMap();
-  const stats={compressedPackets:0,decodedFrames:0,droppedFrames:0,invalidPackets:0};
+  const listenerMaps=new WeakMap(),states=new WeakMap(),patchedCharacteristics=new WeakSet(),patchedServices=new WeakSet();
+  const stats={compressedPackets:0,decodedFrames:0,droppedFrames:0,invalidPackets:0,directHooks:0};
 
   function clamp16(value){return value<-32768?-32768:value>32767?32767:value}
   function decodeFrame(input){
@@ -112,33 +112,85 @@
     catch(error){stats.invalidPackets++;console.warn('[synap audio] ADPCM frame decode failed',error)}
   }
 
-  function install(){
-    if(!root||root.__synapAudioCodecV3Installed)return Boolean(root?.__synapAudioCodecV3Installed);
-    // Bluefy/WebKit can expose Web Bluetooth instances without exposing the
-    // BluetoothRemoteGATTCharacteristic constructor globally. Patch EventTarget,
-    // which every GATT characteristic inherits, and gate strictly on the audio UUID.
-    const prototype=root.EventTarget?.prototype||root.BluetoothRemoteGATTCharacteristic?.prototype;
-    if(!prototype?.addEventListener||!prototype?.removeEventListener)return false;
-    root.__synapAudioCodecV3Installed=true;
-    const nativeAdd=prototype.addEventListener,nativeRemove=prototype.removeEventListener;
-    prototype.addEventListener=function(type,listener,options){
-      if(type!=='characteristicvaluechanged'||String(this?.uuid||'').toLowerCase()!==AUDIO_UUID||!listener){
-        return nativeAdd.call(this,type,listener,options);
-      }
-      let map=listenerMaps.get(this);if(!map){map=new Map();listenerMaps.set(this,map)}
-      let wrapped=map.get(listener);
-      if(!wrapped){wrapped=event=>consume(this,listener,event);map.set(listener,wrapped)}
-      return nativeAdd.call(this,type,wrapped,options);
-    };
-    prototype.removeEventListener=function(type,listener,options){
-      const wrapped=type==='characteristicvaluechanged'?listenerMaps.get(this)?.get(listener):null;
-      if(wrapped){listenerMaps.get(this).delete(listener);return nativeRemove.call(this,type,wrapped,options)}
-      return nativeRemove.call(this,type,listener,options);
-    };
-    console.info('[synap audio] protocol-v3 ADPCM bridge ready');
-    return true;
+  function wrapListener(characteristic,listener){
+    let map=listenerMaps.get(characteristic);if(!map){map=new Map();listenerMaps.set(characteristic,map)}
+    let wrapped=map.get(listener);
+    if(!wrapped){wrapped=event=>consume(characteristic,listener,event);map.set(listener,wrapped)}
+    return wrapped;
   }
-  if(root?.addEventListener)root.addEventListener('synap-gatt-service-ready',install);
+
+  function patchCharacteristic(characteristic){
+    if(!characteristic||patchedCharacteristics.has(characteristic)||
+       String(characteristic.uuid||'').toLowerCase()!==AUDIO_UUID)return characteristic;
+    const nativeAdd=characteristic.addEventListener?.bind(characteristic);
+    const nativeRemove=characteristic.removeEventListener?.bind(characteristic);
+    if(!nativeAdd||!nativeRemove)return characteristic;
+    try{
+      characteristic.addEventListener=function(type,listener,options){
+        if(type!=='characteristicvaluechanged'||!listener)return nativeAdd(type,listener,options);
+        return nativeAdd(type,wrapListener(characteristic,listener),options);
+      };
+      characteristic.removeEventListener=function(type,listener,options){
+        const wrapped=type==='characteristicvaluechanged'?listenerMaps.get(characteristic)?.get(listener):null;
+        if(wrapped){listenerMaps.get(characteristic)?.delete(listener);return nativeRemove(type,wrapped,options)}
+        return nativeRemove(type,listener,options);
+      };
+      patchedCharacteristics.add(characteristic);stats.directHooks++;
+      console.info('[synap audio] direct audio characteristic hook ready');
+    }catch(error){console.warn('[synap audio] direct characteristic hook unavailable',error)}
+    return characteristic;
+  }
+
+  function patchService(service){
+    if(!service||patchedServices.has(service)||typeof service.getCharacteristic!=='function')return false;
+    const nativeGet=service.getCharacteristic.bind(service);
+    try{
+      service.getCharacteristic=function(uuid){
+        const result=nativeGet(uuid);
+        return Promise.resolve(result).then(characteristic=>patchCharacteristic(characteristic));
+      };
+      patchedServices.add(service);
+      console.info('[synap audio] direct GATT service hook ready');
+      return true;
+    }catch(error){
+      console.warn('[synap audio] direct GATT service hook unavailable',error);
+      return false;
+    }
+  }
+
+  function install(){
+    if(!root)return false;
+    // Standard browsers inherit Web Bluetooth characteristics from EventTarget.
+    // Keep this fast path, but do not rely on it: Bluefy/WebKit may expose GATT
+    // objects through a private prototype chain. patchService() below then hooks
+    // the concrete characteristic instance before app.js registers its listener.
+    if(!root.__synapAudioCodecV3Installed){
+      const prototype=root.EventTarget?.prototype||root.BluetoothRemoteGATTCharacteristic?.prototype;
+      if(prototype?.addEventListener&&prototype?.removeEventListener){
+        root.__synapAudioCodecV3Installed=true;
+        const nativeAdd=prototype.addEventListener,nativeRemove=prototype.removeEventListener;
+        prototype.addEventListener=function(type,listener,options){
+          if(type!=='characteristicvaluechanged'||String(this?.uuid||'').toLowerCase()!==AUDIO_UUID||!listener){
+            return nativeAdd.call(this,type,listener,options);
+          }
+          return nativeAdd.call(this,type,wrapListener(this,listener),options);
+        };
+        prototype.removeEventListener=function(type,listener,options){
+          const wrapped=type==='characteristicvaluechanged'?listenerMaps.get(this)?.get(listener):null;
+          if(wrapped){listenerMaps.get(this)?.delete(listener);return nativeRemove.call(this,type,wrapped,options)}
+          return nativeRemove.call(this,type,listener,options);
+        };
+        console.info('[synap audio] protocol-v3 ADPCM prototype bridge ready');
+      }
+    }
+    if(root.__synapGattService)patchService(root.__synapGattService);
+    return Boolean(root.__synapAudioCodecV3Installed||root.__synapGattService);
+  }
+
+  if(root?.addEventListener)root.addEventListener('synap-gatt-service-ready',event=>{
+    patchService(event?.detail?.service||root.__synapGattService);
+    install();
+  });
   return {AUDIO_UUID,MAGIC,COMPRESSED_VERSION,CODEC_IMA_ADPCM,SAMPLES_PER_FRAME,PCM_BYTES_PER_FRAME,
-    ADPCM_BYTES_PER_FRAME,decodeFrame,encodeFrame,install,stats};
+    ADPCM_BYTES_PER_FRAME,decodeFrame,encodeFrame,install,patchService,patchCharacteristic,stats};
 });

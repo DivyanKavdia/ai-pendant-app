@@ -31,7 +31,7 @@ test('PWA receives explicit app-owned GATT service for dedicated EVENT telemetry
   const events=fs.readFileSync(path.join(root,'event-channel.js'),'utf8');
   const identity=fs.readFileSync(path.join(root,'device-identity.js'),'utf8');
   const memoryFix=fs.readFileSync(path.join(root,'memory-ui-fix.js'),'utf8');
-  assert.match(sw,/CACHE_REVISION='1\.0\.0-shell24-audio-v3-loader'/);
+  assert.match(sw,/CACHE_REVISION='1\.0\.0-shell25-bluefy-direct-audio'/);
   assert.match(sw,/\.\/battery-v2-ui\.js/);
   assert.match(sw,/\.\/event-channel\.js/);
   assert.match(sw,/\.\/audio-codec-v3\.js/);
@@ -66,6 +66,8 @@ test('protocol-v3 compressed audio preserves the existing PCM journal contract',
   assert.match(bridge,/ADPCM_BYTES_PER_FRAME=404/);
   assert.match(bridge,/SYNTHETIC_CHUNKS=4/);
   assert.match(bridge,/BluetoothRemoteGATTCharacteristic/);
+  assert.match(bridge,/patchService/);
+  assert.match(bridge,/patchCharacteristic/);
   assert.match(bridge,/packet\[1\]=LEGACY_VERSION/);
   assert.match(app,/MIN_CHUNKS_PER_FRAME = 4/);
   assert.match(app,/MAX_AUDIO_PAYLOAD_BYTES = 500/);

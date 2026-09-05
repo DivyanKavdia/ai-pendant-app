@@ -14,5 +14,5 @@ assert.match(runtime,/window\.open\(url,'_blank','noopener'\)/,'iOS fallback mus
 assert.match(runtime,/anchor\.download=name/,'desktop export must keep direct WAV download');
 assert.match(runtime,/touch-action:manipulation/,'tap targets must opt out of delayed double-tap handling');
 assert.match(runtime,/min-height:44px/,'primary controls must meet the minimum mobile tap target');
-assert.match(sw,/shell24-audio-v3-loader/,'service worker cache must advance with the production audio-v3 loader');
+assert.match(sw,/shell25-bluefy-direct-audio/,'service worker cache must advance with the direct Bluefy audio hook');
 console.log('runtime recording controls and tap responsiveness: ok');
