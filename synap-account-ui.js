@@ -44,6 +44,7 @@
     var statusEl = el('synapAccountStatus');
     var backendInput = el('synapBackendUrlInput');
     var clientInput = el('synapClientIdInput');
+    var connection = el('synapConnectionDetails');
 
     var auth = root.SynapAuth;
     if (!auth) return;
@@ -81,6 +82,20 @@
     if (backendInput) backendInput.value = settings.backendUrl || '';
     if (clientInput) clientInput.value = settings.clientId || '';
 
+    /* A backend URL and a client ID are deployment configuration, not user
+       settings. When the build ships them as defaults there is nothing here a
+       person should be asked to fill in, so the panel stays hidden and signing
+       in is a single tap. It appears only when configuration is genuinely
+       missing — a fork, a self-hosted backend, or a build without defaults —
+       or when sign-in fails in a way that points at these values. */
+    function revealConnection(force) {
+      if (!connection) return;
+      var configured = Boolean(settings.backendUrl && settings.clientId);
+      connection.hidden = configured && !force;
+      if (force) connection.open = true;
+    }
+    revealConnection(false);
+
     /* ai-providers.js defaults an unset preference to 'openai' and would then
        intercept every job looking for a key this build no longer asks for.
        Write the choice down explicitly so both modules agree on first run. */
@@ -104,12 +119,13 @@
         /* Persist connection settings before signing in, so a first-run user
            does not have to press Save and then Sign in in the right order. */
         try {
-          auth.saveConfig({
+          settings = auth.saveConfig({
             backendUrl: backendInput ? backendInput.value : '',
             clientId: clientInput ? clientInput.value : ''
           });
         } catch (error) {
           status(error.message, 'error');
+          revealConnection(true);
           return;
         }
 
@@ -134,6 +150,8 @@
             return;
           }
           status((error && error.message) || 'Sign-in failed.', 'error');
+          // Sign-in failure is the only time these values are worth showing.
+          revealConnection(true);
         }).then(function () {
           signIn.disabled = false;
         }, function () {
@@ -161,11 +179,12 @@
       savePrefs({ provider: provider.value });
       if (provider.value !== 'synap') return;
       try {
-        auth.saveConfig({
+        settings = auth.saveConfig({
           backendUrl: backendInput ? backendInput.value : '',
           clientId: clientInput ? clientInput.value : ''
         });
         if (root.SynapBackend) root.SynapBackend.mirrorEndpoints();
+        revealConnection(false);
       } catch (error) {
         status(error.message, 'error');
       }

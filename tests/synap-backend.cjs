@@ -393,6 +393,19 @@ test('a paused queue aborts polling instead of holding a job open', () => {
   assert.match(backendSource, /aborted\.name = 'AbortError'/);
 });
 
+test('deployment configuration is hidden from users when the build ships defaults', () => {
+  // A backend URL and an OAuth client ID are deployment configuration. Asking a
+  // person to paste them is a setup bug, not a setting.
+  assert.match(uiSource, /connection\.hidden = configured && !force/);
+  assert.match(uiSource, /Boolean\(settings\.backendUrl && settings\.clientId\)/);
+  assert.match(html, /id="synapConnectionDetails"/);
+});
+
+test('the connection panel reappears when sign-in fails or config is missing', () => {
+  // Hiding it must not strand a fork or a self-hosted backend with no way in.
+  assert.match(uiSource, /revealConnection\(true\)/);
+});
+
 test('an unset provider preference is written down as the cloud default', () => {
   // ai-providers.js defaults an unset preference to 'openai' and would then
   // intercept every job looking for a key this build no longer asks for.
