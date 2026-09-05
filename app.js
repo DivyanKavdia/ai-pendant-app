@@ -1345,6 +1345,10 @@ const APP_REVISION = "1.0.0-audio2";
       finalizing = false;
       if (saveError) {
         setAppState("error", "Audio is still in memory. Download it before reloading.");
+      } else if (document.body.dataset.synapPowerState === "deep-sleep") {
+        setAppState("deep-sleep", "Tap the pendant once to wake it.");
+      } else if (deviceStatus.state === DEVICE_STATE.STANDBY && isGattConnected()) {
+        setAppState("standby");
       } else if (!isGattConnected()) {
         setAppState("disconnected");
       } else if (deviceStatus.state === DEVICE_STATE.CONNECTED_IDLE &&

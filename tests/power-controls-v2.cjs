@@ -18,6 +18,8 @@ assert.match(app,/nextState === "deep-sleep"/);
 assert.match(app,/deviceStatus\.state === DEVICE_STATE\.STANDBY/);
 assert.match(app,/dataset\.synapPowerState === "deep-sleep"/);
 assert.match(app,/deepSleep \? "deep-sleep" : "disconnected"/);
+assert.match(app,/dataset\.synapPowerState === "deep-sleep"[\s\S]*?setAppState\("deep-sleep"/,'recording finalization must preserve intentional deep sleep');
+assert.match(app,/DEVICE_STATE\.STANDBY && isGattConnected\(\)[\s\S]*?setAppState\("standby"/,'recording finalization must preserve BLE standby');
 
 assert.match(power,/CMD_STANDBY=0x03/);
 assert.match(power,/CMD_WAKE=0x04/);
