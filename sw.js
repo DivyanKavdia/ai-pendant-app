@@ -1,7 +1,7 @@
 /* Synap production service worker: network-first code, resilient offline shell. */
 const APP_VERSION='1.0.0';
 /* app.js owns the client compatibility revision used for update signalling. */
-const CLIENT_REVISION='1.0.0-audio3';
+const CLIENT_REVISION='1.0.0-audio2';
 /* Protocol-v3 ADPCM transport + recording controls/export responsiveness. */
 const CACHE_REVISION='1.0.0-shell23-adpcm-audio';
 const CACHE_NAME=`synap-pwa-${CACHE_REVISION}`;
