@@ -36,6 +36,8 @@ fi
 
 echo "==> Enabling the APIs needed to build and push"
 gcloud services enable \
+  cloudresourcemanager.googleapis.com \
+  serviceusage.googleapis.com \
   artifactregistry.googleapis.com \
   cloudbuild.googleapis.com \
   run.googleapis.com \

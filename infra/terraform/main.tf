@@ -30,6 +30,10 @@ provider "google" {
 
 locals {
   services = [
+    # Terraform's project IAM and service resources call through the Resource
+    # Manager and Service Usage APIs. Omitting them fails the first apply on a
+    # fresh project with an accessNotConfigured error that names an unrelated
+    # resource, so they are enabled before anything that depends on them.
     "cloudresourcemanager.googleapis.com",
     "serviceusage.googleapis.com",
     "run.googleapis.com",
