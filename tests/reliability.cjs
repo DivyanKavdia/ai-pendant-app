@@ -31,7 +31,7 @@ test('PWA receives explicit app-owned GATT service for dedicated EVENT telemetry
   const events=fs.readFileSync(path.join(root,'event-channel.js'),'utf8');
   const identity=fs.readFileSync(path.join(root,'device-identity.js'),'utf8');
   const memoryFix=fs.readFileSync(path.join(root,'memory-ui-fix.js'),'utf8');
-  assert.match(sw,/CACHE_REVISION='1\.0\.0-shell25-bluefy-direct-audio'/);
+  assert.match(sw,/CACHE_REVISION='1\.0\.0-shell26-end-to-end-audio'/);
   assert.match(sw,/\.\/battery-v2-ui\.js/);
   assert.match(sw,/\.\/event-channel\.js/);
   assert.match(sw,/\.\/audio-codec-v3\.js/);
@@ -39,7 +39,7 @@ test('PWA receives explicit app-owned GATT service for dedicated EVENT telemetry
   assert.match(identity,/synap-gatt-service-ready/);
   assert.match(events,/EVENT_UUID='4fa1234e-0000-1000-8000-00805f9b34fb'/);
   assert.match(events,/CONTROL_UUID='4fa12347-0000-1000-8000-00805f9b34fb'/);
-  assert.match(events,/audio-codec-v3\.js\?v=1\.0\.0-adpcm1/);
+  assert.doesNotMatch(events,/script\.src=['"]audio-codec-v3/);
   assert.match(events,/SynapAudioCodecV3\?\.install/);
   assert.match(events,/synap-gatt-service-ready/);
   assert.match(events,/getCharacteristic\(EVENT_UUID\)/);
@@ -65,11 +65,12 @@ test('protocol-v3 compressed audio preserves the existing PCM journal contract',
   assert.match(bridge,/COMPRESSED_VERSION=3/);
   assert.match(bridge,/ADPCM_BYTES_PER_FRAME=404/);
   assert.match(bridge,/SYNTHETIC_CHUNKS=4/);
-  assert.match(bridge,/BluetoothRemoteGATTCharacteristic/);
-  assert.match(bridge,/patchService/);
-  assert.match(bridge,/patchCharacteristic/);
+  assert.match(bridge,/normalizePacket/);
+  assert.doesNotMatch(bridge,/BluetoothRemoteGATTCharacteristic|EventTarget|patchService|patchCharacteristic/);
   assert.match(bridge,/packet\[1\]=LEGACY_VERSION/);
-  assert.match(app,/MIN_CHUNKS_PER_FRAME = 4/);
+  assert.match(app,/MIN_CHUNKS_PER_FRAME = 1/);
+  assert.match(app,/MIN_STREAM_MTU = 32/);
+  assert.match(app,/SynapAudioCodecV3\?\.normalizePacket/);
   assert.match(app,/MAX_AUDIO_PAYLOAD_BYTES = 500/);
   assert.match(app,/payloadLength > MAX_AUDIO_PAYLOAD_BYTES/);
   assert.match(app,/journal\.append\(currentRecordingId/);
