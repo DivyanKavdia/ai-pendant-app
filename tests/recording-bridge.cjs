@@ -18,11 +18,11 @@ assert.match(source, /start\.click\(\)/, 'hardware STREAMING state opens the bro
 assert.match(source, /stop\.click\(\)/, 'long capture performs a controlled rollover');
 assert.match(source, /continuousGroupId/);
 assert.match(source, /continuousPart/);
-assert.match(source, /Touch: hold ~1s to start · deliberate tap to stop · hold to remember/);
-assert.match(theme, /recording-bridge\.js\?v=1\.0\.0-touch2/);
+assert.match(source, /Touch: hold 2s to start · double tap to stop · hold 5s to sleep\/wake/);
+assert.match(theme, /recording-bridge\.js\?v=1\.0\.0-touch3/);
 assert.match(worker, /\.\/recording-bridge\.js/);
 assert.match(ai, /continuousContext/);
 assert.match(ai, /one continuous conversation/);
 assert.match(ai, /continuous-45m-parts-30s-stt-5m-blocks-final/);
 
-console.log('PASS: hardware-start journal adoption, hardened touch copy, 45-minute rollover, linked parts and continuous AI consolidation.');
+console.log('PASS: hardware-start journal adoption, touch3 copy, 45-minute rollover, linked parts and continuous AI consolidation.');
