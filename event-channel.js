@@ -6,17 +6,7 @@
 const EVENT_UUID='4fa1234e-0000-1000-8000-00805f9b34fb';
 const CONTROL_UUID='4fa12347-0000-1000-8000-00805f9b34fb';
 let characteristic=null,serviceHint=root.__synapGattService||null,mode='none',attachTimer=0,attachEpoch=0,lastPacket=null;
-function loadAudioCodec(){
-  if(root.SynapAudioCodecV3){root.SynapAudioCodecV3.install();return}
-  if(typeof document==='undefined'||document.querySelector('script[data-synap-audio-codec]'))return;
-  const script=document.createElement('script');
-  script.src='audio-codec-v3.js?v=1.0.0-adpcm1';
-  script.async=false;
-  script.dataset.synapAudioCodec='1';
-  script.onload=()=>root.SynapAudioCodecV3?.install();
-  script.onerror=()=>console.error('[synap audio] failed to load protocol-v3 decoder');
-  document.head.appendChild(script);
-}
+function loadAudioCodec(){root.SynapAudioCodecV3?.install?.();}
 function packetBytes(value){try{return Array.from(new Uint8Array(value.buffer,value.byteOffset,value.byteLength)).map(b=>b.toString(16).padStart(2,'0')).join(' ')}catch(_){return''}}
 function inspect(event,source){
   try{
