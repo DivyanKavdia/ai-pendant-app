@@ -14,3 +14,11 @@ node_modules/
 !.env.example
 *.log
 .DS_Store
+
+# Backend build output and Terraform state. State can carry resource metadata;
+# keep it in a remote backend, never in the repo.
+backend/dist/
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/*.tfvars

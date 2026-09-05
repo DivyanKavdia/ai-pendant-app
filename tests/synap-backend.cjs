@@ -1,0 +1,401 @@
+/* Synap backend provider and Google Sign-In regressions.
+ *
+ * These run in the same dependency-free style as the rest of tests/: the module
+ * source is evaluated in a VM with a hand-built browser surface, so there is no
+ * network, no real Google and no real backend involved.
+ */
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+
+const root = path.join(__dirname, '..');
+const authSource = fs.readFileSync(path.join(root, 'google-auth.js'), 'utf8');
+const backendSource = fs.readFileSync(path.join(root, 'synap-backend.js'), 'utf8');
+const uiSource = fs.readFileSync(path.join(root, 'synap-account-ui.js'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
+
+function storage(initial) {
+  const map = new Map(Object.entries(initial || {}));
+  return {
+    getItem: (key) => (map.has(key) ? map.get(key) : null),
+    setItem: (key, value) => map.set(key, String(value)),
+    removeItem: (key) => map.delete(key),
+    _map: map,
+  };
+}
+
+/** Minimal browser context: no document, so the DOM-binding paths stay inert. */
+function load(source, overrides) {
+  const context = Object.assign(
+    {
+      console,
+      Date,
+      JSON,
+      Error,
+      Set,
+      Map,
+      Promise,
+      URL,
+      Object,
+      Array,
+      String,
+      Number,
+      Boolean,
+      Math,
+      Intl,
+      setTimeout,
+      clearTimeout,
+      AbortController,
+      localStorage: storage(),
+    },
+    overrides || {},
+  );
+  context.globalThis = context;
+  vm.createContext(context);
+  vm.runInContext(source, context);
+  return context;
+}
+
+test('the shell loads auth and the backend provider, and caches them offline', () => {
+  assert.match(html, /src="google-auth\.js/);
+  assert.match(html, /src="synap-backend\.js/);
+  assert.match(html, /src="synap-account-ui\.js/);
+  assert.match(sw, /\.\/google-auth\.js/);
+  assert.match(sw, /\.\/synap-backend\.js/);
+  assert.match(sw, /\.\/synap-account-ui\.js/);
+  // Bumping the shell revision is what actually ships the new files to
+  // installed clients; forgetting it is the classic silent no-op deploy.
+  assert.match(sw, /CACHE_REVISION='1\.0\.0-shell28-gemini-brain'/);
+});
+
+test('the settings form offers the encrypted cloud provider and a sign-in control', () => {
+  assert.match(html, /id="providerInput"/);
+  assert.match(html, /value="synap"/);
+  assert.match(html, /id="synapSignInButton"/);
+  assert.match(html, /id="synapBackendUrlInput"/);
+  assert.match(html, /id="synapClientIdInput"/);
+});
+
+test('no provider API key is ever requested for the cloud path', () => {
+  // The whole point of the backend is that the model key lives in Secret
+  // Manager. If a Gemini key appears in a browser file, that has been undone.
+  for (const source of [authSource, backendSource, uiSource]) {
+    assert.doesNotMatch(source, /generativelanguage\.googleapis\.com/);
+    assert.doesNotMatch(source, /x-goog-api-key/i);
+    assert.doesNotMatch(source, /AIza/);
+  }
+});
+
+test('auth exposes the session surface the processor depends on', () => {
+  const context = load(authSource);
+  const auth = context.SynapAuth;
+  assert.ok(auth, 'SynapAuth export');
+  for (const method of ['signIn', 'signOut', 'refresh', 'accessToken', 'authedFetch', 'session']) {
+    assert.equal(typeof auth[method], 'function', `${method} is exported`);
+  }
+});
+
+test('no stored session means not signed in', () => {
+  const context = load(authSource);
+  assert.equal(context.SynapAuth.isSignedIn(), false);
+});
+
+test('a stored refresh token counts as signed in', () => {
+  const context = load(authSource, {
+    localStorage: storage({
+      'synap-auth-session-v1': JSON.stringify({ refreshToken: 'r', accessToken: 'a', expiresAt: 0 }),
+    }),
+  });
+  assert.equal(context.SynapAuth.isSignedIn(), true);
+});
+
+test('a plaintext backend URL is refused', () => {
+  const context = load(authSource);
+  assert.throws(
+    () => context.SynapAuth.saveConfig({ backendUrl: 'http://example.test', clientId: 'x' }),
+    /HTTPS/,
+  );
+});
+
+test('a trailing slash on the backend URL is normalized away', () => {
+  const context = load(authSource);
+  const saved = context.SynapAuth.saveConfig({
+    backendUrl: 'https://api.example.test/',
+    clientId: 'abc.apps.googleusercontent.com',
+  });
+  assert.equal(saved.backendUrl, 'https://api.example.test');
+});
+
+test('a valid access token is reused rather than refreshed on every call', async () => {
+  const context = load(authSource, {
+    localStorage: storage({
+      'synap-auth-session-v1': JSON.stringify({
+        refreshToken: 'r',
+        accessToken: 'still-good',
+        expiresAt: Date.now() + 600000,
+      }),
+    }),
+    fetch: () => {
+      throw new Error('must not call the network for a live token');
+    },
+  });
+  assert.equal(await context.SynapAuth.accessToken(), 'still-good');
+});
+
+test('an expired access token triggers a refresh', async () => {
+  let refreshed = 0;
+  const context = load(authSource, {
+    localStorage: storage({
+      'synap-auth-session-v1': JSON.stringify({
+        refreshToken: 'r',
+        accessToken: 'stale',
+        expiresAt: Date.now() - 1000,
+      }),
+      'synap-backend-config-v1': JSON.stringify({
+        backendUrl: 'https://api.example.test',
+        clientId: 'abc',
+      }),
+    }),
+    fetch: (url) => {
+      assert.match(String(url), /\/v1\/auth\/refresh$/);
+      refreshed += 1;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({ access_token: 'fresh', refresh_token: 'r2', expires_in: 3600 }),
+          ),
+      });
+    },
+  });
+
+  assert.equal(await context.SynapAuth.accessToken(), 'fresh');
+  assert.equal(refreshed, 1);
+});
+
+test('concurrent refreshes collapse into one network call', async () => {
+  let calls = 0;
+  const context = load(authSource, {
+    localStorage: storage({
+      'synap-auth-session-v1': JSON.stringify({
+        refreshToken: 'r',
+        accessToken: 'stale',
+        expiresAt: Date.now() - 1000,
+      }),
+      'synap-backend-config-v1': JSON.stringify({ backendUrl: 'https://api.example.test' }),
+    }),
+    fetch: () => {
+      calls += 1;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({ access_token: 'fresh', refresh_token: 'r2', expires_in: 3600 }),
+          ),
+      });
+    },
+  });
+
+  // The queue runs several jobs at once; a burst of refreshes would otherwise
+  // rotate refresh tokens out from under each other.
+  await Promise.all([
+    context.SynapAuth.refresh(),
+    context.SynapAuth.refresh(),
+    context.SynapAuth.refresh(),
+  ]);
+  assert.equal(calls, 1);
+});
+
+test('a revoked refresh token clears the session instead of retrying forever', async () => {
+  const store = storage({
+    'synap-auth-session-v1': JSON.stringify({ refreshToken: 'revoked', expiresAt: 0 }),
+    'synap-backend-config-v1': JSON.stringify({ backendUrl: 'https://api.example.test' }),
+  });
+  const context = load(authSource, {
+    localStorage: store,
+    fetch: () =>
+      Promise.resolve({
+        ok: false,
+        status: 401,
+        text: () => Promise.resolve(JSON.stringify({ error: { code: 'token_revoked' } })),
+      }),
+  });
+
+  await assert.rejects(() => context.SynapAuth.refresh());
+  assert.equal(store.getItem('synap-auth-session-v1'), null);
+  assert.equal(context.SynapAuth.isSignedIn(), false);
+});
+
+test('the backend provider only intercepts jobs when it is the selected provider', () => {
+  class Processor {
+    async process() {
+      return { from: 'original' };
+    }
+  }
+  const context = load(backendSource, {
+    DKFIFOProcessor: Processor,
+    localStorage: storage({ 'synap-ai-provider-settings': JSON.stringify({ provider: 'openai' }) }),
+  });
+  context.SynapBackend.patchProcessor();
+
+  const processor = new Processor();
+  processor.controllers = new Map();
+  return processor.process({ kind: 'transcribe' }, {}, '').then((result) => {
+    assert.deepEqual(result, { from: 'original' });
+  });
+});
+
+test('the provider refuses to run while signed out, and does not retry', async () => {
+  class Processor {
+    async process() {
+      return { from: 'original' };
+    }
+  }
+  const context = load(backendSource, {
+    DKFIFOProcessor: Processor,
+    localStorage: storage({ 'synap-ai-provider-settings': JSON.stringify({ provider: 'synap' }) }),
+    SynapAuth: { isSignedIn: () => false, config: () => ({ backendUrl: '' }) },
+  });
+  context.SynapBackend.patchProcessor();
+
+  const processor = new Processor();
+  processor.controllers = new Map();
+  await assert.rejects(
+    () => processor.process({ kind: 'transcribe', id: 1 }, {}, ''),
+    (error) => {
+      assert.match(error.message, /Sign in/);
+      // A signed-out queue must stop and ask, not burn five retries first.
+      assert.equal(error.retryable, false);
+      return true;
+    },
+  );
+});
+
+test('patching twice does not stack wrappers', () => {
+  class Processor {
+    async process() {
+      return { from: 'original' };
+    }
+  }
+  const context = load(backendSource, {
+    DKFIFOProcessor: Processor,
+    localStorage: storage(),
+  });
+  context.SynapBackend.patchProcessor();
+  const once = Processor.prototype.process;
+  context.SynapBackend.patchProcessor();
+  assert.equal(Processor.prototype.process, once);
+});
+
+test('structured memory maps onto the fields the library already renders', () => {
+  const context = load(backendSource, { localStorage: storage() });
+  const fields = context.SynapBackend.toRecordingFields({
+    title: 'Launch planning',
+    executive_summary: 'The team settled the launch date.',
+    key_points: ['Launch moves to Friday'],
+    people: [{ name: 'Ankit', role: 'colleague' }],
+    conversations: [
+      {
+        title: 'Launch planning',
+        decisions: [{ text: 'Launch on Friday' }],
+        action_items: [{ task: 'Send the deck', owner: 'self', due_date: '2026-09-05' }],
+        follow_ups: [{ text: 'Check legal approval' }],
+      },
+    ],
+  });
+
+  assert.equal(fields.name, 'Launch planning');
+  assert.equal(fields.processingState, 'done');
+  assert.equal(fields.provider, 'synap');
+  assert.match(fields.summary, /The team settled the launch date\./);
+  assert.match(fields.summary, /Decisions/);
+  assert.match(fields.summary, /• Launch on Friday/);
+  assert.match(fields.summary, /• Send the deck — self · 2026-09-05/);
+  assert.match(fields.summary, /Check legal approval/);
+  assert.equal(fields.people.length, 1);
+});
+
+test('a memory with no conversations still produces a usable summary', () => {
+  const context = load(backendSource, { localStorage: storage() });
+  const fields = context.SynapBackend.toRecordingFields({
+    title: 'Quiet morning',
+    executive_summary: 'Nothing was decided.',
+    key_points: [],
+    people: [],
+    conversations: [],
+  });
+  assert.equal(fields.summary, 'Nothing was decided.');
+});
+
+test('endpoint mirroring satisfies the queue guard without asking for a paste', () => {
+  const store = storage({
+    'synap-ai-provider-settings': JSON.stringify({ provider: 'synap' }),
+    'dk-pendant-settings': JSON.stringify({ autoProcess: true }),
+  });
+  const context = load(backendSource, {
+    localStorage: store,
+    SynapAuth: {
+      isSignedIn: () => true,
+      config: () => ({ backendUrl: 'https://api.example.test' }),
+    },
+  });
+  context.SynapBackend.mirrorEndpoints();
+
+  const settings = JSON.parse(store.getItem('dk-pendant-settings'));
+  // The FIFO queue refuses to start a job with a blank endpoint, and both must
+  // be HTTPS or app.js rejects them on save.
+  assert.equal(settings.endpoint, 'https://api.example.test/v1/recordings');
+  assert.equal(settings.llmEndpoint, 'https://api.example.test/v1/recordings');
+  assert.equal(settings.autoProcess, true);
+});
+
+test('mirroring does nothing when the cloud provider is not selected', () => {
+  const store = storage({
+    'synap-ai-provider-settings': JSON.stringify({ provider: 'custom' }),
+    'dk-pendant-settings': JSON.stringify({ endpoint: 'https://mine.example.test' }),
+  });
+  const context = load(backendSource, {
+    localStorage: store,
+    SynapAuth: { config: () => ({ backendUrl: 'https://api.example.test' }) },
+  });
+  context.SynapBackend.mirrorEndpoints();
+  assert.equal(JSON.parse(store.getItem('dk-pendant-settings')).endpoint, 'https://mine.example.test');
+});
+
+test('the backend read helpers cover the second-brain surface', () => {
+  const context = load(backendSource, { localStorage: storage() });
+  for (const method of ['ask', 'dailyBrief', 'people', 'followUps', 'resolveFollowUp', 'confirmPerson']) {
+    assert.equal(typeof context.SynapBackend[method], 'function', `${method} is exported`);
+  }
+});
+
+test('consolidate is given a longer budget than an upload', () => {
+  // A 45-minute capture takes minutes to transcribe and understand; the queue's
+  // own 120s ceiling is right for an upload and would abort every consolidation.
+  assert.match(backendSource, /PROCESSING_TIMEOUT_MS\s*=\s*900000/);
+  assert.match(backendSource, /UPLOAD_TIMEOUT_MS\s*=\s*120000/);
+  assert.match(backendSource, /job\.kind === 'consolidate' \? PROCESSING_TIMEOUT_MS : UPLOAD_TIMEOUT_MS/);
+});
+
+test('uploads are idempotent and content-addressed', () => {
+  assert.match(backendSource, /X-Synap-Sha256/);
+  assert.match(backendSource, /'Idempotency-Key': 'create:'/);
+  assert.match(backendSource, /idempotencyKey\(job, 'finalize'\)/);
+});
+
+test('a paused queue aborts polling instead of holding a job open', () => {
+  assert.match(backendSource, /processor\.paused \|\| !processor\.canRun\(\)/);
+  assert.match(backendSource, /aborted\.name = 'AbortError'/);
+});
+
+test('an unset provider preference is written down as the cloud default', () => {
+  // ai-providers.js defaults an unset preference to 'openai' and would then
+  // intercept every job looking for a key this build no longer asks for.
+  assert.match(uiSource, /stored !== 'synap' && stored !== 'openai' && stored !== 'custom'/);
+  assert.match(uiSource, /stored = 'synap';\s*\n\s*savePrefs\(\{ provider: stored \}\);/);
+});

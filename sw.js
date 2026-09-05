@@ -2,14 +2,15 @@
 const APP_VERSION='1.0.0';
 /* app.js owns the client compatibility revision used for update signalling. */
 const CLIENT_REVISION='1.0.0-audio2';
-/* Touch guidance aligned with the 2s start / double-tap stop / 5s sleep-wake firmware. */
-const CACHE_REVISION='1.0.0-shell27-touch3';
+/* Adds Google Sign-In and the Synap backend memory provider to the touch-aligned shell. */
+const CACHE_REVISION='1.0.0-shell28-gemini-brain';
 const CACHE_NAME=`synap-pwa-${CACHE_REVISION}`;
 const APP_SHELL=[
   './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css','./settings-icon-fix.css',
   './touch-event-bridge.js','./battery-v2-ui.js','./event-channel.js','./audio-codec-v3.js','./battery-popover-fix.js','./memory-ui-fix.js','./device-identity.js','./audio-store.js','./ota.js','./releases.js',
   './app.js','./enhancements.js','./capture-ui.js','./brain-ui.js','./product-ui.js','./runtime-ui.js',
-  './ai-providers.js','./recording-bridge.js','./manifest.webmanifest','./logo.webp','./icon.svg','./icon-192.png','./icon-512.png'
+  './ai-providers.js','./recording-bridge.js','./manifest.webmanifest','./logo.webp','./icon.svg','./icon-192.png','./icon-512.png',
+  './google-auth.js','./synap-backend.js','./synap-account-ui.js'
 ];
 const SCOPE=self.registration?.scope||'https://local.invalid/';
 const ORIGIN=self.location?.origin||new URL(SCOPE).origin;

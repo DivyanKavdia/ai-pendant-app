@@ -16,3 +16,21 @@ jobs:
           node-version: 22
       - run: |
           for test_file in tests/*.cjs; do node "$test_file"; done
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      # Unit tests only. The envelope, memory validation and answer grounding
+      # are pure functions; nothing here reaches GCP, Gemini or the network.
+      - run: npm test

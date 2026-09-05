@@ -1,0 +1,255 @@
+/**
+ * The read side of the second brain: the daily brief, people, the follow-up
+ * inbox and Ask Synap.
+ */
+
+import { Router } from 'express';
+import { z } from 'zod';
+import { config } from '../../config.js';
+import { openJson } from '../../crypto/envelope.js';
+import { answerFromEvidence, parseQuery, type Evidence } from '../../gemini/ask.js';
+import { embedContent } from '../../gemini/client.js';
+import { readDay, rebuildDay } from '../../pipeline/brief.js';
+import { binding } from '../../pipeline/process.js';
+import * as db from '../../store/firestore.js';
+import type { ConversationDoc } from '../../store/types.js';
+import { nameKey, normalizeName, topicKey } from '../../util/ids.js';
+import { requireAuth, type AuthedRequest } from '../auth.js';
+import { HttpError, handler } from '../errors.js';
+
+const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+const askBody = z.object({
+  query: z.string().min(1).max(1000),
+  scope: z
+    .object({
+      from: z.string().regex(DAY_PATTERN).nullable().optional(),
+      to: z.string().regex(DAY_PATTERN).nullable().optional(),
+      people: z.array(z.string()).max(10).optional(),
+      topics: z.array(z.string()).max(10).optional(),
+    })
+    .optional(),
+  max_sources: z.number().int().min(1).max(20).optional(),
+});
+
+const patchFollowUpBody = z.object({
+  state: z.enum(['open', 'done', 'dismissed']).optional(),
+  due_date: z.string().regex(DAY_PATTERN).nullable().optional(),
+});
+
+const patchPersonBody = z.object({
+  confirmed: z.boolean().optional(),
+});
+
+export function brainRoutes(): Router {
+  const router = Router();
+  router.use(requireAuth());
+
+  // -------------------------------------------------------------------------
+  // Daily brief
+  // -------------------------------------------------------------------------
+  router.get(
+    '/days/:day/brief',
+    handler<AuthedRequest>(async (req, res) => {
+      const day = String(req.params.day);
+      if (!DAY_PATTERN.test(day)) throw new HttpError(400, 'bad_request', 'Day must be YYYY-MM-DD');
+
+      let brief = await readDay(req.uid, day, req.dek);
+      if (!brief) brief = await rebuildDay(req.uid, day, req.dek);
+
+      const recordings = await db.listRecordingsByDay(req.uid, day);
+      res.status(200).json({
+        day,
+        ...brief,
+        recording_count: recordings.length,
+        pending: recordings.filter((recording) => recording.state !== 'ready').length,
+      });
+    }),
+  );
+
+  router.post(
+    '/days/:day/brief/rebuild',
+    handler<AuthedRequest>(async (req, res) => {
+      const day = String(req.params.day);
+      if (!DAY_PATTERN.test(day)) throw new HttpError(400, 'bad_request', 'Day must be YYYY-MM-DD');
+      res.status(200).json({ day, ...(await rebuildDay(req.uid, day, req.dek)) });
+    }),
+  );
+
+  // -------------------------------------------------------------------------
+  // People
+  // -------------------------------------------------------------------------
+  router.get(
+    '/people',
+    handler<AuthedRequest>(async (req, res) => {
+      const people = await db.listPeople(req.uid);
+      res.status(200).json({
+        people: people.map((person) => {
+          const profile = openJson<{ name: string; role: string; evidence: string; confidence: number }>(
+            req.dek,
+            person.sealedProfile,
+            binding(req.uid, `person/${person.personId}`, 'profile'),
+          );
+          return {
+            person_id: person.personId,
+            name: profile.name,
+            role: profile.role,
+            // The PWA renders model-derived identity differently from
+            // user-confirmed identity; conflating them is how a wrong name
+            // becomes permanent.
+            confirmed_by_user: person.confirmedByUser,
+            confidence: profile.confidence,
+            evidence: profile.evidence,
+            first_seen_at: person.firstSeenAt,
+            last_interaction_at: person.lastInteractionAt,
+            conversation_count: person.conversationCount,
+          };
+        }),
+      });
+    }),
+  );
+
+  router.patch(
+    '/people/:personId',
+    handler<AuthedRequest>(async (req, res) => {
+      const personId = String(req.params.personId);
+      const body = patchPersonBody.safeParse(req.body);
+      if (!body.success) throw new HttpError(400, 'bad_request', 'Invalid person patch');
+
+      const person = await db.getPerson(req.uid, personId);
+      if (!person) throw new HttpError(404, 'not_found', 'Unknown person');
+
+      await db.putPerson(req.uid, {
+        ...person,
+        confirmedByUser: body.data.confirmed ?? person.confirmedByUser,
+      });
+      res.status(200).json({ person_id: personId, confirmed_by_user: body.data.confirmed });
+    }),
+  );
+
+  // -------------------------------------------------------------------------
+  // Follow-up inbox
+  // -------------------------------------------------------------------------
+  router.get(
+    '/follow-ups',
+    handler<AuthedRequest>(async (req, res) => {
+      const state = (String(req.query.state ?? 'open') as 'open' | 'done' | 'dismissed' | 'all');
+      const owner = String(req.query.owner ?? 'all') as 'self' | 'other' | 'all';
+      const items = await db.listFollowUps(req.uid, state, owner);
+
+      res.status(200).json({
+        follow_ups: items.map((item) => {
+          const task = openJson<{ task: string; owner: string }>(
+            req.dek,
+            item.sealedTask,
+            binding(req.uid, `followUp/${item.followUpId}`, 'task'),
+          );
+          return {
+            id: item.followUpId,
+            task: task.task,
+            owner: {
+              type: item.ownerType,
+              person_id: item.counterpartyPersonId,
+              display_name: item.ownerType === 'self' ? 'Me' : task.owner,
+            },
+            due_date: item.dueDate,
+            state: item.state,
+            source: {
+              recording_id: item.recordingId,
+              conversation_id: item.conversationId,
+              start_ms: item.startMs,
+            },
+          };
+        }),
+      });
+    }),
+  );
+
+  router.patch(
+    '/follow-ups/:followUpId',
+    handler<AuthedRequest>(async (req, res) => {
+      const body = patchFollowUpBody.safeParse(req.body);
+      if (!body.success) throw new HttpError(400, 'bad_request', 'Invalid follow-up patch');
+      const followUpId = String(req.params.followUpId);
+      await db.patchFollowUp(req.uid, followUpId, {
+        ...(body.data.state ? { state: body.data.state } : {}),
+        ...(body.data.due_date !== undefined ? { dueDate: body.data.due_date } : {}),
+      });
+      res.status(200).json({ id: followUpId, ...body.data });
+    }),
+  );
+
+  // -------------------------------------------------------------------------
+  // Ask Synap
+  // -------------------------------------------------------------------------
+  router.post(
+    '/ask',
+    handler<AuthedRequest>(async (req, res) => {
+      const body = askBody.safeParse(req.body);
+      if (!body.success) throw new HttpError(400, 'bad_request', 'query is required');
+
+      const { query, scope = {}, max_sources } = body.data;
+      const limit = Math.min(max_sources ?? config.limits.maxAskSources, 20);
+      const today = new Date().toISOString().slice(0, 10);
+
+      // Structured filters first, semantic search second. Filtering before the
+      // KNN stage is what keeps "what did Ankit say last week" from scanning a
+      // year of vectors.
+      const parsed = await parseQuery(query, today);
+      const peopleNames = [...(scope.people ?? []), ...parsed.people];
+      const personIds: string[] = [];
+      for (const name of peopleNames) {
+        const person = await db.findPersonByNameKey(req.uid, nameKey(req.dek, name));
+        if (person) personIds.push(person.personId);
+      }
+
+      const retrieval = {
+        from: scope.from ?? parsed.from,
+        to: scope.to ?? parsed.to,
+        personIds,
+        topicKeys: [...(scope.topics ?? []), ...parsed.topics].map(topicKey).filter(Boolean),
+      };
+
+      let conversations: ConversationDoc[] = [];
+      try {
+        const vector = await embedContent(query, 'RETRIEVAL_QUERY');
+        // Over-fetch so post-filtering still leaves enough evidence to answer.
+        conversations = await db.findNearestConversations(req.uid, vector, limit * 2, retrieval);
+      } catch {
+        conversations = await db.recentConversations(req.uid, limit * 2, retrieval);
+      }
+
+      const evidence: Evidence[] = conversations.slice(0, limit * 2).map((conversation) => {
+        const content = openJson<{ title: string; summary: string; topics: string[] }>(
+          req.dek,
+          conversation.sealedContent,
+          binding(req.uid, `conversation/${conversation.conversationId}`, 'content'),
+        );
+        return {
+          recordingId: conversation.recordingId,
+          conversationId: conversation.conversationId,
+          startMs: conversation.startMs,
+          endMs: conversation.endMs,
+          day: conversation.day,
+          title: content.title,
+          summary: content.summary,
+        };
+      });
+
+      const answer = await answerFromEvidence(query, evidence);
+      res.status(200).json({
+        ...answer,
+        // Surfacing what was searched makes an unhelpful answer debuggable
+        // rather than mysterious.
+        searched: {
+          conversations: evidence.length,
+          from: retrieval.from,
+          to: retrieval.to,
+          people: peopleNames.map(normalizeName),
+        },
+      });
+    }),
+  );
+
+  return router;
+}

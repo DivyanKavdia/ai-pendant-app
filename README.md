@@ -95,9 +95,30 @@ A September 4 validation run exposed a stale regression-test expectation for an 
 
 ## AI processing and digital twin
 
-Insights provides local memory search across recording names, notes, summaries and transcripts. Selecting a result opens the original recording/date. This is browser-local retrieval, not cloud synchronization.
+Insights provides local memory search across recording names, notes, summaries and transcripts. Selecting a result opens the original recording/date. This is browser-local retrieval and keeps working offline.
 
-AI processing remains browser-controlled through user-configured HTTPS STT/LLM endpoints. Jobs use stable idempotency keys, preserve transcription → segment summary → recording consolidation ordering, isolate permanent failures by recording and recover interrupted `running` jobs to pending state. Firmware OTA pauses AI processing.
+Memory is built in one of two places, chosen in **Settings → Memory & AI**.
+
+### synap cloud (default)
+
+Sealed audio segments are uploaded to the Synap backend in `backend/`, a Cloud Run service that holds the Gemini AI Studio key in Secret Manager and writes encrypted memory to GCP. The PWA never sees a model API key.
+
+The pipeline is `audio → transcript → conversation boundaries → people, decisions, commitments → daily brief → retrieval → grounded answer`:
+
+- **Transcription** uses `gemini-3.5-transcribe` with speaker diarization and word timestamps. It auto-detects across 85+ languages and handles mid-sentence code-switching, which is what Hindi/English capture actually needs. Custom vocabulary is documented as incompatible with diarization and timestamps, so confirmed people names are supplied later, during memory extraction, instead.
+- **Understanding** uses `gemini-3.5-flash` with a strict JSON schema. Every decision, action item and follow-up carries the transcript window it came from; anything without provenance, with an out-of-range timestamp, or owned by a person the model never identified is dropped before it is stored.
+- **Retrieval** embeds conversation summaries with `gemini-embedding-001` and searches them with Firestore vector search, prefiltered by person, topic and date.
+- **Ask Synap** answers only from retrieved evidence and cites by index. An answer citing a source that does not exist is discarded rather than shown, and a question the recordings cannot answer returns an explicit not-found.
+
+Sign-in is Google Identity Services, exchanged once for a Synap session token so a long capture keeps uploading without a re-prompt when the phone locks. Conversation content is sealed with AES-256-GCM under a per-user key wrapped by a Cloud KMS CMEK — see [`docs/ENCRYPTION.md`](docs/ENCRYPTION.md) for what that does and does not protect. Deployment is in [`docs/GCP_DEPLOYMENT.md`](docs/GCP_DEPLOYMENT.md); the API contract is [`docs/BACKEND_AI_STT_ENDPOINT_SPEC.md`](docs/BACKEND_AI_STT_ENDPOINT_SPEC.md).
+
+Audio reaches the backend as decoded PCM from the local segment store, so the pendant's ADPCM transport and protocol version stay entirely below this layer.
+
+### Custom endpoints
+
+The original browser-controlled path over user-configured HTTPS STT/LLM endpoints is unchanged and still selectable.
+
+Either way the local queue is the same: jobs use stable idempotency keys, preserve transcription → segment summary → recording consolidation ordering, isolate permanent failures by recording and recover interrupted `running` jobs to pending state. Firmware OTA pauses AI processing.
 
 ## Diagnostics
 

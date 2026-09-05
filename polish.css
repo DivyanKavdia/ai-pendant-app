@@ -32,6 +32,23 @@ body{font-size:var(--synap-body);-webkit-text-size-adjust:100%;text-size-adjust:
 .firmware-inline progress{grid-column:1/-1;grid-row:2;width:100%!important;height:5px!important;margin:8px 0 0!important}
 .pendant-settings-card:has(#otaProgress:not([hidden])){row-gap:2px!important}
 .processing-fields{gap:13px!important}.processing-fields label{gap:6px!important}
+/* Memory & AI card: account row reads like the pendant row above it. */
+.memory-settings-card{display:grid!important;gap:12px!important}
+.memory-settings-card .memory-provider{display:grid!important;gap:6px!important}
+.synap-account{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;align-items:center!important;column-gap:8px!important;padding:10px 12px!important;border:1px solid var(--border);border-radius:14px;background:var(--surface-2)}
+.synap-account-copy{min-width:0;display:grid;gap:3px}
+.synap-account-copy strong{font-size:14px!important;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.synap-account-copy span{font-size:11.5px!important;line-height:1.35;color:var(--muted);overflow:hidden;text-overflow:ellipsis}
+.synap-account button{width:auto!important;min-width:0!important;min-height:36px!important;padding:7px 12px!important;border-radius:11px!important;font-size:12px!important;white-space:nowrap!important;margin:0!important}
+.synap-gsi-host{display:flex;justify-content:center;padding:4px 0}
+.synap-account-status{margin:0!important;font-size:12px!important;line-height:1.4;color:var(--muted)}
+.synap-account-status[data-kind="error"]{color:var(--danger,#c0392b)}
+.synap-account-status[data-kind="ok"]{color:var(--accent)}
+.synap-connection summary{font-size:13px!important;cursor:pointer}
+.synap-connection .settings-row-body{display:grid;gap:10px;padding-top:10px}
+.synap-connection label{display:grid;gap:6px}
+.settings-hint{margin:0!important;font-size:12px!important;line-height:1.45!important;color:var(--muted)}
+@media(max-width:360px){.synap-account{grid-template-columns:minmax(0,1fr)!important;row-gap:8px!important}.synap-account button{width:100%!important}}
 /* Match the main-page all-white Synap mark in dark mode. */
 :root[data-theme="dark"] .pendant-settings-top .settings-brand-logo{filter:brightness(0) invert(1)!important}
 :root[data-theme="dark"] .pendant-settings-top .settings-device-art.settings-brand-lockup{background:transparent!important;border-color:var(--border)!important}
