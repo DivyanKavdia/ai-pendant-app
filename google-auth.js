@@ -30,7 +30,7 @@
      deploy prints it. */
   var DEFAULTS = {
     clientId: '435475937223-7d2lmg7oc0887tc8psbt8ikgn0jkm62q.apps.googleusercontent.com',
-    backendUrl: ''
+    backendUrl: 'https://synap-backend-435475937223.asia-south1.run.app'
   };
 
   var listeners = [];
