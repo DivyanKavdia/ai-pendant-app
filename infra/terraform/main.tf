@@ -30,6 +30,8 @@ provider "google" {
 
 locals {
   services = [
+    "cloudresourcemanager.googleapis.com",
+    "serviceusage.googleapis.com",
     "run.googleapis.com",
     "firestore.googleapis.com",
     "cloudkms.googleapis.com",
@@ -176,6 +178,10 @@ resource "google_firestore_index" "conversation_vectors" {
       flat {}
     }
   }
+
+  lifecycle {
+    ignore_changes = [fields]
+  }
 }
 
 resource "google_firestore_index" "conversations_by_person" {
@@ -192,6 +198,10 @@ resource "google_firestore_index" "conversations_by_person" {
   fields {
     field_path = "startedAt"
     order      = "DESCENDING"
+  }
+
+  lifecycle {
+    ignore_changes = [fields]
   }
 }
 
@@ -214,6 +224,10 @@ resource "google_firestore_index" "follow_ups" {
   fields {
     field_path = "createdAt"
     order      = "DESCENDING"
+  }
+
+  lifecycle {
+    ignore_changes = [fields]
   }
 }
 
