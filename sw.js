@@ -3,7 +3,7 @@ const APP_VERSION='1.0.0';
 /* app.js owns the client compatibility revision used for update signalling. */
 const CLIENT_REVISION='1.0.0-audio2';
 /* Protocol-v3 ADPCM direct characteristic hook for Bluefy/WebKit. */
-const CACHE_REVISION='1.0.0-shell25-bluefy-direct-audio';
+const CACHE_REVISION='1.0.0-shell26-end-to-end-audio';
 const CACHE_NAME=`synap-pwa-${CACHE_REVISION}`;
 const APP_SHELL=[
   './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css','./settings-icon-fix.css',

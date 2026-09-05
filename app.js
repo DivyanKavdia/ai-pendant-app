@@ -29,7 +29,7 @@ const APP_REVISION = "1.0.0-audio2";
   const DEFAULT_SAMPLE_RATE = 16000;
   // Native protocol-v2 transport. The browser consumes exactly what firmware sends;
   // there is no BLE event rewriting or synthetic re-segmentation layer.
-  const MIN_CHUNKS_PER_FRAME = 4;
+  const MIN_CHUNKS_PER_FRAME = 1;
   const MAX_CHUNKS_PER_FRAME = 20;
   const MAX_AUDIO_PAYLOAD_BYTES = 500;
 
@@ -53,6 +53,9 @@ const APP_REVISION = "1.0.0-audio2";
   const MAX_RECORDING_MS = 50 * 60 * 1000;
   const START_TIMEOUT_MS = 5000;
   const COMMAND_TIMEOUT_MS = 3500;
+  const MIN_STREAM_MTU = 32;
+  const AUDIO_STALL_TIMEOUT_MS = 12000;
+  const FOREGROUND_STALL_GRACE_MS = 3000;
   const INCOMPLETE_FRAME_TIMEOUT_MS = 900;
   const MAX_AUTO_RECONNECT_ATTEMPTS = 3;
 
@@ -183,6 +186,7 @@ const APP_REVISION = "1.0.0-audio2";
   let lastObservedSequence = null;
   let lastFrameCleanupAt = 0;
   let lastAudioAt = 0;
+  let foregroundAt = performance.now();
 
   let sessionStats = createEmptyStats();
   let levelHistory = [];
@@ -588,7 +592,12 @@ const APP_REVISION = "1.0.0-audio2";
       else { manualDisconnect = false;recoverRememberedConnection("preference-enabled", true); }
     });
     document.addEventListener("visibilitychange", function () {
-      if (document.visibilityState === "visible") recoverRememberedConnection("foreground", false);
+      if (document.visibilityState !== "visible") return;
+      foregroundAt = performance.now();
+      recoverRememberedConnection("foreground", false);
+      if (isGattConnected() && !connectInProgress && !firmwareBusy && !finalizing) {
+        readControlStatus().then(ok=>{if(ok) log("Foreground pendant status resynchronised");});
+      }
     });
     window.addEventListener("pageshow", function (event) {
       if (event.persisted) recoverRememberedConnection("page-restored", false);
@@ -1044,7 +1053,7 @@ const APP_REVISION = "1.0.0-audio2";
       return false;
     }
     if (receivedStatus.state === DEVICE_STATE.STREAMING &&
-        (receivedStatus.mtu < 91 || receivedStatus.chunksPerFrame < MIN_CHUNKS_PER_FRAME ||
+        (receivedStatus.mtu < MIN_STREAM_MTU || receivedStatus.chunksPerFrame < MIN_CHUNKS_PER_FRAME ||
          receivedStatus.chunksPerFrame > MAX_CHUNKS_PER_FRAME || receivedStatus.payloadBytes < 1 ||
          receivedStatus.payloadBytes > MAX_AUDIO_PAYLOAD_BYTES ||
          receivedStatus.payloadBytes + AUDIO_HEADER_BYTES > receivedStatus.attCapacity)) {
@@ -1178,6 +1187,7 @@ const APP_REVISION = "1.0.0-audio2";
     if (!recordingConfirmed) {
       recordingConfirmed = true;
       recordingStartedAt = performance.now();
+      foregroundAt = recordingStartedAt;
       lastAudioAt = recordingStartedAt;
       clearStartTimeout();
       startTimer();
@@ -1335,8 +1345,15 @@ const APP_REVISION = "1.0.0-audio2";
   // -------------------------------------------------------------------------
 
   function handleAudioNotification(event) {
-    const value = event.target.value;
+    const original = event?.target?.value;
+    const normalizer = globalThis.SynapAudioCodecV3?.normalizePacket;
+    const values = typeof normalizer === "function"
+      ? normalizer(original, event?.target || audioCharacteristic)
+      : [original];
+    for (const value of values) handleNormalizedAudioValue(value);
+  }
 
+  function handleNormalizedAudioValue(value) {
     if (!value || value.byteLength < AUDIO_HEADER_BYTES) {
       sessionStats.invalidPackets += 1;
       return;
@@ -1458,7 +1475,6 @@ const APP_REVISION = "1.0.0-audio2";
       cleanupStaleFrames(false);
     }
   }
-
   function observeSequence(sequence) {
     if (sessionStats.firstSequence === null) {
       sessionStats.firstSequence = sequence;
@@ -1628,9 +1644,14 @@ const APP_REVISION = "1.0.0-audio2";
 
     const elapsed = performance.now() - recordingStartedAt;
     ui.timer.textContent = formatClock(elapsed);
-    if (appState === "recording" && performance.now() - lastAudioAt > 7000) {
-      log("Audio stalled for seven seconds; stopping safely");
-      toast("Audio stopped arriving. Saving what was received.", "error");
+    const now = performance.now();
+    if (appState === "recording" && document.visibilityState === "visible" &&
+        now - foregroundAt > FOREGROUND_STALL_GRACE_MS &&
+        now - lastAudioAt > AUDIO_STALL_TIMEOUT_MS) {
+      log("Audio stalled while foregrounded; stopping safely", {
+        stalledMs: Math.round(now-lastAudioAt), session: recordingSessionId
+      });
+      toast("Audio stream stalled. Saving what was received.", "error");
       stopRecording();
     }
   }
@@ -2370,14 +2391,20 @@ const APP_REVISION = "1.0.0-audio2";
     ui.wakeLockInput.checked = settings.wakeLock;
   }
 
+  function validHttpsEndpoint(value) {
+    if (!value) return true;
+    try { return new URL(value).protocol === "https:"; }
+    catch (_) { return false; }
+  }
+
   function saveSettings() {
     const endpoint = ui.endpointInput.value.trim();
     const llmEndpoint = ui.llmEndpointInput.value.trim();
-    if (llmEndpoint && new URL(llmEndpoint).protocol !== "https:") {
-      toast("Use an HTTPS LLM endpoint.", "error");return false;
+    if (!validHttpsEndpoint(llmEndpoint)) {
+      toast("Use a valid HTTPS LLM endpoint.", "error");return false;
     }
-    if (endpoint && new URL(endpoint).protocol !== "https:") {
-      toast("Use an HTTPS transcription endpoint.", "error");
+    if (!validHttpsEndpoint(endpoint)) {
+      toast("Use a valid HTTPS transcription endpoint.", "error");
       return false;
     }
     settings = {

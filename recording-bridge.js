@@ -172,7 +172,7 @@
     if (key && !document.getElementById('touchControlHint')) {
       const hint = document.createElement('span');
       hint.id = 'touchControlHint';
-      hint.textContent = 'Touch: tap to start/stop · hold to remember';
+      hint.textContent = 'Touch: hold ~1s to start · deliberate tap to stop · hold to remember';
       key.appendChild(hint);
     }
   }
