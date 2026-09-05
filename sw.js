@@ -2,8 +2,8 @@
 const APP_VERSION='1.0.0';
 /* app.js owns the client compatibility revision used for update signalling. */
 const CLIENT_REVISION='1.0.0-audio2';
-/* Recording reliability: hardware-start adoption + TTP223 control semantics. */
-const CACHE_REVISION='1.0.0-shell21-touch-reliability';
+/* Recording controls/export responsiveness + hardware-start/touch reliability. */
+const CACHE_REVISION='1.0.0-shell22-recording-controls';
 const CACHE_NAME=`synap-pwa-${CACHE_REVISION}`;
 const APP_SHELL=[
   './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css','./settings-icon-fix.css',
