@@ -14,5 +14,5 @@ assert.match(runtime,/window\.open\(url,'_blank','noopener'\)/,'iOS fallback mus
 assert.match(runtime,/anchor\.download=name/,'desktop export must keep direct WAV download');
 assert.match(runtime,/touch-action:manipulation/,'tap targets must opt out of delayed double-tap handling');
 assert.match(runtime,/min-height:44px/,'primary controls must meet the minimum mobile tap target');
-assert.match(sw,/shell23-adpcm-audio/,'service worker cache must advance with the compressed audio transport');
+assert.match(sw,/shell24-audio-v3-loader/,'service worker cache must advance with the production audio-v3 loader');
 console.log('runtime recording controls and tap responsiveness: ok');
