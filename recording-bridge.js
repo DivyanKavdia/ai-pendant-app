@@ -137,7 +137,7 @@
   function handleDeviceState() {
     const state = document.body.dataset.deviceState;
     if (state === '2') {
-      // Hardware tap can put the pendant into STREAMING before the browser has
+      // A hardware hold can put the pendant into STREAMING before the browser has
       // opened its journal. Keep trying briefly until the app-side Start action
       // becomes available; firmware START is idempotent so adoption is safe.
       adoptHardwareStream();
@@ -172,7 +172,7 @@
     if (key && !document.getElementById('touchControlHint')) {
       const hint = document.createElement('span');
       hint.id = 'touchControlHint';
-      hint.textContent = 'Touch: hold ~1s to start · deliberate tap to stop · hold to remember';
+      hint.textContent = 'Touch: hold 2s to start · double tap to stop · hold 5s to sleep/wake';
       key.appendChild(hint);
     }
   }
