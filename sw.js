@@ -1,13 +1,13 @@
 /* Synap production service worker: network-first code, resilient offline shell. */
 const APP_VERSION='1.0.0';
 /* app.js owns the client compatibility revision used for update signalling. */
-const CLIENT_REVISION='1.0.0-audio2';
-/* Recording controls/export responsiveness + hardware-start/touch reliability. */
-const CACHE_REVISION='1.0.0-shell22-recording-controls';
+const CLIENT_REVISION='1.0.0-audio3';
+/* Protocol-v3 ADPCM transport + recording controls/export responsiveness. */
+const CACHE_REVISION='1.0.0-shell23-adpcm-audio';
 const CACHE_NAME=`synap-pwa-${CACHE_REVISION}`;
 const APP_SHELL=[
   './','./index.html','./theme.js','./styles.css','./brand.css','./compact.css','./brain.css','./polish.css','./settings-icon-fix.css',
-  './touch-event-bridge.js','./battery-v2-ui.js','./event-channel.js','./battery-popover-fix.js','./memory-ui-fix.js','./device-identity.js','./audio-store.js','./ota.js','./releases.js',
+  './touch-event-bridge.js','./battery-v2-ui.js','./event-channel.js','./audio-codec-v3.js','./battery-popover-fix.js','./memory-ui-fix.js','./device-identity.js','./audio-store.js','./ota.js','./releases.js',
   './app.js','./enhancements.js','./capture-ui.js','./brain-ui.js','./product-ui.js','./runtime-ui.js',
   './ai-providers.js','./recording-bridge.js','./manifest.webmanifest','./logo.webp','./icon.svg','./icon-192.png','./icon-512.png'
 ];
