@@ -114,12 +114,15 @@
 
   function install(){
     if(!root||root.__synapAudioCodecV3Installed)return Boolean(root?.__synapAudioCodecV3Installed);
-    const prototype=root.BluetoothRemoteGATTCharacteristic?.prototype;
+    // Bluefy/WebKit can expose Web Bluetooth instances without exposing the
+    // BluetoothRemoteGATTCharacteristic constructor globally. Patch EventTarget,
+    // which every GATT characteristic inherits, and gate strictly on the audio UUID.
+    const prototype=root.EventTarget?.prototype||root.BluetoothRemoteGATTCharacteristic?.prototype;
     if(!prototype?.addEventListener||!prototype?.removeEventListener)return false;
     root.__synapAudioCodecV3Installed=true;
     const nativeAdd=prototype.addEventListener,nativeRemove=prototype.removeEventListener;
     prototype.addEventListener=function(type,listener,options){
-      if(type!=='characteristicvaluechanged'||String(this.uuid||'').toLowerCase()!==AUDIO_UUID||!listener){
+      if(type!=='characteristicvaluechanged'||String(this?.uuid||'').toLowerCase()!==AUDIO_UUID||!listener){
         return nativeAdd.call(this,type,listener,options);
       }
       let map=listenerMaps.get(this);if(!map){map=new Map();listenerMaps.set(this,map)}
