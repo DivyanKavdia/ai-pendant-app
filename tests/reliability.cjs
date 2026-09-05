@@ -31,13 +31,16 @@ test('PWA receives explicit app-owned GATT service for dedicated EVENT telemetry
   const events=fs.readFileSync(path.join(root,'event-channel.js'),'utf8');
   const identity=fs.readFileSync(path.join(root,'device-identity.js'),'utf8');
   const memoryFix=fs.readFileSync(path.join(root,'memory-ui-fix.js'),'utf8');
-  assert.match(sw,/CACHE_REVISION='1\.0\.0-shell22-recording-controls'/);
+  assert.match(sw,/CACHE_REVISION='1\.0\.0-shell23-adpcm-audio'/);
   assert.match(sw,/\.\/battery-v2-ui\.js/);
   assert.match(sw,/\.\/event-channel\.js/);
+  assert.match(sw,/\.\/audio-codec-v3\.js/);
   assert.match(identity,/__synapGattService = service/);
   assert.match(identity,/synap-gatt-service-ready/);
   assert.match(events,/EVENT_UUID='4fa1234e-0000-1000-8000-00805f9b34fb'/);
   assert.match(events,/CONTROL_UUID='4fa12347-0000-1000-8000-00805f9b34fb'/);
+  assert.match(events,/audio-codec-v3\.js\?v=1\.0\.0-adpcm1/);
+  assert.match(events,/SynapAudioCodecV3\?\.install/);
   assert.match(events,/synap-gatt-service-ready/);
   assert.match(events,/getCharacteristic\(EVENT_UUID\)/);
   assert.match(events,/startNotifications\(\)/);
@@ -50,14 +53,20 @@ test('PWA receives explicit app-owned GATT service for dedicated EVENT telemetry
   assert.doesNotMatch(touch,/__synapInteractionBridge/);
 });
 
-test('native audio v2 consumes firmware packets without an EventTarget BLE translation shim',()=>{
+test('protocol-v3 compressed audio preserves the existing PCM journal contract',()=>{
   const theme=fs.readFileSync(path.join(root,'theme.js'),'utf8');
   const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
+  const bridge=fs.readFileSync(path.join(root,'audio-codec-v3.js'),'utf8');
   assert.match(theme,/typeof navigator!==['"]undefined['"]&&!navigator\.locks/);
   assert.match(theme,/synapLockFallback/);
   assert.doesNotMatch(theme,/framesByTarget/);
   assert.doesNotMatch(theme,/LEGACY_CHUNKS/);
   assert.doesNotMatch(theme,/EventTarget\.prototype|ET\.prototype/);
+  assert.match(bridge,/COMPRESSED_VERSION=3/);
+  assert.match(bridge,/ADPCM_BYTES_PER_FRAME=404/);
+  assert.match(bridge,/SYNTHETIC_CHUNKS=4/);
+  assert.match(bridge,/BluetoothRemoteGATTCharacteristic/);
+  assert.match(bridge,/packet\[1\]=LEGACY_VERSION/);
   assert.match(app,/MIN_CHUNKS_PER_FRAME = 4/);
   assert.match(app,/MAX_AUDIO_PAYLOAD_BYTES = 500/);
   assert.match(app,/payloadLength > MAX_AUDIO_PAYLOAD_BYTES/);
