@@ -329,6 +329,20 @@ resource "google_secret_manager_secret_version" "session_signing_key" {
   secret_data = random_bytes.session_signing_key.base64
 }
 
+# Cloud Run fails its startup probe if this secret has no version: the service
+# resolves secrets at boot and exits rather than serving with a missing key.
+# A placeholder version lets a fresh project converge in one apply; the real key
+# is added afterwards as a new version, which supersedes this one. Terraform
+# ignores the data so adding the real key never shows up as drift.
+resource "google_secret_manager_secret_version" "gemini_api_key_placeholder" {
+  secret      = google_secret_manager_secret.gemini_api_key.id
+  secret_data = "REPLACE_WITH_YOUR_GEMINI_API_KEY"
+
+  lifecycle {
+    ignore_changes = [secret_data, enabled]
+  }
+}
+
 resource "google_secret_manager_secret_iam_member" "api_reads_gemini_key" {
   secret_id = google_secret_manager_secret.gemini_api_key.id
   role      = "roles/secretmanager.secretAccessor"

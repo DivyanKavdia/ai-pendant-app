@@ -109,6 +109,12 @@ Expect roughly 5 minutes, most of it API enablement and Firestore creation.
 
 ## 3. Add the Gemini key and pin the service URL
 
+> Terraform seeds the Gemini secret with a placeholder version, because Cloud
+> Run resolves secrets at boot and exits if one has no version at all — without
+> it the first apply dies on a startup probe failure that reads as a broken
+> container. Replace the placeholder before expecting any transcription to work;
+> the service logs a loud ERROR on every boot until you do.
+
 ```bash
 printf '%s' "YOUR_GEMINI_API_KEY" | \
   gcloud secrets versions add synap-gemini-api-key --data-file=- --project=synap-prod

@@ -104,6 +104,8 @@ export const config = {
   },
 } as const;
 
+const PLACEHOLDER_GEMINI_KEY = 'REPLACE_WITH_YOUR_GEMINI_API_KEY';
+
 let cachedSecrets: Secrets | null = null;
 
 async function readSecret(client: SecretManagerServiceClient, name: string): Promise<string> {
@@ -148,6 +150,20 @@ export async function loadSecrets(): Promise<Secrets> {
   const key = Buffer.from(sessionSigningKey, 'base64');
   if (key.length < 32) {
     throw new Error('Session signing key must decode to at least 32 bytes');
+  }
+
+  if (geminiApiKey === PLACEHOLDER_GEMINI_KEY) {
+    // Terraform seeds a placeholder so the first apply can bring Cloud Run up.
+    // Boot rather than crash-loop, but say so loudly: every Gemini call will
+    // fail until a real key is added as a new secret version.
+    process.stderr.write(
+      JSON.stringify({
+        severity: 'ERROR',
+        message:
+          'Gemini API key is still the Terraform placeholder. Add the real key: ' +
+          'gcloud secrets versions add synap-gemini-api-key --data-file=-',
+      }) + '\n',
+    );
   }
 
   cachedSecrets = { geminiApiKey, sessionSigningKey: key };
